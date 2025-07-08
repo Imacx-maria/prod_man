@@ -1,59 +1,142 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
 
 @layer base {
-  :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.3rem;
-  }
-
-  .dark {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 3.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 3.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 0% 98%;
-    --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 240 4.9% 83.9%;
+  input,
+  textarea,
+  select {
+    @apply uppercase;
   }
 }
 
-@layer base {
-  * {
-    @apply border-border;
-  }
-  body {
-    @apply bg-background text-foreground;
-  }
+:root {
+  --background: oklch(0.94 0.01 95.04);
+  --secondary-background: oklch(0.91 0.01 95.08);
+  --foreground: oklch(0% 0 0);
+  --main-foreground: oklch(0% 0 0);
+  --main: oklch(84.08% 0.1725 84.2);
+  --border: oklch(0% 0 0);
+  --ring: oklch(0% 0 0);
+  --overlay: oklch(0% 0 0 / 0.8);
+  --shadow: 4px 4px 0px 0px var(--border);
+  --chart-1: #FFBF00;
+  --chart-2: #0099FF;
+  --chart-3: #ff8800;
+  --chart-4: #00D696;
+  --chart-5: #7A83FF;
+  --chart-active-dot: #000;
+  --tile: rgba(0, 0, 0, 0.1);
+  --tile-border: rgba(0, 0, 0, 0.05);
+  --dropdown-bg: var(--background);
+  --orange: oklch(0.7771 0.1729 66.06);
+  --orange-dark: #ff9c00;
+  --blue-light: oklch(0.67 0.1759 250.15);
+  color-scheme: dark;
+}
+
+.dark {
+  --background: oklch(0.31 0 0);
+  --secondary-background: oklch(0.26 0 0 / 87.46%);
+  --foreground: oklch(92.49% 0 0);
+  --main-foreground: oklch(100% 0 0); /* This is white */
+  --main: oklch(84.08% 0.1725 84.2); /* Same yellow as light mode */
+  --border: oklch(0% 0 0);
+  --ring: oklch(100% 0 0);
+  --shadow: 4px 4px 0px 0px var(--border);
+  --chart-1: #E5AC00;
+  --chart-2: #008AE5;
+  --chart-3: #EB6D00;
+  --chart-4: #00BD84;
+  --chart-5: #7A83FF;
+  --chart-active-dot: #fff;
+  --tile: rgba(255, 255, 255, 0.3);
+  --tile-border: rgba(255, 255, 255, 0.1);
+  --dropdown-bg: var(--background);
+  --orange: #ff8800;
+  --orange-dark: #f26b03;
+}
+
+@theme inline {
+  --color-main: var(--main);
+  --color-background: var(--background);
+  --color-secondary-background: var(--secondary-background);
+  --color-foreground: var(--foreground);
+  --color-main-foreground: var(--main-foreground);
+  --color-border: var(--border);
+  --color-overlay: var(--overlay);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --spacing-boxShadowX: 4px;
+  --spacing-boxShadowY: 4px;
+  --spacing-reverseBoxShadowX: -4px;
+  --spacing-reverseBoxShadowY: -4px;
+  --radius-base: 0px;
+  --shadow-shadow: var(--shadow);
+  --font-weight-base: 500;
+  --font-weight-heading: 700;
+  --boxShadowX: var(--spacing-boxShadowX);
+  --boxShadowY: var(--spacing-boxShadowY);
+  --color-secondary: var(--secondary-background);
+  --color-secondary-foreground: var(--foreground);
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #fff;
+  --color-accent: #fbbf24;
+  --color-accent-foreground: #000;
+  --color-orange: var(--orange);
+}
+
+/* Custom Scrollbar Styles */
+::-webkit-scrollbar {
+  width: 12px;
+  background: #000; /* Black background */
+}
+::-webkit-scrollbar-thumb {
+  background: var(--main); /* Use main brand yellow */
+  border-radius: 0; /* No rounding */
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #FFC400; /* Slightly darker yellow on hover */
+}
+
+.dark ::-webkit-scrollbar {
+  background: var(--main); /* Yellow background */
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #000; /* Black bar */
+  border-radius: 0; /* No rounding */
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #222; /* Slightly lighter black on hover */
+}
+
+/* Calendar styles - keeping only essential styles */
+/* Styling for header cells to maintain consistent header appearance */
+.rdp-head_row > :first-child,
+.rdp-head_row > :last-child {
+  background-color: var(--secondary-background) !important;
+}
+
+/* Calendar custom class to ensure proper layout */
+.calendar-custom .rdp-months {
+  background-color: var(--background);
+}
+
+/* All other redundant calendar selectors have been removed as they're
+   now properly handled by DayPicker's modifiers and modifiersStyles */
+
+/* Autofill background override */
+input:-webkit-autofill,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px #dfdfdf inset !important;
+  box-shadow: 0 0 0 1000px #dfdfdf inset !important;
+  -webkit-text-fill-color: var(--foreground) !important;
 }

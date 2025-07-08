@@ -1,0 +1,340 @@
+import React, { useState, useEffect, useMemo } from 'react'
+import { Check, ChevronsUpDown, FileText, Package } from 'lucide-react'
+import { cn } from '@/utils/tailwind'
+import { Button } from '@/components/ui/button'
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import { createBrowserClient } from '@/utils/supabase'
+import type { FolhaObra, ItemBase } from '@/types/producao'
+
+interface FolhaObraWithItems extends FolhaObra {
+  items_base?: ItemBase[]
+}
+
+interface FOItemSelectorProps {
+  folhaObraId?: string
+  itemId?: string
+  onFolhaObraChange: (folhaObraId: string) => void
+  onItemChange: (itemId: string) => void
+  disabled?: boolean
+  className?: string
+}
+
+export const FOItemSelector: React.FC<FOItemSelectorProps> = ({
+  folhaObraId,
+  itemId,
+  onFolhaObraChange,
+  onItemChange,
+  disabled = false,
+  className
+}) => {
+  const [foOpen, setFoOpen] = useState(false)
+  const [itemOpen, setItemOpen] = useState(false)
+  const [folhasObras, setFolhasObras] = useState<FolhaObraWithItems[]>([])
+  const [loading, setLoading] = useState(true)
+  const [foSearchValue, setFoSearchValue] = useState('')
+  const [itemSearchValue, setItemSearchValue] = useState('')
+
+  const supabase = createBrowserClient()
+
+  // Fetch work orders with items
+  useEffect(() => {
+    const fetchFolhasObras = async () => {
+      try {
+        setLoading(true)
+        const { data, error } = await supabase
+          .from('folhas_obras')
+          .select(`
+            *,
+            items_base!inner(
+              *,
+              designer_items!inner(paginacao)
+            )
+          `)
+          .eq('items_base.designer_items.paginacao', true)
+          .order('numero_fo', { ascending: false })
+          .order('created_at', { ascending: false })
+
+        if (error) {
+          console.error('Error fetching folhas obras:', error)
+          return
+        }
+
+        if (data) {
+          setFolhasObras(data)
+        }
+      } catch (err) {
+        console.error('Error loading folhas obras:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchFolhasObras()
+  }, [supabase])
+
+  // Get filtered work orders
+  const filteredFolhasObras = useMemo(() => {
+    if (!foSearchValue) return folhasObras
+
+    return folhasObras.filter(fo =>
+      fo.numero_fo?.toLowerCase().includes(foSearchValue.toLowerCase()) ||
+      fo.nome_campanha?.toLowerCase().includes(foSearchValue.toLowerCase()) ||
+      fo.cliente?.toLowerCase().includes(foSearchValue.toLowerCase())
+    )
+  }, [folhasObras, foSearchValue])
+
+  // Get selected work order
+  const selectedFolhaObra = folhasObras.find(fo => fo.id === folhaObraId)
+
+  // Get available items for selected work order
+  const availableItems = useMemo(() => {
+    if (!selectedFolhaObra?.items_base) return []
+    
+    // Items are already filtered by paginacao = true in the query
+    return selectedFolhaObra.items_base.filter(item =>
+      !itemSearchValue || 
+      item.descricao?.toLowerCase().includes(itemSearchValue.toLowerCase()) ||
+      item.codigo?.toLowerCase().includes(itemSearchValue.toLowerCase())
+    )
+  }, [selectedFolhaObra, itemSearchValue])
+
+  // Get selected item
+  const selectedItem = availableItems.find(item => item.id === itemId)
+
+  // Handle work order selection
+  const handleFolhaObraSelect = (foId: string) => {
+    onFolhaObraChange(foId)
+    // Clear item selection when FO changes
+    if (itemId) {
+      onItemChange('')
+    }
+    setFoOpen(false)
+    setFoSearchValue('')
+  }
+
+  // Handle item selection
+  const handleItemSelect = (itemId: string) => {
+    onItemChange(itemId)
+    setItemOpen(false)
+    setItemSearchValue('')
+  }
+
+  // Format FO display name
+  const formatFODisplayName = (fo: FolhaObraWithItems) => {
+    const parts = [fo.numero_fo, fo.nome_campanha].filter(Boolean)
+    return parts.join(' - ')
+  }
+
+  // Format item display name
+  const formatItemDisplayName = (item: ItemBase) => {
+    const parts = [item.codigo, item.descricao].filter(Boolean)
+    return parts.join(' - ')
+  }
+
+  // Get work order status
+  const getFOStatus = (fo: FolhaObraWithItems) => {
+    if (fo.concluido) return { label: 'Concluído', color: 'bg-green-500' }
+    if (fo.data_saida && new Date(fo.data_saida) < new Date()) return { label: 'Atrasado', color: 'bg-red-500' }
+    return { label: 'Em Andamento', color: 'bg-blue-500' }
+  }
+
+  // Get item status
+  const getItemStatus = (item: ItemBase) => {
+    if (item.concluido) return { label: 'Concluído', color: 'bg-green-500' }
+    return { label: 'Pendente', color: 'bg-orange-500' }
+  }
+
+  return (
+    <div className={cn("grid gap-4", className)}>
+      {/* Work Order Selector */}
+      <div>
+        <Label htmlFor="folha-obra-selector" className="text-sm font-medium">
+          Folha de Obra
+        </Label>
+        <Popover open={foOpen} onOpenChange={setFoOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={foOpen}
+              className="w-full justify-between mt-1"
+              disabled={disabled}
+              id="folha-obra-selector"
+            >
+              {selectedFolhaObra ? (
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <FileText className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{formatFODisplayName(selectedFolhaObra)}</span>
+                  <Badge 
+                    variant="outline" 
+                    className="text-xs flex-shrink-0"
+                  >
+                    {selectedFolhaObra.items_base?.length || 0} itens
+                  </Badge>
+                </div>
+              ) : (
+                <span className="text-muted-foreground">Selecionar folha de obra...</span>
+              )}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[500px] p-0">
+            <Command>
+              <CommandInput 
+                placeholder="Pesquisar por FO, campanha ou cliente..." 
+                value={foSearchValue}
+                onValueChange={setFoSearchValue}
+              />
+              <CommandEmpty>
+                {loading ? "Carregando..." : "Nenhuma folha de obra encontrada."}
+              </CommandEmpty>
+              <CommandGroup className="max-h-64 overflow-auto">
+                {filteredFolhasObras.map((fo) => {
+                  const status = getFOStatus(fo)
+                  
+                  return (
+                    <CommandItem
+                      key={fo.id}
+                      value={fo.id}
+                      onSelect={() => handleFolhaObraSelect(fo.id)}
+                      className="flex items-center justify-between py-3"
+                    >
+                      <div className="flex items-center min-w-0 flex-1">
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            folhaObraId === fo.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <FileText className="mr-2 h-4 w-4 text-blue-500" />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">
+                            {formatFODisplayName(fo)}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            <span>Cliente: {fo.cliente}</span>
+                            <div className="flex items-center gap-1">
+                              <div className={`w-2 h-2 ${status.color}`} />
+                              <span>{status.label}</span>
+                            </div>
+                            <span>{fo.items_base?.length || 0} itens</span>
+                          </div>
+                        </div>
+                      </div>
+                    </CommandItem>
+                  )
+                })}
+              </CommandGroup>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Item Selector */}
+      <div>
+        <Label htmlFor="item-selector" className="text-sm font-medium">
+          Item
+        </Label>
+        <Popover open={itemOpen} onOpenChange={setItemOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              role="combobox"
+              aria-expanded={itemOpen}
+              className="w-full justify-between mt-1"
+              disabled={disabled || !selectedFolhaObra}
+              id="item-selector"
+            >
+              {selectedItem ? (
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  <Package className="w-4 h-4 flex-shrink-0" />
+                  <span className="truncate">{formatItemDisplayName(selectedItem)}</span>
+                  {selectedItem.quantidade && (
+                    <Badge variant="outline" className="text-xs flex-shrink-0">
+                      Qtd: {selectedItem.quantidade}
+                    </Badge>
+                  )}
+                </div>
+              ) : (
+                <span className="text-muted-foreground">
+                  {selectedFolhaObra ? "Selecionar item..." : "Primeiro selecione uma FO"}
+                </span>
+              )}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[450px] p-0">
+            <Command>
+              <CommandInput 
+                placeholder="Pesquisar item..." 
+                value={itemSearchValue}
+                onValueChange={setItemSearchValue}
+              />
+              <CommandEmpty>
+                {!selectedFolhaObra ? "Selecione uma folha de obra primeiro" : "Nenhum item encontrado."}
+              </CommandEmpty>
+              <CommandGroup className="max-h-64 overflow-auto">
+                {availableItems.map((item) => {
+                  const status = getItemStatus(item)
+                  
+                  return (
+                    <CommandItem
+                      key={item.id}
+                      value={item.id}
+                      onSelect={() => handleItemSelect(item.id)}
+                      className="flex items-center justify-between py-3"
+                    >
+                      <div className="flex items-center min-w-0 flex-1">
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            itemId === item.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        <Package className="mr-2 h-4 w-4 text-purple-500" />
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">
+                            {formatItemDisplayName(item)}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-gray-500">
+                            {item.quantidade && (
+                              <span>Quantidade: {item.quantidade}</span>
+                            )}
+                            <div className="flex items-center gap-1">
+                              <div className={`w-2 h-2 ${status.color}`} />
+                              <span>{status.label}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </CommandItem>
+                  )
+                })}
+              </CommandGroup>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Selection Summary */}
+      {selectedFolhaObra && selectedItem && (
+        <div className="p-3 bg-blue-50 shadow-shadow border-2 border-blue-500">
+          <div className="text-sm">
+            <div className="font-medium text-blue-900 mb-1">Seleção Atual:</div>
+            <div className="text-blue-700">
+              <div><strong>FO:</strong> {formatFODisplayName(selectedFolhaObra)}</div>
+              <div><strong>Cliente:</strong> {selectedFolhaObra.cliente}</div>
+              <div><strong>Item:</strong> {formatItemDisplayName(selectedItem)}</div>
+              {selectedItem.quantidade && (
+                <div><strong>Quantidade:</strong> {selectedItem.quantidade}</div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+} 
