@@ -96,7 +96,7 @@ Use consistent hover effects across interactive elements:
     <Table className="w-full border-0">
       <TableHeader>
         <TableRow>
-          <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] uppercase">
+          <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] font-bold uppercase">
             Data
           </TableHead>
           {/* ...other headers... */}
@@ -543,11 +543,159 @@ The logistics tab uses a specialized table component with specific requirements:
 
 ## 🎯 Interactive Elements
 
+### Inline Editing Pattern
+
+For tables that support inline editing (editing fields directly in the table without opening a drawer), use this pattern:
+
+#### Inline Edit Button (Edit Icon)
+```tsx
+{/* Inline edit button - makes row fields editable */}
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button
+        variant="default"
+        size="icon"
+        onClick={() => {
+          setEditingId(item.id);
+          setEditField1(item.field1);
+          setEditField2(item.field2);
+          // Set initial values for all editable fields
+        }}
+        disabled={editingId !== null}
+      >
+        <Edit className="w-4 h-4" />
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>Editar</TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+```
+
+#### Inline Editing State Management
+```tsx
+const [editingId, setEditingId] = useState<string | null>(null)
+const [editField1, setEditField1] = useState('')
+const [editField2, setEditField2] = useState<Date | undefined>(undefined)
+```
+
+#### Inline Editable Fields with Save/Cancel
+```tsx
+{/* Example: Text field with save/cancel buttons */}
+{editingId === item.id ? (
+  <div className="flex gap-2 items-center">
+    <Input
+      value={editField1}
+      onChange={(e) => setEditField1(e.target.value)}
+      className="rounded-none flex-1"
+      placeholder="Field placeholder"
+    />
+    <div className="flex gap-1">
+      {/* Save button */}
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="default"
+              size="icon"
+              onClick={handleSave}
+              disabled={!editField1.trim() || submitting}
+            >
+              <span className="text-xs">✓</span>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Guardar</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+      {/* Cancel button */}
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleCancel}
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>Cancelar</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  </div>
+) : (
+  item.field1
+)}
+
+{/* Example: DatePicker field for inline editing */}
+{editingId === item.id ? (
+  <DatePicker
+    selected={editField2}
+    onSelect={(date) => setEditField2(date)}
+    buttonClassName="w-full h-10 border-0 outline-0 focus:ring-0 focus:border-0 rounded-none"
+  />
+) : (
+  formatDisplayDate(item.field2)
+)}
+```
+
+#### Complete Save Handler Example
+```tsx
+const handleSave = async () => {
+  if (!editField1.trim()) return;
+  
+  setSubmitting(true);
+  try {
+    const updates = {
+      field1: editField1.trim(),
+      field2: editField2 ? editField2.toISOString().split('T')[0] : item.field2,
+      updated_at: new Date().toISOString().split('T')[0]
+    };
+    
+    const { error } = await supabase
+      .from('table')
+      .update(updates)
+      .eq('id', item.id);
+    
+    if (!error) {
+      setItems(prev => prev.map(i => 
+        i.id === item.id ? { ...i, ...updates } : i
+      ));
+    }
+  } catch (error) {
+    console.error('Error updating:', error);
+  } finally {
+    setSubmitting(false);
+    setEditingId(null);
+    setEditField1('');
+    setEditField2(undefined);
+  }
+};
+```
+
 ### Button Patterns
 ```tsx
 {/* Primary actions */}
 <Button variant="default" size="icon">
   <Plus className="w-4 h-4" />
+</Button>
+
+{/* Edit button (always icon-only with tooltip) */}
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button variant="default" size="icon">
+        <Edit className="w-4 h-4" />
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>Editar</TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+
+{/* Refresh button (always icon-only, no text) */}
+<Button variant="outline" size="icon" onClick={refreshTable}>
+  <RotateCw className="w-4 h-4" />
 </Button>
 
 {/* Secondary actions */}
@@ -564,6 +712,59 @@ The logistics tab uses a specialized table component with specific requirements:
 <Button variant="default" size="sm">
   <Plus className="w-4 h-4 mr-2" /> Add Item
 </Button>
+```
+
+### Icon-Only Button Tooltip Pattern
+
+- **All icon-only buttons (buttons without text) must always be wrapped in a Tooltip with a clear, descriptive label.**
+- This applies to:
+  - Add / Adicionar buttons (just the "+" sign)
+  - Copiar (just the icon, except for Copiar Entrega on produção/logistica tab)
+  - Refresh
+  - Any other icon-only action buttons
+- The Tooltip should use a concise, user-friendly label (e.g., "Adicionar", "Copiar", "Atualizar").
+- See `designer-flow/page.tsx` for a good implementation example.
+
+#### Example: Add Button
+```tsx
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button variant="default" size="icon" aria-label="Adicionar">
+        <Plus className="h-4 w-4" />
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>Adicionar</TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+```
+
+#### Example: Copiar Button
+```tsx
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button variant="outline" size="icon" aria-label="Copiar">
+        <Copy className="h-4 w-4" />
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>Copiar</TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+```
+
+#### Example: Refresh Button
+```tsx
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button variant="outline" size="icon" aria-label="Atualizar">
+        <RotateCw className="h-4 w-4" />
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>Atualizar</TooltipContent>
+  </Tooltip>
+</TooltipProvider>
 ```
 
 ### Notes Button Pattern
@@ -877,7 +1078,8 @@ Use `w-4 h-4` for most icons, `w-5 h-5` for larger elements
 
 ### Common Icon Mappings
 - Add: `Plus`
-- Edit: `Eye`, `Edit`
+- **Inline Edit**: `Edit` (always variant="default", with "Editar" tooltip) - for editing fields directly in table
+- **View/Open Drawer**: `Eye` (always variant="default", with appropriate tooltip) - for opening detailed view in drawer
 - Delete: `Trash2`
 - Refresh: `RotateCw`
 - Close: `X`
@@ -913,6 +1115,14 @@ Use these custom properties consistently:
 - [ ] **Implement notes buttons with mandatory tooltips (if applicable)**
 - [ ] **Use FileText icon for all notes buttons**
 - [ ] **Ensure notes tooltips show content on hover**
+- [ ] Every table includes a refresh button in the filter/action bar, always as an icon-only button (no text)
+- [ ] All table headers use both font-bold and uppercase classes
+- [ ] **For inline editing**: Use Edit icon with variant="default", size="icon", "Editar" tooltip, makes table row fields editable with save/cancel buttons
+- [ ] **For drawer opening**: Use Eye icon with variant="default", size="icon", appropriate tooltip, opens detailed view in drawer
+- [ ] All tables use consistent action button patterns based on their functionality (inline edit vs drawer view)
+- [ ] All export-to-Excel actions use the standard Exportar Excel button: icon-only, FileSpreadsheet icon, variant="default" (primary color), size="icon", always wrapped in a Tooltip with label 'Exportar Excel'
+- [ ] All notas (notes) buttons follow the style: icon-only, FileText icon, buttonSize="icon", className="mx-auto aspect-square", variant="link" if notes exist, variant="ghost" if empty, always wrapped in a Tooltip showing full notes content on hover
+- [ ] All icon-only buttons are wrapped in a Tooltip with a clear, descriptive label.
 
 ## 🔗 Component Dependencies
 
@@ -935,7 +1145,7 @@ import NotasPopover from '@/components/ui/NotasPopover';
 
 Common Lucide icons:
 ```tsx
-import { Plus, Eye, Trash2, X, RotateCw, ArrowUp, ArrowDown, Loader2, FileText } from "lucide-react";
+import { Plus, Eye, Trash2, X, RotateCw, ArrowUp, ArrowDown, Loader2, FileText, FileSpreadsheet } from "lucide-react";
 ```
 
 ## 🟧 Border Radius Policy
@@ -1012,3 +1222,9 @@ All input fields must follow these conventions to ensure visual consistency acro
 ```
 
 > **Note:** Always review table columns and add `text-right` to any numeric field, including calculated values, prices, and totals. 
+
+## Tooltips
+
+- All tooltips must use small caps: capitalize only the first letter, rest lowercase (e.g. "Adicionar", "Atualizar").
+- Do not use all uppercase or all lowercase for tooltips.
+- Exceptions: acronyms, code, or special cases may use their standard casing. 

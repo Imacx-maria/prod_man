@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose, DrawerDescription } from '@/components/ui/drawer'
+
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import DatePicker from '@/components/ui/DatePicker'
 import { Plus, Trash2, X, Loader2, Edit, RotateCw, ArrowUp, ArrowDown } from 'lucide-react'
@@ -24,12 +24,9 @@ interface Feriado {
 export default function FeriadosPage() {
   const [feriados, setFeriados] = useState<Feriado[]>([])
   const [loading, setLoading] = useState(true)
-  const [openDrawer, setOpenDrawer] = useState(false)
-  const [editingFeriado, setEditingFeriado] = useState<Feriado | null>(null)
-  const [formData, setFormData] = useState({
-    holiday_date: '',
-    description: ''
-  })
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDescription, setEditDescription] = useState('')
+  const [editDate, setEditDate] = useState<Date | undefined>(undefined)
   const [descriptionFilter, setDescriptionFilter] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [sortColumn, setSortColumn] = useState<'holiday_date' | 'description'>('holiday_date')
@@ -94,57 +91,38 @@ export default function FeriadosPage() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formData.holiday_date || !formData.description.trim()) return
+  const handleAddNew = async () => {
+    const description = prompt('Digite a descrição do feriado:')
+    if (!description?.trim()) return
+
+    const dateStr = prompt('Digite a data (YYYY-MM-DD):')
+    if (!dateStr?.trim()) return
+
+    // Validate date format
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/
+    if (!dateRegex.test(dateStr)) {
+      alert('Formato de data inválido. Use YYYY-MM-DD')
+      return
+    }
 
     setSubmitting(true)
     try {
-      if (editingFeriado) {
-        // Update existing feriado
-        const { data, error } = await supabase
-          .from('feriados')
-          .update({
-            holiday_date: formData.holiday_date,
-            description: formData.description,
-            updated_at: new Date().toISOString().split('T')[0]
-          })
-          .eq('id', editingFeriado.id)
-          .select('*')
+      const { data, error } = await supabase
+        .from('feriados')
+        .insert({
+          holiday_date: dateStr,
+          description: description.trim()
+        })
+        .select('*')
 
-        if (!error && data && data[0]) {
-          setFeriados(prev => prev.map(f => f.id === editingFeriado.id ? data[0] : f))
-        }
-      } else {
-        // Create new feriado
-        const { data, error } = await supabase
-          .from('feriados')
-          .insert({
-            holiday_date: formData.holiday_date,
-            description: formData.description
-          })
-          .select('*')
-
-        if (!error && data && data[0]) {
-          setFeriados(prev => [...prev, data[0]])
-        }
+      if (!error && data && data[0]) {
+        setFeriados(prev => [...prev, data[0]])
       }
-
-      resetForm()
     } catch (error) {
-      console.error('Error saving feriado:', error)
+      console.error('Error creating feriado:', error)
     } finally {
       setSubmitting(false)
     }
-  }
-
-  const handleEdit = (feriado: Feriado) => {
-    setEditingFeriado(feriado)
-    setFormData({
-      holiday_date: feriado.holiday_date,
-      description: feriado.description
-    })
-    setOpenDrawer(true)
   }
 
   const handleDelete = async (id: string) => {
@@ -164,19 +142,7 @@ export default function FeriadosPage() {
     }
   }
 
-  const resetForm = () => {
-    setFormData({
-      holiday_date: '',
-      description: ''
-    })
-    setEditingFeriado(null)
-    setOpenDrawer(false)
-  }
 
-  const openNewForm = () => {
-    resetForm()
-    setOpenDrawer(true)
-  }
 
   const formatDisplayDate = (dateString: string) => {
     try {
@@ -199,13 +165,19 @@ export default function FeriadosPage() {
                   <RotateCw className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Atualizar lista</TooltipContent>
+              <TooltipContent>Atualizar</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <Button onClick={openNewForm}>
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Feriado
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={handleAddNew}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Novo Feriado</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
@@ -215,21 +187,28 @@ export default function FeriadosPage() {
           placeholder="Filtrar por descrição..."
           value={descriptionFilter}
           onChange={(e) => setDescriptionFilter(e.target.value)}
-          className="w-[300px]"
+          className="w-[300px] rounded-none"
         />
-        <Button variant="outline" size="icon" onClick={() => setDescriptionFilter('')}>
-          <X className="w-4 h-4" />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" onClick={() => setDescriptionFilter('')}>
+                <X className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Limpar filtro</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {/* Table */}
-      <div className="rounded-md bg-background w-full">
+      <div className="bg-background w-full">
         <div className="max-h-[70vh] overflow-y-auto w-full">
-          <Table className="w-full">
+          <Table className="w-full border-2 border-border">
             <TableHeader>
               <TableRow>
                 <TableHead 
-                  className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border cursor-pointer select-none w-[140px] uppercase"
+                  className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border cursor-pointer select-none w-[140px] font-bold uppercase"
                   onClick={() => handleSort('holiday_date')}
                 >
                   Data
@@ -240,7 +219,7 @@ export default function FeriadosPage() {
                   )}
                 </TableHead>
                 <TableHead 
-                  className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border cursor-pointer select-none min-w-[300px] uppercase"
+                  className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border cursor-pointer select-none min-w-[300px] font-bold uppercase"
                   onClick={() => handleSort('description')}
                 >
                   Descrição
@@ -250,7 +229,7 @@ export default function FeriadosPage() {
                     <ArrowDown className="inline w-3 h-3 ml-1" />
                   )}
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px] font-bold uppercase">
                   Ações
                 </TableHead>
               </TableRow>
@@ -271,24 +250,136 @@ export default function FeriadosPage() {
               ) : (
                 sortedFeriados.map((feriado) => (
                   <TableRow key={feriado.id}>
-                    <TableCell className="font-medium uppercase">{formatDisplayDate(feriado.holiday_date)}</TableCell>
-                    <TableCell className="uppercase">{feriado.description}</TableCell>
+                    <TableCell className="font-medium uppercase">
+                      {editingId === feriado.id ? (
+                        <DatePicker
+                          selected={editDate}
+                          onSelect={(date) => {
+                            setEditDate(date);
+                          }}
+                          buttonClassName="w-full h-10 border-0 outline-0 focus:ring-0 focus:border-0 rounded-none"
+                        />
+                      ) : (
+                        formatDisplayDate(feriado.holiday_date)
+                      )}
+                    </TableCell>
+                    <TableCell className="uppercase">
+                      {editingId === feriado.id ? (
+                        <div className="flex gap-2 items-center">
+                          <Input
+                            value={editDescription}
+                            onChange={(e) => setEditDescription(e.target.value)}
+                            className="rounded-none flex-1"
+                            placeholder="Descrição do feriado"
+                          />
+                          <div className="flex gap-1">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="default"
+                                    size="icon"
+                                    onClick={async () => {
+                                      if (!editDescription.trim()) return;
+                                      
+                                      setSubmitting(true);
+                                      try {
+                                        const isoDate = editDate ? editDate.toISOString().split('T')[0] : feriado.holiday_date;
+                                        const { error } = await supabase
+                                          .from('feriados')
+                                          .update({ 
+                                            holiday_date: isoDate,
+                                            description: editDescription.trim(),
+                                            updated_at: new Date().toISOString().split('T')[0]
+                                          })
+                                          .eq('id', feriado.id);
+                                        
+                                        if (!error) {
+                                          setFeriados(prev => prev.map(f => 
+                                            f.id === feriado.id ? { 
+                                              ...f, 
+                                              holiday_date: isoDate,
+                                              description: editDescription.trim() 
+                                            } : f
+                                          ));
+                                        }
+                                      } catch (error) {
+                                        console.error('Error updating:', error);
+                                      } finally {
+                                        setSubmitting(false);
+                                        setEditingId(null);
+                                        setEditDescription('');
+                                        setEditDate(undefined);
+                                      }
+                                    }}
+                                    disabled={!editDescription.trim() || submitting}
+                                  >
+                                    <span className="text-xs">✓</span>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Guardar</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => {
+                                      setEditingId(null);
+                                      setEditDescription('');
+                                      setEditDate(undefined);
+                                    }}
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Cancelar</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </div>
+                      ) : (
+                        feriado.description
+                      )}
+                    </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => handleEdit(feriado)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={() => handleDelete(feriado.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="default"
+                                size="icon"
+                                onClick={() => {
+                                  setEditingId(feriado.id);
+                                  setEditDescription(feriado.description);
+                                  setEditDate(new Date(feriado.holiday_date));
+                                }}
+                                disabled={editingId !== null}
+                              >
+                                <Edit className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Editar</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="destructive"
+                                size="icon"
+                                onClick={() => handleDelete(feriado.id)}
+                                disabled={editingId !== null}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Excluir</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -299,77 +390,7 @@ export default function FeriadosPage() {
         </div>
       </div>
 
-      {/* Drawer for add/edit form */}
-      <Drawer open={openDrawer} onOpenChange={(open) => !open && resetForm()}>
-        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0">
-          <div className="w-full px-4 md:px-8 flex flex-col h-full">
-            <DrawerHeader className="flex-none">
-              <div className="flex justify-end items-center gap-2 mb-2">
-                <DrawerClose asChild>
-                  <Button variant="outline" size="sm">
-                    <X className="w-5 h-5" />
-                  </Button>
-                </DrawerClose>
-              </div>
-              <DrawerTitle>
-                {editingFeriado ? 'Editar Feriado' : 'Novo Feriado'}
-              </DrawerTitle>
-              <DrawerDescription>
-                {editingFeriado 
-                  ? 'Edite as informações do feriado abaixo.'
-                  : 'Preencha as informações para criar um novo feriado.'
-                }
-              </DrawerDescription>
-            </DrawerHeader>
 
-            <div className="flex-grow overflow-y-auto">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div>
-                  <Label htmlFor="holiday_date" className="font-base text-sm">
-                    Data do Feriado *
-                  </Label>
-                  <DatePicker
-                    selected={formData.holiday_date ? new Date(formData.holiday_date) : undefined}
-                    onSelect={(date) => {
-                      const isoDate = date ? date.toISOString().split('T')[0] : ''
-                      setFormData(prev => ({ ...prev, holiday_date: isoDate }))
-                    }}
-                    buttonClassName="w-full justify-start"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="description" className="font-base text-sm">
-                    Descrição *
-                  </Label>
-                  <Input
-                    id="description"
-                    value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    placeholder="Ex: Natal, Ano Novo, Dia da República"
-                    required
-                  />
-                </div>
-
-                <div className="flex gap-2 pt-4">
-                  <Button 
-                    type="submit" 
-                    disabled={submitting || !formData.holiday_date || !formData.description.trim()}
-                  >
-                    {submitting ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : null}
-                    {editingFeriado ? 'Atualizar' : 'Criar'} Feriado
-                  </Button>
-                  <Button type="button" variant="outline" onClick={resetForm}>
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </DrawerContent>
-      </Drawer>
     </div>
   )
 } 

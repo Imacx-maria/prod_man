@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose, DrawerDescription } from '@/components/ui/drawer'
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
+import Combobox from '@/components/ui/Combobox'
+
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Plus, Trash2, X, Loader2, Edit, RotateCw, Users, Shield, Mail } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -52,22 +52,18 @@ export default function UtilizadoresPage() {
   const [roles, setRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
   const [rolesLoading, setRolesLoading] = useState(false)
-  const [openRoleDrawer, setOpenRoleDrawer] = useState(false)
-  const [openProfileDrawer, setOpenProfileDrawer] = useState(false)
-  const [editingProfile, setEditingProfile] = useState<Profile | null>(null)
-  const [editingRole, setEditingRole] = useState<Role | null>(null)
-  
-  const [profileFormData, setProfileFormData] = useState({
-    user_id: '',
-    first_name: '',
-    last_name: '',
-    role_id: ''
-  })
 
-  const [roleFormData, setRoleFormData] = useState({
-    name: '',
-    description: ''
-  })
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null)
+  const [editFirstName, setEditFirstName] = useState('')
+  const [editLastName, setEditLastName] = useState('')
+  const [editRoleId, setEditRoleId] = useState('')
+  const [editingRoleId, setEditingRoleId] = useState<string | null>(null)
+  const [editRoleName, setEditRoleName] = useState('')
+  const [editRoleDescription, setEditRoleDescription] = useState('')
+  const [creatingNewProfile, setCreatingNewProfile] = useState(false)
+  const [newProfileUserId, setNewProfileUserId] = useState('')
+  
+
 
   const [nameFilter, setNameFilter] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
@@ -185,130 +181,7 @@ export default function UtilizadoresPage() {
     role.name.toLowerCase().includes(nameFilter.toLowerCase())
   )
 
-  const handleProfileSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!profileFormData.first_name.trim() || !profileFormData.last_name.trim() || !profileFormData.role_id) return
 
-    setSubmitting(true)
-    try {
-      if (editingProfile) {
-        // Update existing profile
-        const { data, error } = await supabase
-          .from('profiles')
-          .update({
-            first_name: profileFormData.first_name,
-            last_name: profileFormData.last_name,
-            role_id: profileFormData.role_id,
-            updated_at: new Date().toISOString().split('T')[0]
-          })
-          .eq('id', editingProfile.id)
-          .select(`
-            *,
-            roles (
-              id,
-              name,
-              description
-            )
-          `)
-
-        if (!error && data && data[0]) {
-          setProfiles(prev => prev.map(p => p.id === editingProfile.id ? data[0] : p))
-        }
-      } else {
-        // Create new profile
-        const { data, error } = await supabase
-          .from('profiles')
-          .insert({
-            user_id: profileFormData.user_id,
-            first_name: profileFormData.first_name,
-            last_name: profileFormData.last_name,
-            role_id: profileFormData.role_id
-          })
-          .select(`
-            *,
-            roles (
-              id,
-              name,
-              description
-            )
-          `)
-
-        if (!error && data && data[0]) {
-          setProfiles(prev => [...prev, data[0]])
-        }
-      }
-
-      resetProfileForm()
-    } catch (error) {
-      console.error('Error saving profile:', error)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const handleRoleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!roleFormData.name.trim()) return
-
-    setSubmitting(true)
-    try {
-      if (editingRole) {
-        // Update existing role
-        const { data, error } = await supabase
-          .from('roles')
-          .update({
-            name: roleFormData.name,
-            description: roleFormData.description || null,
-            updated_at: new Date().toISOString().split('T')[0]
-          })
-          .eq('id', editingRole.id)
-          .select('*')
-
-        if (!error && data && data[0]) {
-          setRoles(prev => prev.map(r => r.id === editingRole.id ? data[0] : r))
-        }
-      } else {
-        // Create new role
-        const { data, error } = await supabase
-          .from('roles')
-          .insert({
-            name: roleFormData.name,
-            description: roleFormData.description || null
-          })
-          .select('*')
-
-        if (!error && data && data[0]) {
-          setRoles(prev => [...prev, data[0]])
-        }
-      }
-
-      resetRoleForm()
-    } catch (error) {
-      console.error('Error saving role:', error)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const handleEditProfile = (profile: Profile) => {
-    setEditingProfile(profile)
-    setProfileFormData({
-      user_id: profile.user_id,
-      first_name: profile.first_name,
-      last_name: profile.last_name,
-      role_id: profile.role_id
-    })
-    setOpenProfileDrawer(true)
-  }
-
-  const handleEditRole = (role: Role) => {
-    setEditingRole(role)
-    setRoleFormData({
-      name: role.name,
-      description: role.description || ''
-    })
-    setOpenRoleDrawer(true)
-  }
 
   const handleDeleteProfile = async (id: string) => {
     try {
@@ -340,40 +213,108 @@ export default function UtilizadoresPage() {
     }
   }
 
-  const resetProfileForm = () => {
-    setProfileFormData({
-      user_id: '',
-      first_name: '',
-      last_name: '',
-      role_id: ''
-    })
-    setEditingProfile(null)
-    setOpenProfileDrawer(false)
-  }
 
-  const resetRoleForm = () => {
-    setRoleFormData({
-      name: '',
-      description: ''
-    })
-    setEditingRole(null)
-    setOpenRoleDrawer(false)
-  }
 
-  const openNewRoleForm = () => {
-    resetRoleForm()
-    setOpenRoleDrawer(true)
+  const openNewRoleForm = async () => {
+    const name = prompt('Digite o nome do novo papel:')
+    if (!name || !name.trim()) return
+    
+    const description = prompt('Digite a descrição do papel (opcional):') || ''
+    
+    setSubmitting(true)
+    try {
+      const { data, error } = await supabase
+        .from('roles')
+        .insert({
+          name: name.trim(),
+          description: description.trim() || null
+        })
+        .select('*')
+
+      if (!error && data && data[0]) {
+        setRoles(prev => [...prev, data[0]])
+      }
+    } catch (error) {
+      console.error('Error creating role:', error)
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const openNewProfileForm = () => {
-    setProfileFormData({
-      user_id: '',
-      first_name: '',
-      last_name: '',
-      role_id: ''
-    })
-    setEditingProfile(null)
-    setOpenProfileDrawer(true)
+    // Start inline creation mode
+    setCreatingNewProfile(true)
+    setEditFirstName('')
+    setEditLastName('')
+    setNewProfileUserId('')
+    setEditRoleId('')
+  }
+
+  const saveNewProfile = async () => {
+    if (!editFirstName.trim() || !editLastName.trim() || !newProfileUserId.trim() || !editRoleId) {
+      alert('Por favor, preencha todos os campos.')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      // Check if a user with this ID exists in auth
+      const authUser = authUsers.find(user => user.id === newProfileUserId)
+      
+      if (!authUser) {
+        alert('Utilizador não encontrado na autenticação.')
+        return
+      }
+
+      // Check if profile already exists for this user
+      const existingProfile = profiles.find(profile => profile.user_id === authUser.id)
+      if (existingProfile) {
+        alert('Este utilizador já tem um perfil criado.')
+        return
+      }
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: authUser.id,
+          first_name: editFirstName.trim(),
+          last_name: editLastName.trim(),
+          role_id: editRoleId
+        })
+        .select(`
+          *,
+          roles (
+            id,
+            name,
+            description
+          )
+        `)
+
+      if (!error && data && data[0]) {
+        setProfiles(prev => [...prev, data[0]])
+        // Reset creation mode
+        setCreatingNewProfile(false)
+        setEditFirstName('')
+        setEditLastName('')
+        setNewProfileUserId('')
+        setEditRoleId('')
+      } else {
+        alert('Erro ao criar perfil: ' + (error?.message || 'Erro desconhecido'))
+      }
+    } catch (error) {
+      console.error('Error creating profile:', error)
+      alert('Erro ao criar perfil: ' + error)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const cancelNewProfile = () => {
+    setCreatingNewProfile(false)
+    setEditFirstName('')
+    setEditLastName('')
+    setNewProfileUserId('')
+    setEditRoleId('')
   }
 
   return (
@@ -392,9 +333,10 @@ export default function UtilizadoresPage() {
                   <RotateCw className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Atualizar dados</TooltipContent>
+              <TooltipContent>Atualizar</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+
         </div>
       </div>
 
@@ -416,72 +358,177 @@ export default function UtilizadoresPage() {
               placeholder="Filtrar por nome..."
               value={nameFilter}
               onChange={(e) => setNameFilter(e.target.value)}
-              className="w-[200px]"
+              className="w-[200px] rounded-none"
             />
             <Input
               placeholder="Filtrar por email..."
               value={emailFilter}
               onChange={(e) => setEmailFilter(e.target.value)}
-              className="w-[200px]"
+              className="w-[200px] rounded-none"
             />
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Filtrar por papel" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos os papéis</SelectItem>
-                {roles.map(role => (
-                  <SelectItem key={role.id} value={role.id}>
-                    {role.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="icon" onClick={() => {
-              setNameFilter('')
-              setEmailFilter('')
-              setRoleFilter('all')
-            }}>
-              <X className="w-4 h-4" />
-            </Button>
+            <Combobox
+              value={roleFilter}
+              onChange={setRoleFilter}
+              placeholder="Filtrar por papel"
+              maxWidth="200px"
+              options={[
+                { value: 'all', label: 'Todos os papéis' },
+                ...roles.map(role => ({
+                  value: role.id,
+                  label: role.name
+                }))
+              ]}
+            />
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" onClick={() => {
+                    setNameFilter('')
+                    setEmailFilter('')
+                    setRoleFilter('all')
+                  }}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Limpar filtros</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <div className="flex-1" />
-            <Button onClick={openNewProfileForm}>
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Perfil
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    onClick={openNewProfileForm}
+                    disabled={creatingNewProfile || editingProfileId !== null}
+                  >
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Novo Perfil</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           {/* Profiles Table */}
-          <div className="rounded-md bg-background w-full">
-            <div className="max-h-[70vh] overflow-y-auto w-full">
-              <Table className="w-full">
+          <div className="rounded-none bg-background w-full border-2 border-border">
+            <div className="max-h-[70vh] overflow-y-auto w-full rounded-none">
+              <Table className="w-full border-0 rounded-none">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[150px]">
+                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[150px] font-bold uppercase">
                       Nome
                     </TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[150px]">
+                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[150px] font-bold uppercase">
                       Apelido
                     </TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[200px]">
+                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[200px] font-bold uppercase">
                       Email
                     </TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[150px]">
+                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[150px] font-bold uppercase">
                       Papel
                     </TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px]">
+                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px] font-bold uppercase">
                       Ações
                     </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
+                  {/* New Profile Creation Row */}
+                  {creatingNewProfile && (
+                    <TableRow className="bg-blue-50 dark:bg-blue-950">
+                      <TableCell>
+                        <Input
+                          value={editFirstName}
+                          onChange={(e) => setEditFirstName(e.target.value)}
+                          className="rounded-none"
+                          placeholder="Primeiro nome"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={editLastName}
+                          onChange={(e) => setEditLastName(e.target.value)}
+                          className="rounded-none"
+                          placeholder="Apelido"
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Combobox
+                          value={newProfileUserId}
+                          onChange={(userId) => {
+                            setNewProfileUserId(userId)
+                            // Auto-fill first/last name if available in user metadata
+                            const selectedUser = authUsers.find(user => user.id === userId)
+                            if (selectedUser?.user_metadata?.first_name) {
+                              setEditFirstName(selectedUser.user_metadata.first_name)
+                            }
+                            if (selectedUser?.user_metadata?.last_name) {
+                              setEditLastName(selectedUser.user_metadata.last_name)
+                            }
+                          }}
+                          placeholder="Selecione um utilizador"
+                          maxWidth="250px"
+                          options={getAvailableAuthUsers().map(user => ({
+                            value: user.id,
+                            label: user.email
+                          }))}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Combobox
+                          value={editRoleId}
+                          onChange={setEditRoleId}
+                          placeholder="Selecione um papel"
+                          maxWidth="200px"
+                          options={roles.map(role => ({
+                            value: role.id,
+                            label: role.name
+                          }))}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="default"
+                                  size="icon"
+                                  onClick={saveNewProfile}
+                                  disabled={!editFirstName.trim() || !editLastName.trim() || !newProfileUserId.trim() || !editRoleId || submitting}
+                                >
+                                  <span className="text-xs">✓</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Guardar</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={cancelNewProfile}
+                                >
+                                  <X className="w-4 h-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Cancelar</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  
                   {loading ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center h-40">
                         <Loader2 className="animate-spin w-8 h-8 text-muted-foreground mx-auto" />
                       </TableCell>
                     </TableRow>
-                  ) : filteredProfiles.length === 0 ? (
+                  ) : filteredProfiles.length === 0 && !creatingNewProfile ? (
                     <TableRow>
                       <TableCell colSpan={5} className="text-center text-gray-500">
                         Nenhum perfil encontrado.
@@ -492,8 +539,30 @@ export default function UtilizadoresPage() {
                       const authUser = getAuthUserForProfile(profile.user_id)
                       return (
                         <TableRow key={profile.id}>
-                          <TableCell className="font-medium">{profile.first_name}</TableCell>
-                          <TableCell>{profile.last_name}</TableCell>
+                          <TableCell className="font-medium">
+                            {editingProfileId === profile.id ? (
+                              <Input
+                                value={editFirstName}
+                                onChange={(e) => setEditFirstName(e.target.value)}
+                                className="rounded-none"
+                                placeholder="Primeiro nome"
+                              />
+                            ) : (
+                              profile.first_name
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {editingProfileId === profile.id ? (
+                              <Input
+                                value={editLastName}
+                                onChange={(e) => setEditLastName(e.target.value)}
+                                className="rounded-none"
+                                placeholder="Apelido"
+                              />
+                            ) : (
+                              profile.last_name
+                            )}
+                          </TableCell>
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <Mail className="w-4 h-4 text-muted-foreground" />
@@ -501,26 +570,138 @@ export default function UtilizadoresPage() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge variant="outline">
-                              {profile.roles?.name || '-'}
-                            </Badge>
+                            {editingProfileId === profile.id ? (
+                              <Combobox
+                                value={editRoleId}
+                                onChange={setEditRoleId}
+                                placeholder="Selecione um papel"
+                                maxWidth="200px"
+                                options={roles.map(role => ({
+                                  value: role.id,
+                                  label: role.name
+                                }))}
+                              />
+                            ) : (
+                              <Badge variant="outline" className="rounded-none">
+                                {profile.roles?.name || '-'}
+                              </Badge>
+                            )}
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-1">
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                onClick={() => handleEditProfile(profile)}
-                              >
-                                <Edit className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                size="icon"
-                                onClick={() => handleDeleteProfile(profile.id)}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
+                              {editingProfileId === profile.id ? (
+                                <>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="default"
+                                          size="icon"
+                                          onClick={async () => {
+                                            if (!editFirstName.trim() || !editLastName.trim() || !editRoleId) return;
+                                            
+                                            setSubmitting(true);
+                                            try {
+                                              const { data, error } = await supabase
+                                                .from('profiles')
+                                                .update({
+                                                  first_name: editFirstName.trim(),
+                                                  last_name: editLastName.trim(),
+                                                  role_id: editRoleId,
+                                                  updated_at: new Date().toISOString().split('T')[0]
+                                                })
+                                                .eq('id', profile.id)
+                                                .select(`
+                                                  *,
+                                                  roles (
+                                                    id,
+                                                    name,
+                                                    description
+                                                  )
+                                                `);
+                                              
+                                              if (!error && data && data[0]) {
+                                                setProfiles(prev => prev.map(p => 
+                                                  p.id === profile.id ? data[0] : p
+                                                ));
+                                              }
+                                            } catch (error) {
+                                              console.error('Error updating:', error);
+                                            } finally {
+                                              setSubmitting(false);
+                                              setEditingProfileId(null);
+                                              setEditFirstName('');
+                                              setEditLastName('');
+                                              setEditRoleId('');
+                                            }
+                                          }}
+                                          disabled={!editFirstName.trim() || !editLastName.trim() || !editRoleId || submitting}
+                                        >
+                                          <span className="text-xs">✓</span>
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Guardar</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="outline"
+                                          size="icon"
+                                          onClick={() => {
+                                            setEditingProfileId(null);
+                                            setEditFirstName('');
+                                            setEditLastName('');
+                                            setEditRoleId('');
+                                          }}
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Cancelar</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </>
+                              ) : (
+                                <>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="default"
+                                          size="icon"
+                                          onClick={() => {
+                                            setEditingProfileId(profile.id);
+                                            setEditFirstName(profile.first_name);
+                                            setEditLastName(profile.last_name);
+                                            setEditRoleId(profile.role_id);
+                                          }}
+                                          disabled={editingProfileId !== null}
+                                        >
+                                          <Edit className="w-4 h-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Editar</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="destructive"
+                                          size="icon"
+                                          onClick={() => handleDeleteProfile(profile.id)}
+                                          disabled={editingProfileId !== null}
+                                        >
+                                          <Trash2 className="w-4 h-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Excluir</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </>
+                              )}
                             </div>
                           </TableCell>
                         </TableRow>
@@ -539,31 +720,44 @@ export default function UtilizadoresPage() {
               placeholder="Filtrar por nome do papel..."
               value={nameFilter}
               onChange={(e) => setNameFilter(e.target.value)}
-              className="w-[300px]"
+              className="w-[300px] rounded-none"
             />
-            <Button variant="outline" size="icon" onClick={() => setNameFilter('')}>
-              <X className="w-4 h-4" />
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="icon" onClick={() => setNameFilter('')}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Limpar filtro</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <div className="flex-1" />
-            <Button onClick={openNewRoleForm}>
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Papel
-            </Button>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={openNewRoleForm}>
+                    <Plus className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Novo Papel</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
 
           {/* Roles Table */}
-          <div className="rounded-md bg-background w-full">
-            <div className="max-h-[70vh] overflow-y-auto w-full">
-              <Table className="w-full">
+          <div className="rounded-none bg-background w-full border-2 border-border">
+            <div className="max-h-[70vh] overflow-y-auto w-full rounded-none">
+              <Table className="w-full border-0 rounded-none">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[200px]">
+                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[200px] font-bold uppercase">
                       Nome do Papel
                     </TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[300px]">
+                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[300px] font-bold uppercase">
                       Descrição
                     </TableHead>
-                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px]">
+                    <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px] font-bold uppercase">
                       Ações
                     </TableHead>
                   </TableRow>
@@ -584,24 +778,131 @@ export default function UtilizadoresPage() {
                   ) : (
                     filteredRoles.map((role) => (
                       <TableRow key={role.id}>
-                        <TableCell className="font-medium">{role.name}</TableCell>
-                        <TableCell>{role.description || '-'}</TableCell>
+                        <TableCell className="font-medium">
+                          {editingRoleId === role.id ? (
+                            <Input
+                              value={editRoleName}
+                              onChange={(e) => setEditRoleName(e.target.value)}
+                              className="rounded-none"
+                              placeholder="Nome do papel"
+                            />
+                          ) : (
+                            role.name
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {editingRoleId === role.id ? (
+                            <div className="flex gap-2 items-center">
+                              <Input
+                                value={editRoleDescription}
+                                onChange={(e) => setEditRoleDescription(e.target.value)}
+                                className="rounded-none flex-1"
+                                placeholder="Descrição do papel"
+                              />
+                              <div className="flex gap-1">
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="default"
+                                        size="icon"
+                                        onClick={async () => {
+                                          if (!editRoleName.trim()) return;
+                                          
+                                          setSubmitting(true);
+                                          try {
+                                            const { data, error } = await supabase
+                                              .from('roles')
+                                              .update({
+                                                name: editRoleName.trim(),
+                                                description: editRoleDescription.trim() || null,
+                                                updated_at: new Date().toISOString().split('T')[0]
+                                              })
+                                              .eq('id', role.id)
+                                              .select('*');
+                                            
+                                            if (!error && data && data[0]) {
+                                              setRoles(prev => prev.map(r => 
+                                                r.id === role.id ? data[0] : r
+                                              ));
+                                            }
+                                          } catch (error) {
+                                            console.error('Error updating:', error);
+                                          } finally {
+                                            setSubmitting(false);
+                                            setEditingRoleId(null);
+                                            setEditRoleName('');
+                                            setEditRoleDescription('');
+                                          }
+                                        }}
+                                        disabled={!editRoleName.trim() || submitting}
+                                      >
+                                        <span className="text-xs">✓</span>
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Guardar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={() => {
+                                          setEditingRoleId(null);
+                                          setEditRoleName('');
+                                          setEditRoleDescription('');
+                                        }}
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Cancelar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                            </div>
+                          ) : (
+                            role.description || '-'
+                          )}
+                        </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button
-                              variant="outline"
-                              size="icon"
-                              onClick={() => handleEditRole(role)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="destructive"
-                              size="icon"
-                              onClick={() => handleDeleteRole(role.id)}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="default"
+                                    size="icon"
+                                    onClick={() => {
+                                      setEditingRoleId(role.id);
+                                      setEditRoleName(role.name);
+                                      setEditRoleDescription(role.description || '');
+                                    }}
+                                    disabled={editingRoleId !== null}
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Editar</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="destructive"
+                                    size="icon"
+                                    onClick={() => handleDeleteRole(role.id)}
+                                    disabled={editingRoleId !== null}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Excluir</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -614,235 +915,7 @@ export default function UtilizadoresPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Profile Form Drawer */}
-      <Drawer open={openProfileDrawer} onOpenChange={(open) => { if (!open) resetProfileForm() }}>
-        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0">
-          <div className="w-full px-4 md:px-8 flex flex-col h-full">
-            <DrawerHeader className="flex-none">
-              <div className="flex justify-end items-center gap-2 mb-2">
-                <DrawerClose asChild>
-                  <Button variant="outline" size="sm">
-                    <X className="w-5 h-5" />
-                  </Button>
-                </DrawerClose>
-              </div>
-              <DrawerTitle>
-                {editingProfile ? 'Editar Perfil' : 'Novo Perfil'}
-              </DrawerTitle>
-              <DrawerDescription>
-                {editingProfile 
-                  ? 'Edite as informações do perfil do utilizador.'
-                  : 'Crie um novo perfil para um utilizador autenticado.'
-                }
-              </DrawerDescription>
-            </DrawerHeader>
 
-            <div className="flex-grow overflow-y-auto">
-              <form onSubmit={handleProfileSubmit} className="space-y-6">
-                <div className="space-y-4">
-                  {!editingProfile && (
-                    <div className="space-y-2">
-                      <Label htmlFor="user_select" className="font-base text-sm">Utilizador Autenticado</Label>
-                      <select 
-                        id="user_select"
-                        value={profileFormData.user_id} 
-                        onChange={(e) => {
-                          const value = e.target.value
-                          const selectedUser = authUsers.find(u => u.id === value)
-                          setProfileFormData(prev => ({
-                            ...prev,
-                            user_id: value,
-                            first_name: selectedUser?.user_metadata?.first_name || '',
-                            last_name: selectedUser?.user_metadata?.last_name || ''
-                          }))
-                        }}
-                        disabled={submitting}
-                        className="flex h-9 w-full border border-border bg-background px-3 py-1 text-sm shadow-shadow transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        <option value="">Selecione um utilizador autenticado</option>
-                        {getAvailableAuthUsers().map(user => (
-                          <option key={user.id} value={user.id}>
-                            {user.email}
-                            {user.user_metadata?.first_name && user.user_metadata?.last_name && 
-                              ' - ' + user.user_metadata.first_name + ' ' + user.user_metadata.last_name
-                            }
-                          </option>
-                        ))}
-                      </select>
-                      {getAvailableAuthUsers().length === 0 && (
-                        <p className="text-sm text-muted-foreground">
-                          Todos os utilizadores autenticados já têm perfis criados.
-                        </p>
-                      )}
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="first_name" className="font-base text-sm">Primeiro Nome</Label>
-                      <Input
-                        id="first_name"
-                        name="first_name"
-                        value={profileFormData.first_name}
-                        onChange={(e) => setProfileFormData(prev => ({
-                          ...prev,
-                          first_name: e.target.value
-                        }))}
-                        placeholder="Digite o primeiro nome"
-                        required
-                        disabled={submitting}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="last_name" className="font-base text-sm">Apelido</Label>
-                      <Input
-                        id="last_name"
-                        name="last_name"
-                        value={profileFormData.last_name}
-                        onChange={(e) => setProfileFormData(prev => ({
-                          ...prev,
-                          last_name: e.target.value
-                        }))}
-                        placeholder="Digite o apelido"
-                        required
-                        disabled={submitting}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="role_id" className="font-base text-sm">Papel</Label>
-                    <select
-                      id="role_id"
-                      value={profileFormData.role_id} 
-                      onChange={(e) => setProfileFormData(prev => ({
-                        ...prev,
-                        role_id: e.target.value
-                      }))}
-                      disabled={submitting}
-                      className="flex h-9 w-full border border-border bg-background px-3 py-1 text-sm shadow-shadow transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <option value="">Selecione um papel</option>
-                      {roles.map(role => (
-                        <option key={role.id} value={role.id}>
-                          {role.name}
-                          {role.description && ' - ' + role.description}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-4 sticky bottom-0 bg-background border-t border-border">
-                  <Button 
-                    type="submit" 
-                    disabled={submitting || !profileFormData.first_name.trim() || !profileFormData.last_name.trim() || !profileFormData.role_id || (!editingProfile && !profileFormData.user_id)}
-                    className="flex-1"
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        {editingProfile ? 'Atualizando...' : 'Criando...'}
-                      </>
-                    ) : (
-                      editingProfile ? 'Atualizar Perfil' : 'Criar Perfil'
-                    )}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={resetProfileForm} disabled={submitting}>
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </DrawerContent>
-      </Drawer>
-
-      {/* Role Form Drawer */}
-      <Drawer open={openRoleDrawer} onOpenChange={(open) => { if (!open) resetRoleForm() }}>
-        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0">
-          <div className="w-full px-4 md:px-8 flex flex-col h-full">
-            <DrawerHeader className="flex-none">
-              <div className="flex justify-end items-center gap-2 mb-2">
-                <DrawerClose asChild>
-                  <Button variant="outline" size="sm">
-                    <X className="w-5 h-5" />
-                  </Button>
-                </DrawerClose>
-              </div>
-              <DrawerTitle>
-                {editingRole ? 'Editar Papel' : 'Novo Papel'}
-              </DrawerTitle>
-              <DrawerDescription>
-                {editingRole 
-                  ? 'Edite as informações do papel.'
-                  : 'Crie um novo papel para atribuir aos utilizadores.'
-                }
-              </DrawerDescription>
-            </DrawerHeader>
-
-            <div className="flex-grow overflow-y-auto">
-              <form onSubmit={handleRoleSubmit} className="space-y-6">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="role_name" className="font-base text-sm">Nome do Papel</Label>
-                    <Input
-                      id="role_name"
-                      name="name"
-                      value={roleFormData.name}
-                      onChange={(e) => setRoleFormData(prev => ({
-                        ...prev,
-                        name: e.target.value
-                      }))}
-                      placeholder="Digite o nome do papel"
-                      required
-                      disabled={submitting}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="role_description" className="font-base text-sm">Descrição</Label>
-                    <Textarea
-                      id="role_description"
-                      name="description"
-                      value={roleFormData.description}
-                      onChange={(e) => setRoleFormData(prev => ({
-                        ...prev,
-                        description: e.target.value
-                      }))}
-                      placeholder="Digite a descrição do papel (opcional)"
-                      disabled={submitting}
-                      className="min-h-[80px] h-24 resize-none w-full"
-                      rows={3}
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-4 sticky bottom-0 bg-background border-t border-border">
-                  <Button 
-                    type="submit" 
-                    disabled={submitting || !roleFormData.name.trim()}
-                    className="flex-1"
-                  >
-                    {submitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        {editingRole ? 'Atualizando...' : 'Criando...'}
-                      </>
-                    ) : (
-                      editingRole ? 'Atualizar Papel' : 'Criar Papel'
-                    )}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={resetRoleForm} disabled={submitting}>
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </DrawerContent>
-      </Drawer>
     </div>
   )
 } 

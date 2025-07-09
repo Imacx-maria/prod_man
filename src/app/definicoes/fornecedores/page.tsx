@@ -177,61 +177,74 @@ export default function FornecedoresPage() {
 
   return (
     <div className="w-full space-y-6 p-4 md:p-8">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Gestão de Fornecedores</h1>
         <div className="flex gap-2">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={fetchFornecedores}>
+                <Button variant="outline" size="icon" onClick={fetchFornecedores} aria-label="Atualizar">
                   <RotateCw className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Atualizar lista</TooltipContent>
+              <TooltipContent>Atualizar</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <Button onClick={openNewForm}>
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Fornecedor
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={openNewForm} variant="default" size="icon" aria-label="Adicionar">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Adicionar</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 mb-6">
         <Input
           placeholder="Filtrar por nome, número PHC ou email..."
           value={nameFilter}
           onChange={(e) => setNameFilter(e.target.value)}
-          className="w-[300px]"
+          className="w-[300px] rounded-none"
         />
-        <Button variant="outline" size="icon" onClick={() => setNameFilter('')}>
-          <X className="w-4 h-4" />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" onClick={() => setNameFilter('')} aria-label="Limpar filtro">
+                <X className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Limpar filtro</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {/* Table */}
-      <div className="rounded-md bg-background w-full">
-        <div className="max-h-[70vh] overflow-y-auto w-full">
-          <Table className="w-full">
+      <div className="rounded-none bg-background w-full border-2 border-border">
+        <div className="max-h-[70vh] overflow-y-auto w-full rounded-none">
+          <Table className="w-full border-0 rounded-none">
             <TableHeader>
               <TableRow>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[120px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] font-bold uppercase rounded-none">
                   Número PHC
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[200px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[200px] font-bold uppercase rounded-none">
                   Nome do Fornecedor
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[250px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[250px] font-bold uppercase rounded-none">
                   Morada
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[120px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] font-bold uppercase rounded-none">
                   Telefone
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[200px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[200px] font-bold uppercase rounded-none">
                   Email
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[140px] font-bold uppercase rounded-none">
                   Ações
                 </TableHead>
               </TableRow>
@@ -252,27 +265,43 @@ export default function FornecedoresPage() {
               ) : (
                 filteredFornecedores.map((fornecedor) => (
                   <TableRow key={fornecedor.id}>
-                    <TableCell className="uppercase">{fornecedor.numero_phc || '-'}</TableCell>
-                    <TableCell className="font-medium uppercase">{fornecedor.nome_forn}</TableCell>
-                    <TableCell className="uppercase">{fornecedor.morada || '-'}</TableCell>
-                    <TableCell className="uppercase">{fornecedor.telefone || '-'}</TableCell>
-                    <TableCell className="lowercase">{fornecedor.email || '-'}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => handleEdit(fornecedor)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={() => handleDelete(fornecedor.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                    <TableCell className="uppercase rounded-none">{fornecedor.numero_phc || '-'}</TableCell>
+                    <TableCell className="font-medium uppercase rounded-none">{fornecedor.nome_forn}</TableCell>
+                    <TableCell className="uppercase rounded-none">{fornecedor.morada || '-'}</TableCell>
+                    <TableCell className="uppercase rounded-none">{fornecedor.telefone || '-'}</TableCell>
+                    <TableCell className="lowercase rounded-none">{fornecedor.email || '-'}</TableCell>
+                    <TableCell className="rounded-none">
+                      <div className="flex gap-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="default"
+                                size="icon"
+                                onClick={() => handleEdit(fornecedor)}
+                                aria-label="Ver detalhes do fornecedor"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Ver</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="destructive"
+                                size="icon"
+                                onClick={() => handleDelete(fornecedor.id)}
+                                aria-label="Eliminar fornecedor"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Eliminar</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -285,12 +314,12 @@ export default function FornecedoresPage() {
 
       {/* Drawer for add/edit form */}
       <Drawer open={openDrawer} onOpenChange={(open) => !open && resetForm()}>
-        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0">
+        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0 rounded-none">
           <div className="w-full px-4 md:px-8 flex flex-col h-full">
             <DrawerHeader className="flex-none">
               <div className="flex justify-end items-center gap-2 mb-2">
                 <DrawerClose asChild>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" aria-label="Fechar">
                     <X className="w-5 h-5" />
                   </Button>
                 </DrawerClose>
@@ -318,6 +347,7 @@ export default function FornecedoresPage() {
                       value={formData.numero_phc}
                       onChange={(e) => setFormData(prev => ({ ...prev, numero_phc: e.target.value }))}
                       placeholder="Número do sistema PHC"
+                      className="rounded-none"
                     />
                   </div>
 
@@ -331,6 +361,7 @@ export default function FornecedoresPage() {
                       onChange={(e) => setFormData(prev => ({ ...prev, nome_forn: e.target.value }))}
                       placeholder="Nome do fornecedor"
                       required
+                      className="rounded-none"
                     />
                   </div>
                 </div>
@@ -344,7 +375,7 @@ export default function FornecedoresPage() {
                     value={formData.morada}
                     onChange={(e) => setFormData(prev => ({ ...prev, morada: e.target.value }))}
                     placeholder="Morada completa do fornecedor"
-                    className="min-h-[80px] h-24 resize-none w-full"
+                    className="min-h-[80px] h-24 resize-none w-full rounded-none"
                   />
                 </div>
 
@@ -358,6 +389,7 @@ export default function FornecedoresPage() {
                       value={formData.codigo_pos}
                       onChange={(e) => setFormData(prev => ({ ...prev, codigo_pos: e.target.value }))}
                       placeholder="Ex: 1000-001"
+                      className="rounded-none"
                     />
                   </div>
 
@@ -370,6 +402,7 @@ export default function FornecedoresPage() {
                       value={formData.telefone}
                       onChange={(e) => setFormData(prev => ({ ...prev, telefone: e.target.value }))}
                       placeholder="Ex: 123456789"
+                      className="rounded-none"
                     />
                   </div>
                 </div>
@@ -385,6 +418,7 @@ export default function FornecedoresPage() {
                       value={formData.email}
                       onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                       placeholder="fornecedor@exemplo.com"
+                      className="rounded-none"
                     />
                   </div>
 
@@ -397,18 +431,19 @@ export default function FornecedoresPage() {
                       value={formData.contacto_principal}
                       onChange={(e) => setFormData(prev => ({ ...prev, contacto_principal: e.target.value }))}
                       placeholder="Nome do contacto principal"
+                      className="rounded-none"
                     />
                   </div>
                 </div>
 
                 <div className="flex gap-2 pt-4">
-                  <Button type="submit" disabled={submitting || !formData.nome_forn.trim()}>
+                  <Button type="submit" disabled={submitting || !formData.nome_forn.trim()} variant="default">
                     {submitting ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : null}
-                    {editingFornecedor ? 'Atualizar' : 'Criar'} Fornecedor
+                    {editingFornecedor ? 'Guardar' : 'Criar Fornecedor'}
                   </Button>
-                  <Button type="button" variant="outline" onClick={resetForm}>
+                  <Button type="button" variant="outline" onClick={resetForm} aria-label="Cancelar">
                     Cancelar
                   </Button>
                 </div>

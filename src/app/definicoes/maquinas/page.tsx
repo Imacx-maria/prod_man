@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose, DrawerDescription } from '@/components/ui/drawer'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Plus, Trash2, X, Loader2, Edit, RotateCw } from 'lucide-react'
+import { Plus, Trash2, X, Loader2, Edit, RotateCw, Eye } from 'lucide-react'
 
 interface Maquina {
   id: string
@@ -166,17 +166,23 @@ export default function MaquinasPage() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={fetchMaquinas}>
+                <Button variant="outline" size="icon" onClick={fetchMaquinas} aria-label="Atualizar">
                   <RotateCw className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Atualizar lista</TooltipContent>
+              <TooltipContent>Atualizar</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <Button onClick={openNewForm}>
-            <Plus className="w-4 h-4 mr-2" />
-            Nova Máquina
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={openNewForm} variant="default" size="icon" aria-label="Adicionar">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Adicionar</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
@@ -186,29 +192,36 @@ export default function MaquinasPage() {
           placeholder="Filtrar por nome da máquina..."
           value={nameFilter}
           onChange={(e) => setNameFilter(e.target.value)}
-          className="w-[300px]"
+          className="w-[300px] rounded-none border-0 outline-none"
         />
-        <Button variant="outline" size="icon" onClick={() => setNameFilter('')}>
-          <X className="w-4 h-4" />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" onClick={() => setNameFilter('')} aria-label="Limpar filtro">
+                <X className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Limpar filtro</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {/* Table */}
-      <div className="rounded-md bg-background w-full">
-        <div className="max-h-[70vh] overflow-y-auto w-full">
-          <Table className="w-full">
+      <div className="rounded-none border-2 border-border bg-background w-full">
+        <div className="max-h-[70vh] overflow-y-auto w-full bg-background rounded-none">
+          <Table className="w-full border-0 bg-background rounded-none">
             <TableHeader>
               <TableRow>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[100px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[100px] font-bold uppercase">
                   ID
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[300px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[300px] font-bold uppercase">
                   Nome da Máquina
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[150px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[150px] font-bold uppercase">
                   Valor/m²
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[140px] font-bold uppercase">
                   Ações
                 </TableHead>
               </TableRow>
@@ -234,20 +247,36 @@ export default function MaquinasPage() {
                     <TableCell className="uppercase">{formatCurrency(maquina.valor_m2)}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => handleEdit(maquina)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={() => handleDelete(maquina.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="default"
+                                size="icon"
+                                onClick={() => handleEdit(maquina)}
+                                aria-label="Ver"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Ver</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="destructive"
+                                size="icon"
+                                onClick={() => handleDelete(maquina.id)}
+                                aria-label="Eliminar"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Eliminar</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -259,16 +288,21 @@ export default function MaquinasPage() {
       </div>
 
       {/* Drawer for add/edit form */}
-      <Drawer open={openDrawer} onOpenChange={(open) => !open && resetForm()}>
-        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0">
+      <Drawer open={openDrawer} onOpenChange={setOpenDrawer}>
+        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0 rounded-none border-2 border-border">
           <div className="w-full px-4 md:px-8 flex flex-col h-full">
             <DrawerHeader className="flex-none">
               <div className="flex justify-end items-center gap-2 mb-2">
-                <DrawerClose asChild>
-                  <Button variant="outline" size="sm">
-                    <X className="w-5 h-5" />
-                  </Button>
-                </DrawerClose>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="outline" size="sm" aria-label="Fechar" onClick={() => setOpenDrawer(false)}>
+                        <X className="w-5 h-5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Fechar</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
               <DrawerTitle>
                 {editingMaquina ? 'Editar Máquina' : 'Nova Máquina'}
@@ -293,6 +327,7 @@ export default function MaquinasPage() {
                     onChange={(e) => setFormData(prev => ({ ...prev, maquina: e.target.value }))}
                     placeholder="Nome da máquina"
                     required
+                    className="rounded-none border-0 outline-none"
                   />
                 </div>
 
@@ -308,15 +343,16 @@ export default function MaquinasPage() {
                     value={formData.valor_m2}
                     onChange={(e) => setFormData(prev => ({ ...prev, valor_m2: e.target.value }))}
                     placeholder="Ex: 15.50"
+                    className="rounded-none border-0 outline-none"
                   />
                 </div>
 
                 <div className="flex gap-2 pt-4">
-                  <Button type="submit" disabled={submitting || !formData.maquina.trim()}>
+                  <Button type="submit" disabled={submitting || !formData.maquina.trim()}> 
                     {submitting ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : null}
-                    {editingMaquina ? 'Atualizar' : 'Criar'} Máquina
+                    {editingMaquina ? 'Guardar' : 'Criar Máquina'}
                   </Button>
                   <Button type="button" variant="outline" onClick={resetForm}>
                     Cancelar

@@ -313,61 +313,74 @@ export default function ClientesPage() {
 
   return (
     <div className="w-full space-y-6 p-4 md:p-8">
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">Gestão de Clientes</h1>
         <div className="flex gap-2">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={fetchClientes}>
+                <Button variant="outline" size="icon" onClick={fetchClientes} aria-label="Atualizar">
                   <RotateCw className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Atualizar lista</TooltipContent>
+              <TooltipContent>Atualizar</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <Button onClick={openNewForm}>
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Cliente
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={openNewForm} variant="default" size="icon" aria-label="Adicionar">
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Adicionar</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 mb-6">
         <Input
           placeholder="Filtrar por nome ou número PHC..."
           value={nameFilter}
           onChange={(e) => setNameFilter(e.target.value)}
-          className="w-[300px]"
+          className="w-[300px] rounded-none"
         />
-        <Button variant="outline" size="icon" onClick={() => setNameFilter('')}>
-          <X className="w-4 h-4" />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" size="icon" onClick={() => setNameFilter('')} aria-label="Limpar filtro">
+                <X className="w-4 h-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Limpar filtro</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {/* Table */}
-      <div className="rounded-md bg-background w-full">
-        <div className="max-h-[70vh] overflow-y-auto w-full">
-          <Table className="w-full">
+      <div className="rounded-none bg-background w-full border-2 border-border">
+        <div className="max-h-[70vh] overflow-y-auto w-full rounded-none">
+          <Table className="w-full border-0 rounded-none">
             <TableHeader>
               <TableRow>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[120px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] font-bold uppercase rounded-none">
                   Número PHC
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[200px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[200px] font-bold uppercase rounded-none">
                   Nome do Cliente
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[250px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[250px] font-bold uppercase rounded-none">
                   Morada
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[120px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] font-bold uppercase rounded-none">
                   Código Postal
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[140px] font-bold uppercase rounded-none">
                   Telefone
                 </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[160px] uppercase">
+                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[160px] font-bold uppercase rounded-none">
                   Ações
                 </TableHead>
               </TableRow>
@@ -388,35 +401,58 @@ export default function ClientesPage() {
               ) : (
                 filteredClientes.map((cliente) => (
                   <TableRow key={cliente.id}>
-                    <TableCell className="uppercase">{cliente.numero_phc || '-'}</TableCell>
-                    <TableCell className="font-medium uppercase">{cliente.nome_cl}</TableCell>
-                    <TableCell className="uppercase">{cliente.morada || '-'}</TableCell>
-                    <TableCell className="uppercase">{cliente.codigo_pos || '-'}</TableCell>
-                    <TableCell className="uppercase">{cliente.telefone || '-'}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => handleViewContacts(cliente)}
-                          title="Ver contactos"
-                        >
-                          <Users className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => handleEdit(cliente)}
-                        >
-                          <Edit className="w-4 h-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          onClick={() => handleDelete(cliente.id)}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                    <TableCell className="uppercase rounded-none">{cliente.numero_phc || '-'}</TableCell>
+                    <TableCell className="font-medium uppercase rounded-none">{cliente.nome_cl}</TableCell>
+                    <TableCell className="uppercase rounded-none">{cliente.morada || '-'}</TableCell>
+                    <TableCell className="uppercase rounded-none">{cliente.codigo_pos || '-'}</TableCell>
+                    <TableCell className="uppercase rounded-none">{cliente.telefone || '-'}</TableCell>
+                    <TableCell className="rounded-none">
+                      <div className="flex gap-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => handleViewContacts(cliente)}
+                                aria-label="Ver contactos"
+                              >
+                                <Users className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Contactos</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="default"
+                                size="icon"
+                                onClick={() => handleEdit(cliente)}
+                                aria-label="Ver detalhes do cliente"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Ver</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="destructive"
+                                size="icon"
+                                onClick={() => handleDelete(cliente.id)}
+                                aria-label="Eliminar cliente"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Eliminar</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -429,12 +465,12 @@ export default function ClientesPage() {
 
       {/* Cliente Form Drawer */}
       <Drawer open={openDrawer} onOpenChange={(open) => !open && resetForm()}>
-        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0">
+        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0 rounded-none">
           <div className="w-full px-4 md:px-8 flex flex-col h-full">
             <DrawerHeader className="flex-none">
               <div className="flex justify-end items-center gap-2 mb-2">
                 <DrawerClose asChild>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" aria-label="Fechar">
                     <X className="w-5 h-5" />
                   </Button>
                 </DrawerClose>
@@ -462,6 +498,7 @@ export default function ClientesPage() {
                       value={formData.numero_phc}
                       onChange={(e) => setFormData(prev => ({ ...prev, numero_phc: e.target.value }))}
                       placeholder="Número do sistema PHC"
+                      className="rounded-none"
                     />
                   </div>
 
@@ -475,6 +512,7 @@ export default function ClientesPage() {
                       onChange={(e) => setFormData(prev => ({ ...prev, nome_cl: e.target.value }))}
                       placeholder="Nome do cliente"
                       required
+                      className="rounded-none"
                     />
                   </div>
                 </div>
@@ -488,7 +526,7 @@ export default function ClientesPage() {
                     value={formData.morada}
                     onChange={(e) => setFormData(prev => ({ ...prev, morada: e.target.value }))}
                     placeholder="Morada completa do cliente"
-                    className="min-h-[80px] h-24 resize-none w-full"
+                    className="min-h-[80px] h-24 resize-none w-full rounded-none"
                   />
                 </div>
 
@@ -502,6 +540,7 @@ export default function ClientesPage() {
                       value={formData.codigo_pos}
                       onChange={(e) => setFormData(prev => ({ ...prev, codigo_pos: e.target.value }))}
                       placeholder="Ex: 1000-001"
+                      className="rounded-none"
                     />
                   </div>
 
@@ -514,18 +553,19 @@ export default function ClientesPage() {
                       value={formData.telefone}
                       onChange={(e) => setFormData(prev => ({ ...prev, telefone: e.target.value }))}
                       placeholder="Ex: +351 123 456 789"
+                      className="rounded-none"
                     />
                   </div>
                 </div>
 
                 <div className="flex gap-2 pt-4">
-                  <Button type="submit" disabled={submitting || !formData.nome_cl.trim()}>
+                  <Button type="submit" disabled={submitting || !formData.nome_cl.trim()} variant="default">
                     {submitting ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : null}
-                    {editingCliente ? 'Atualizar' : 'Criar'} Cliente
+                    {editingCliente ? 'Guardar' : 'Criar Cliente'}
                   </Button>
-                  <Button type="button" variant="outline" onClick={resetForm}>
+                  <Button type="button" variant="outline" onClick={resetForm} aria-label="Cancelar">
                     Cancelar
                   </Button>
                 </div>
@@ -537,12 +577,12 @@ export default function ClientesPage() {
 
       {/* Contacts Management Drawer */}
       <Drawer open={openContactDrawer} onOpenChange={(open) => !open && setOpenContactDrawer(false)}>
-        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0">
+        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0 rounded-none">
           <div className="w-full px-4 md:px-8 flex flex-col h-full">
             <DrawerHeader className="flex-none">
               <div className="flex justify-end items-center gap-2 mb-2">
                 <DrawerClose asChild>
-                  <Button variant="outline" size="sm" onClick={() => setOpenContactDrawer(false)}>
+                  <Button variant="outline" size="sm" onClick={() => setOpenContactDrawer(false)} aria-label="Fechar">
                     <X className="w-5 h-5" />
                   </Button>
                 </DrawerClose>
@@ -555,34 +595,34 @@ export default function ClientesPage() {
               </DrawerDescription>
             </DrawerHeader>
 
-            <div className="flex-grow overflow-y-auto space-y-4">
+            <div className="flex-grow overflow-y-auto space-y-4 rounded-none">
               {/* Add Contact Button */}
               <div className="flex justify-end">
-                <Button onClick={openNewContactForm}>
+                <Button onClick={openNewContactForm} aria-label="Adicionar novo contacto">
                   <Plus className="w-4 h-4 mr-2" />
                   Novo Contacto
                 </Button>
               </div>
 
               {/* Contacts Table */}
-              <div className="rounded-md bg-background w-full">
-                <div className="max-h-[60vh] overflow-y-auto w-full">
-                  <Table className="w-full">
+              <div className="rounded-none bg-background w-full border-2 border-border">
+                <div className="max-h-[60vh] overflow-y-auto w-full rounded-none">
+                  <Table className="w-full border-0 rounded-none">
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[200px] uppercase">
+                        <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[200px] font-bold uppercase rounded-none">
                           Nome
                         </TableHead>
-                        <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[200px] uppercase">
+                        <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[200px] font-bold uppercase rounded-none">
                           Email
                         </TableHead>
-                        <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px] uppercase">
+                        <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[140px] font-bold uppercase rounded-none">
                           Telefone
                         </TableHead>
-                        <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px] uppercase">
+                        <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[140px] font-bold uppercase rounded-none">
                           Telemóvel
                         </TableHead>
-                        <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px] uppercase">
+                        <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[140px] font-bold uppercase rounded-none">
                           Ações
                         </TableHead>
                       </TableRow>
@@ -607,26 +647,42 @@ export default function ClientesPage() {
                       ) : (
                         contacts.map((contact) => (
                           <TableRow key={contact.id}>
-                            <TableCell className="font-medium uppercase">{contact.name}</TableCell>
-                            <TableCell className="uppercase">{contact.email || '-'}</TableCell>
-                            <TableCell className="uppercase">{contact.phone_number || '-'}</TableCell>
-                            <TableCell className="uppercase">{contact.mobile || '-'}</TableCell>
-                            <TableCell>
+                            <TableCell className="font-medium uppercase rounded-none">{contact.name}</TableCell>
+                            <TableCell className="uppercase rounded-none">{contact.email || '-'}</TableCell>
+                            <TableCell className="uppercase rounded-none">{contact.phone_number || '-'}</TableCell>
+                            <TableCell className="uppercase rounded-none">{contact.mobile || '-'}</TableCell>
+                            <TableCell className="rounded-none">
                               <div className="flex gap-1">
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={() => handleEditContact(contact)}
-                                >
-                                  <Edit className="w-4 h-4" />
-                                </Button>
-                                <Button
-                                  variant="destructive"
-                                  size="icon"
-                                  onClick={() => handleDeleteContact(contact.id)}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={() => handleEditContact(contact)}
+                                        aria-label="Editar contacto"
+                                      >
+                                        <Edit className="w-4 h-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Editar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="destructive"
+                                        size="icon"
+                                        onClick={() => handleDeleteContact(contact.id)}
+                                        aria-label="Eliminar contacto"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Eliminar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -643,12 +699,12 @@ export default function ClientesPage() {
 
       {/* Contact Form Drawer */}
       <Drawer open={openContactForm || editingContact !== null} onOpenChange={(open) => !open && resetContactForm()}>
-        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0">
+        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0 rounded-none">
           <div className="w-full px-4 md:px-8 flex flex-col h-full">
             <DrawerHeader className="flex-none">
               <div className="flex justify-end items-center gap-2 mb-2">
                 <DrawerClose asChild>
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" aria-label="Fechar">
                     <X className="w-5 h-5" />
                   </Button>
                 </DrawerClose>
@@ -661,7 +717,7 @@ export default function ClientesPage() {
               </DrawerDescription>
             </DrawerHeader>
 
-            <div className="flex-grow overflow-y-auto">
+            <div className="flex-grow overflow-y-auto rounded-none">
               <form onSubmit={handleContactSubmit} className="space-y-6">
                 <div>
                   <Label htmlFor="contact_name" className="font-base text-sm">
@@ -673,6 +729,7 @@ export default function ClientesPage() {
                     onChange={(e) => setContactFormData(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="Nome completo do contacto"
                     required
+                    className="rounded-none"
                   />
                 </div>
 
@@ -686,6 +743,7 @@ export default function ClientesPage() {
                     value={contactFormData.email}
                     onChange={(e) => setContactFormData(prev => ({ ...prev, email: e.target.value }))}
                     placeholder="email@exemplo.com"
+                    className="rounded-none"
                   />
                 </div>
 
@@ -699,6 +757,7 @@ export default function ClientesPage() {
                       value={contactFormData.phone_number}
                       onChange={(e) => setContactFormData(prev => ({ ...prev, phone_number: e.target.value }))}
                       placeholder="Ex: 123 456 789"
+                      className="rounded-none"
                     />
                   </div>
 
@@ -711,18 +770,19 @@ export default function ClientesPage() {
                       value={contactFormData.mobile}
                       onChange={(e) => setContactFormData(prev => ({ ...prev, mobile: e.target.value }))}
                       placeholder="Ex: 912 345 678"
+                      className="rounded-none"
                     />
                   </div>
                 </div>
 
                 <div className="flex gap-2 pt-4">
-                  <Button type="submit" disabled={submitting || !contactFormData.name.trim()}>
+                  <Button type="submit" disabled={submitting || !contactFormData.name.trim()} variant="default">
                     {submitting ? (
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     ) : null}
                     {editingContact ? 'Atualizar' : 'Criar'} Contacto
                   </Button>
-                  <Button type="button" variant="outline" onClick={resetContactForm}>
+                  <Button type="button" variant="outline" onClick={resetContactForm} aria-label="Cancelar">
                     Cancelar
                   </Button>
                 </div>

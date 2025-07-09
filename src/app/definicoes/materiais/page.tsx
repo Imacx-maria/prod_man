@@ -539,7 +539,7 @@ export default function MateriaisPage() {
                   <RotateCw className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Atualizar lista</TooltipContent>
+              <TooltipContent>Atualizar</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <Button onClick={() => {
@@ -561,7 +561,7 @@ export default function MateriaisPage() {
               fornecedor_id: null,
               ORC: false
             })
-          }}>
+          }} className="rounded-none">
             <Plus className="w-4 h-4 mr-2" />
             Novo Material
           </Button>
@@ -576,11 +576,18 @@ export default function MateriaisPage() {
             placeholder="Filtrar por material..."
             value={materialFilter}
             onChange={(e) => setMaterialFilter(e.target.value)}
-            className="flex-1"
+            className="flex-1 rounded-none"
           />
-          <Button variant="outline" size="icon" onClick={() => setMaterialFilter('')}>
-            <X className="w-4 h-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={() => setMaterialFilter('')}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Limpar filtro</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <div className="flex items-center gap-2">
@@ -589,11 +596,18 @@ export default function MateriaisPage() {
             placeholder="Filtrar por características..."
             value={caracteristicaFilter}
             onChange={(e) => setCaracteristicaFilter(e.target.value)}
-            className="flex-1"
+            className="flex-1 rounded-none"
           />
-          <Button variant="outline" size="icon" onClick={() => setCaracteristicaFilter('')}>
-            <X className="w-4 h-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={() => setCaracteristicaFilter('')}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Limpar filtro</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         <div className="flex items-center gap-2">
@@ -602,11 +616,18 @@ export default function MateriaisPage() {
             placeholder="Filtrar por cor..."
             value={corFilter}
             onChange={(e) => setCorFilter(e.target.value)}
-            className="flex-1"
+            className="flex-1 rounded-none"
           />
-          <Button variant="outline" size="icon" onClick={() => setCorFilter('')}>
-            <X className="w-4 h-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={() => setCorFilter('')}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Limpar filtro</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {/* Clear all filters button in same row */}
@@ -618,7 +639,7 @@ export default function MateriaisPage() {
               setCaracteristicaFilter('')
               setCorFilter('')
             }}
-            className="text-sm whitespace-nowrap"
+            className="text-sm whitespace-nowrap rounded-none"
           >
             Limpar Filtros
           </Button>
@@ -631,26 +652,26 @@ export default function MateriaisPage() {
           <Table className="w-full border-0 rounded-none">
             <TableHeader>
               <TableRow>
-                <TableHead className="p-1 min-w-[80px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border uppercase cursor-pointer rounded-none" onClick={() => handleSort('referencia')}>
+                <TableHead className="p-1 min-w-[80px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border font-bold uppercase cursor-pointer rounded-none" onClick={() => handleSort('referencia')}>
                   <span className="inline-flex items-center gap-1">Referência {getSortIcon('referencia')}</span>
                 </TableHead>
-                <TableHead className="p-1 w-[250px] min-w-[250px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border uppercase cursor-pointer rounded-none" onClick={() => handleSort('material')}>
+                <TableHead className="p-1 w-[250px] min-w-[250px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border font-bold uppercase cursor-pointer rounded-none" onClick={() => handleSort('material')}>
                   <span className="inline-flex items-center gap-1">Material {getSortIcon('material')}</span>
                 </TableHead>
-                <TableHead className="p-1 w-[250px] min-w-[250px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border uppercase cursor-pointer rounded-none" onClick={() => handleSort('carateristica')}>
+                <TableHead className="p-1 w-[250px] min-w-[250px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border font-bold uppercase cursor-pointer rounded-none" onClick={() => handleSort('carateristica')}>
                   <span className="inline-flex items-center gap-1">Características {getSortIcon('carateristica')}</span>
                 </TableHead>
-                <TableHead className="p-1 min-w-[80px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border uppercase cursor-pointer rounded-none" onClick={() => handleSort('cor')}>
+                <TableHead className="p-1 min-w-[80px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border font-bold uppercase cursor-pointer rounded-none" onClick={() => handleSort('cor')}>
                   <span className="inline-flex items-center gap-1">Cor {getSortIcon('cor')}</span>
                 </TableHead>
-                <TableHead className="p-1 w-[100px] min-w-[100px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border uppercase cursor-pointer rounded-none" onClick={() => handleSort('qt_palete')}>
+                <TableHead className="p-1 w-[100px] min-w-[100px] text-right sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border font-bold uppercase cursor-pointer rounded-none" onClick={() => handleSort('qt_palete')}>
                   <span className="inline-flex items-center gap-1">QT PAL {getSortIcon('qt_palete')}</span>
                 </TableHead>
-                <TableHead className="p-1 min-w-[100px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border uppercase cursor-pointer rounded-none" onClick={() => handleSort('valor_m2')}>
+                <TableHead className="p-1 min-w-[100px] text-right sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border font-bold uppercase cursor-pointer rounded-none" onClick={() => handleSort('valor_m2')}>
                   <span className="inline-flex items-center gap-1">Valor/m² {getSortIcon('valor_m2')}</span>
                 </TableHead>
-                <TableHead className="p-1 w-[80px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border uppercase cursor-pointer rounded-none" onClick={() => handleSort('ORC')}>ORC {getSortIcon('ORC')}</TableHead>
-                <TableHead className="p-1 w-[80px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border uppercase">
+                <TableHead className="p-1 w-[80px] text-center sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border font-bold uppercase cursor-pointer rounded-none" onClick={() => handleSort('ORC')}>ORC {getSortIcon('ORC')}</TableHead>
+                <TableHead className="p-1 w-[80px] sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border font-bold uppercase rounded-none">
                   Ações
                 </TableHead>
               </TableRow>
@@ -659,22 +680,22 @@ export default function MateriaisPage() {
               {creatingNew && editingId === 'new' && (
                 <TableRow key="new-material-row">
                   <TableCell className="p-1 px-1 uppercase">
-                    <Input name="referencia" value={editRow.referencia ?? ''} onChange={handleInputChange} />
+                    <Input name="referencia" value={editRow.referencia ?? ''} onChange={handleInputChange} className="rounded-none" />
                   </TableCell>
                   <TableCell className="p-1 font-medium px-1 uppercase w-[250px]">
-                    <Input name="material" value={editRow.material ?? ''} onChange={handleInputChange} required className="w-full" />
+                    <Input name="material" value={editRow.material ?? ''} onChange={handleInputChange} required className="w-full rounded-none" />
                   </TableCell>
                   <TableCell className="p-1 px-1 uppercase w-[250px]">
-                    <Textarea name="carateristica" value={editRow.carateristica ?? ''} onChange={handleInputChange} className="min-h-[40px] h-10 resize-none w-full" />
+                    <Textarea name="carateristica" value={editRow.carateristica ?? ''} onChange={handleInputChange} className="min-h-[40px] h-10 resize-none w-full rounded-none" />
                   </TableCell>
                   <TableCell className="p-1 px-1 uppercase">
-                    <Input name="cor" value={editRow.cor ?? ''} onChange={handleInputChange} />
+                    <Input name="cor" value={editRow.cor ?? ''} onChange={handleInputChange} className="rounded-none" />
                   </TableCell>
-                  <TableCell className="p-1 w-[100px]">
-                    <Input name="qt_palete" type="number" value={editRow.qt_palete ?? ''} onChange={handleInputChange} className="w-[100px]" />
+                  <TableCell className="p-1 w-[100px] text-right">
+                    <Input name="qt_palete" type="number" value={editRow.qt_palete ?? ''} onChange={handleInputChange} className="w-[100px] text-right rounded-none" />
                   </TableCell>
-                  <TableCell className="p-1 px-1 uppercase">
-                    <Input name="valor_m2" type="text" inputMode="decimal" pattern="[0-9.,]*" value={typeof editRow.valor_m2 === 'number' ? String(editRow.valor_m2) : (editRow.valor_m2 ?? '')} onChange={handleInputChange} />
+                  <TableCell className="p-1 px-1 text-right uppercase">
+                    <Input name="valor_m2" type="text" inputMode="decimal" pattern="[0-9.,]*" value={typeof editRow.valor_m2 === 'number' ? String(editRow.valor_m2) : (editRow.valor_m2 ?? '')} onChange={handleInputChange} className="text-right rounded-none" />
                   </TableCell>
                   <TableCell className="p-1 text-center">
                     <Checkbox
@@ -722,14 +743,14 @@ export default function MateriaisPage() {
                         } finally {
                           setSubmitting(false)
                         }
-                      }} disabled={submitting}>
+                      }} disabled={submitting} className="rounded-none">
                         Guardar
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => {
                         setCreatingNew(false)
                         setEditingId(null)
                         setEditRow({})
-                      }}>
+                      }} className="rounded-none">
                         Cancelar
                       </Button>
                     </div>
@@ -755,10 +776,10 @@ export default function MateriaisPage() {
                       <>
                         <TableCell className="p-1 px-1">{material.referencia ?? '-'}</TableCell>
                         <TableCell className="p-1 font-medium px-1 uppercase w-[250px]">
-                          <Input name="material" value={editRow.material ?? ''} onChange={handleInputChange} required className="w-full" />
+                          <Input name="material" value={editRow.material ?? ''} onChange={handleInputChange} required className="w-full rounded-none" />
                         </TableCell>
                         <TableCell className="p-1 px-1 uppercase w-[250px]">
-                          <Textarea name="carateristica" value={editRow.carateristica ?? ''} onChange={handleInputChange} className="min-h-[40px] h-10 resize-none w-full" />
+                          <Textarea name="carateristica" value={editRow.carateristica ?? ''} onChange={handleInputChange} className="min-h-[40px] h-10 resize-none w-full rounded-none" />
                         </TableCell>
                         <TableCell className="p-1 px-1">{material.cor ?? '-'}</TableCell>
                         <TableCell className="p-1 px-1">{material.qt_palete ?? '-'}</TableCell>
@@ -773,10 +794,10 @@ export default function MateriaisPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button size="sm" onClick={() => handleSaveDrawer()}>
+                            <Button size="sm" onClick={() => handleSaveDrawer()} className="rounded-none">
                               Guardar
                             </Button>
-                            <Button size="sm" variant="outline" onClick={handleDrawerClose}>
+                            <Button size="sm" variant="outline" onClick={handleDrawerClose} className="rounded-none">
                               Cancelar
                             </Button>
                           </div>
@@ -798,8 +819,8 @@ export default function MateriaisPage() {
                           }
                         </TableCell>
                         <TableCell className="p-1 px-1">{material.cor ?? '-'}</TableCell>
-                        <TableCell className="p-1 px-1">{material.qt_palete ?? '-'}</TableCell>
-                        <TableCell className="p-1 px-1">{typeof material.valor_m2 === 'number' ? formatCurrency(material.valor_m2) : '-'}</TableCell>
+                        <TableCell className="p-1 px-1 text-right">{material.qt_palete ?? '-'}</TableCell>
+                        <TableCell className="p-1 px-1 text-right">{typeof material.valor_m2 === 'number' ? formatCurrency(material.valor_m2) : '-'}</TableCell>
                         <TableCell className="p-1 text-center">
                           <Checkbox
                             checked={!!material.ORC}
@@ -810,12 +831,26 @@ export default function MateriaisPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
-                            <Button variant="outline" size="icon" onClick={() => handleEdit(material)}>
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button variant="destructive" size="icon" onClick={() => handleDelete(material.id)}>
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="default" size="icon" onClick={() => handleEdit(material)}>
+                                    <Edit className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Editar</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button variant="destructive" size="icon" onClick={() => handleDelete(material.id)}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Eliminar</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
                           </div>
                         </TableCell>
                       </>
@@ -829,8 +864,16 @@ export default function MateriaisPage() {
       </div>
 
       <Drawer open={openDrawer} onOpenChange={setOpenDrawer} shouldScaleBackground={false}>
-        <DrawerContent className="h-[98vh] min-h-[98vh] max-h-[98vh] !top-0 overflow-y-auto !transform-none !filter-none !backdrop-filter-none will-change-auto">
-          <DrawerHeader>
+        <DrawerContent className="h-[98vh] min-h-[98vh] max-h-[98vh] !top-0 overflow-y-auto !transform-none !filter-none !backdrop-filter-none will-change-auto rounded-none">
+          <DrawerHeader className="relative">
+            <Button 
+              size="icon" 
+              variant="outline" 
+              onClick={handleDrawerClose} 
+              className="absolute top-6 right-6 z-10 rounded-none"
+            >
+              <X className="w-4 h-4" />
+            </Button>
             <DrawerTitle className="flex items-center gap-2 uppercase">
               <Edit className="w-5 h-5" />
               Editar Material
@@ -862,10 +905,10 @@ export default function MateriaisPage() {
                     value={editingMaterial?.tipo?.toUpperCase() ?? ''}
                     onValueChange={handleTipoChange}
                   >
-                    <SelectTrigger className="mt-2">
+                    <SelectTrigger className="mt-2 rounded-none">
                       <SelectValue placeholder="SELECIONE O TIPO" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-none">
                       {availableTipos.map(tipo => (
                         <SelectItem key={tipo} value={tipo}>{tipo}</SelectItem>
                       ))}
@@ -919,7 +962,7 @@ export default function MateriaisPage() {
                     id="referencia" 
                     value={editingMaterial?.referencia ?? ''} 
                     onChange={(e) => handleDrawerInputChange('referencia', e.target.value)} 
-                    className="mt-2" 
+                    className="mt-2 rounded-none" 
                   />
                 </div>
                 <div>
@@ -928,7 +971,7 @@ export default function MateriaisPage() {
                     id="ref_cliente" 
                     value={editingMaterial?.ref_cliente ?? ''} 
                     onChange={(e) => handleDrawerInputChange('ref_cliente', e.target.value)} 
-                    className="mt-2" 
+                    className="mt-2 rounded-none" 
                   />
                 </div>
                 <div>
@@ -937,7 +980,7 @@ export default function MateriaisPage() {
                     id="ref_fornecedor" 
                     value={editingMaterial?.ref_fornecedor ?? ''} 
                     onChange={(e) => handleDrawerInputChange('ref_fornecedor', e.target.value)} 
-                    className="mt-2" 
+                    className="mt-2 rounded-none" 
                   />
                 </div>
               </div>
@@ -950,7 +993,7 @@ export default function MateriaisPage() {
                     id="tipo_canal" 
                     value={editingMaterial?.tipo_canal ?? ''} 
                     onChange={(e) => handleDrawerInputChange('tipo_canal', e.target.value)} 
-                    className="mt-2" 
+                    className="mt-2 rounded-none" 
                   />
                 </div>
                 <div>
@@ -959,7 +1002,7 @@ export default function MateriaisPage() {
                     id="dimensoes" 
                     value={editingMaterial?.dimensoes ?? ''} 
                     onChange={(e) => handleDrawerInputChange('dimensoes', e.target.value)} 
-                    className="mt-2" 
+                    className="mt-2 rounded-none" 
                     rows={1}
                   />
                 </div>
@@ -975,7 +1018,7 @@ export default function MateriaisPage() {
                     step="0.01" 
                     value={editingMaterial?.valor_m2_custo ?? ''} 
                     onChange={(e) => handleDrawerInputChange('valor_m2_custo', parseFloat(e.target.value) || null)} 
-                    className="mt-2" 
+                    className="mt-2 text-right rounded-none" 
                   />
                 </div>
                 <div>
@@ -986,7 +1029,7 @@ export default function MateriaisPage() {
                     step="0.01" 
                     value={editingMaterial?.valor_placa ?? ''} 
                     onChange={(e) => handleDrawerInputChange('valor_placa', parseFloat(e.target.value) || null)} 
-                    className="mt-2" 
+                    className="mt-2 text-right rounded-none" 
                   />
                 </div>
                 <div>
@@ -997,7 +1040,7 @@ export default function MateriaisPage() {
                     step="0.01" 
                     value={editingMaterial?.valor_m2 ?? ''} 
                     onChange={(e) => handleDrawerInputChange('valor_m2', parseFloat(e.target.value) || null)} 
-                    className="mt-2" 
+                    className="mt-2 text-right rounded-none" 
                   />
                 </div>
               </div>
@@ -1011,7 +1054,7 @@ export default function MateriaisPage() {
                     type="number" 
                     value={editingMaterial?.qt_palete ?? ''} 
                     onChange={(e) => handleDrawerInputChange('qt_palete', parseInt(e.target.value) || null)} 
-                    className="mt-2" 
+                    className="mt-2 text-right rounded-none" 
                   />
                 </div>
                 <div>
@@ -1022,7 +1065,7 @@ export default function MateriaisPage() {
                     step="0.01"
                     value={editingMaterial?.stock_minimo ?? ''} 
                     onChange={(e) => handleDrawerInputChange('stock_minimo', parseFloat(e.target.value) || null)} 
-                    className="mt-2" 
+                    className="mt-2 text-right rounded-none" 
                   />
                 </div>
                 <div>
@@ -1033,7 +1076,7 @@ export default function MateriaisPage() {
                     step="0.01"
                     value={editingMaterial?.stock_critico ?? ''} 
                     onChange={(e) => handleDrawerInputChange('stock_critico', parseFloat(e.target.value) || null)} 
-                    className="mt-2" 
+                    className="mt-2 text-right rounded-none" 
                   />
                 </div>
                 <div>
@@ -1051,11 +1094,11 @@ export default function MateriaisPage() {
               </div>
             </div>
             <div className="flex gap-4 pt-6">
-              <Button type="submit" className="flex-1">
+              <Button type="submit" className="flex-1 rounded-none">
                 Atualizar
               </Button>
               <DrawerClose asChild>
-                <Button type="button" variant="outline">
+                <Button type="button" variant="outline" className="rounded-none">
                   Cancelar
                 </Button>
               </DrawerClose>
