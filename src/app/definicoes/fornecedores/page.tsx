@@ -5,11 +5,31 @@ import { createBrowserClient } from '@/utils/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose, DrawerDescription } from '@/components/ui/drawer'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerClose,
+  DrawerDescription,
+} from '@/components/ui/drawer'
 import { Textarea } from '@/components/ui/textarea'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { Plus, Eye, Trash2, X, Loader2, Edit, RotateCw } from 'lucide-react'
+import PermissionGuard from '@/components/PermissionGuard'
 
 interface Fornecedor {
   id: string
@@ -27,19 +47,20 @@ interface Fornecedor {
 export default function FornecedoresPage() {
   const [fornecedores, setFornecedores] = useState<Fornecedor[]>([])
   const [loading, setLoading] = useState(true)
-  const [openDrawer, setOpenDrawer] = useState(false)
-  const [editingFornecedor, setEditingFornecedor] = useState<Fornecedor | null>(null)
-  const [formData, setFormData] = useState({
+  // Remove drawer logic and related state
+  const [nameFilter, setNameFilter] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  // Inline editing state
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editData, setEditData] = useState({
     numero_phc: '',
     nome_forn: '',
     morada: '',
     codigo_pos: '',
     telefone: '',
     email: '',
-    contacto_principal: ''
+    contacto_principal: '',
   })
-  const [nameFilter, setNameFilter] = useState('')
-  const [submitting, setSubmitting] = useState(false)
 
   const supabase = createBrowserClient()
 
@@ -65,79 +86,16 @@ export default function FornecedoresPage() {
     fetchFornecedores()
   }, [])
 
-  const filteredFornecedores = fornecedores.filter(fornecedor =>
-    fornecedor.nome_forn.toLowerCase().includes(nameFilter.toLowerCase()) ||
-    (fornecedor.numero_phc && fornecedor.numero_phc.toLowerCase().includes(nameFilter.toLowerCase())) ||
-    (fornecedor.email && fornecedor.email.toLowerCase().includes(nameFilter.toLowerCase()))
+  const filteredFornecedores = fornecedores.filter(
+    (fornecedor) =>
+      fornecedor.nome_forn.toLowerCase().includes(nameFilter.toLowerCase()) ||
+      (fornecedor.numero_phc &&
+        fornecedor.numero_phc
+          .toLowerCase()
+          .includes(nameFilter.toLowerCase())) ||
+      (fornecedor.email &&
+        fornecedor.email.toLowerCase().includes(nameFilter.toLowerCase())),
   )
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!formData.nome_forn.trim()) return
-
-    setSubmitting(true)
-    try {
-      if (editingFornecedor) {
-        // Update existing fornecedor
-        const { data, error } = await supabase
-          .from('fornecedores')
-          .update({
-            numero_phc: formData.numero_phc || null,
-            nome_forn: formData.nome_forn,
-            morada: formData.morada || null,
-            codigo_pos: formData.codigo_pos || null,
-            telefone: formData.telefone || null,
-            email: formData.email || null,
-            contacto_principal: formData.contacto_principal || null,
-            updated_at: new Date().toISOString().split('T')[0]
-          })
-          .eq('id', editingFornecedor.id)
-          .select('*')
-
-        if (!error && data && data[0]) {
-          setFornecedores(prev => prev.map(f => f.id === editingFornecedor.id ? data[0] : f))
-        }
-      } else {
-        // Create new fornecedor
-        const { data, error } = await supabase
-          .from('fornecedores')
-          .insert({
-            numero_phc: formData.numero_phc || null,
-            nome_forn: formData.nome_forn,
-            morada: formData.morada || null,
-            codigo_pos: formData.codigo_pos || null,
-            telefone: formData.telefone || null,
-            email: formData.email || null,
-            contacto_principal: formData.contacto_principal || null
-          })
-          .select('*')
-
-        if (!error && data && data[0]) {
-          setFornecedores(prev => [...prev, data[0]])
-        }
-      }
-
-      resetForm()
-    } catch (error) {
-      console.error('Error saving fornecedor:', error)
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const handleEdit = (fornecedor: Fornecedor) => {
-    setEditingFornecedor(fornecedor)
-    setFormData({
-      numero_phc: fornecedor.numero_phc || '',
-      nome_forn: fornecedor.nome_forn,
-      morada: fornecedor.morada || '',
-      codigo_pos: fornecedor.codigo_pos || '',
-      telefone: fornecedor.telefone || '',
-      email: fornecedor.email || '',
-      contacto_principal: fornecedor.contacto_principal || ''
-    })
-    setOpenDrawer(true)
-  }
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este fornecedor?')) return
@@ -149,309 +107,548 @@ export default function FornecedoresPage() {
         .eq('id', id)
 
       if (!error) {
-        setFornecedores(prev => prev.filter(f => f.id !== id))
+        setFornecedores((prev) => prev.filter((f) => f.id !== id))
       }
     } catch (error) {
       console.error('Error deleting fornecedor:', error)
     }
   }
 
-  const resetForm = () => {
-    setFormData({
+  // Add handler for inline add
+  const handleAddNew = () => {
+    if (editingId !== null) return
+    setEditingId('new')
+    setEditData({
       numero_phc: '',
       nome_forn: '',
       morada: '',
       codigo_pos: '',
       telefone: '',
       email: '',
-      contacto_principal: ''
+      contacto_principal: '',
     })
-    setEditingFornecedor(null)
-    setOpenDrawer(false)
   }
 
-  const openNewForm = () => {
-    resetForm()
-    setOpenDrawer(true)
+  // Save handler for new row
+  const handleAddSave = async () => {
+    if (!editData.nome_forn.trim()) return
+    setSubmitting(true)
+    try {
+      const { data, error } = await supabase
+        .from('fornecedores')
+        .insert({
+          numero_phc: editData.numero_phc || null,
+          nome_forn: editData.nome_forn,
+          morada: editData.morada || null,
+          codigo_pos: editData.codigo_pos || null,
+          telefone: editData.telefone || null,
+          email: editData.email || null,
+          contacto_principal: editData.contacto_principal || null,
+        })
+        .select('*')
+      if (!error && data && data[0]) {
+        setFornecedores((prev) => [data[0], ...prev])
+      }
+      setEditingId(null)
+      setEditData({
+        numero_phc: '',
+        nome_forn: '',
+        morada: '',
+        codigo_pos: '',
+        telefone: '',
+        email: '',
+        contacto_principal: '',
+      })
+    } catch (error) {
+      console.error('Error creating fornecedor:', error)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Inline edit handlers
+  const handleEdit = (fornecedor: Fornecedor) => {
+    setEditingId(fornecedor.id)
+    setEditData({
+      numero_phc: fornecedor.numero_phc || '',
+      nome_forn: fornecedor.nome_forn,
+      morada: fornecedor.morada || '',
+      codigo_pos: fornecedor.codigo_pos || '',
+      telefone: fornecedor.telefone || '',
+      email: fornecedor.email || '',
+      contacto_principal: fornecedor.contacto_principal || '',
+    })
+  }
+
+  // Save handler for edit
+  const handleEditSave = async (id: string) => {
+    if (id === 'new') {
+      await handleAddSave()
+      return
+    }
+    if (!editData.nome_forn.trim()) return
+    setSubmitting(true)
+    try {
+      const updates = {
+        numero_phc: editData.numero_phc || null,
+        nome_forn: editData.nome_forn,
+        morada: editData.morada || null,
+        codigo_pos: editData.codigo_pos || null,
+        telefone: editData.telefone || null,
+        email: editData.email || null,
+        contacto_principal: editData.contacto_principal || null,
+        updated_at: new Date().toISOString().split('T')[0],
+      }
+      const { error } = await supabase
+        .from('fornecedores')
+        .update(updates)
+        .eq('id', id)
+      if (!error) {
+        setFornecedores((prev) =>
+          prev.map((f) => (f.id === id ? { ...f, ...updates } : f)),
+        )
+      }
+      setEditingId(null)
+      setEditData({
+        numero_phc: '',
+        nome_forn: '',
+        morada: '',
+        codigo_pos: '',
+        telefone: '',
+        email: '',
+        contacto_principal: '',
+      })
+    } catch (error) {
+      console.error('Error updating fornecedor:', error)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // Cancel handler
+  const handleEditCancel = () => {
+    setEditingId(null)
+    setEditData({
+      numero_phc: '',
+      nome_forn: '',
+      morada: '',
+      codigo_pos: '',
+      telefone: '',
+      email: '',
+      contacto_principal: '',
+    })
   }
 
   return (
-    <div className="w-full space-y-6 p-4 md:p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Gestão de Fornecedores</h1>
-        <div className="flex gap-2">
+    <PermissionGuard>
+      <div className="w-full space-y-6 p-4 md:p-8">
+        <div className="mb-6 flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Gestão de Fornecedores</h1>
+          <div className="flex gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={fetchFornecedores}
+                    aria-label="Atualizar"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Atualizar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleAddNew}
+                    variant="default"
+                    size="icon"
+                    aria-label="Adicionar"
+                    disabled={editingId !== null}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Adicionar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
+
+        {/* Filter bar */}
+        <div className="mb-6 flex items-center gap-2">
+          <Input
+            placeholder="Filtrar por nome, número PHC ou email..."
+            value={nameFilter}
+            onChange={(e) => setNameFilter(e.target.value)}
+            className="w-[300px] rounded-none"
+          />
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={fetchFornecedores} aria-label="Atualizar">
-                  <RotateCw className="w-4 h-4" />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setNameFilter('')}
+                  aria-label="Limpar filtro"
+                >
+                  <X className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Atualizar</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button onClick={openNewForm} variant="default" size="icon" aria-label="Adicionar">
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Adicionar</TooltipContent>
+              <TooltipContent>Limpar filtro</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
-      </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 mb-6">
-        <Input
-          placeholder="Filtrar por nome, número PHC ou email..."
-          value={nameFilter}
-          onChange={(e) => setNameFilter(e.target.value)}
-          className="w-[300px] rounded-none"
-        />
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" onClick={() => setNameFilter('')} aria-label="Limpar filtro">
-                <X className="w-4 h-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Limpar filtro</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-
-      {/* Table */}
-      <div className="rounded-none bg-background w-full border-2 border-border">
-        <div className="max-h-[70vh] overflow-y-auto w-full rounded-none">
-          <Table className="w-full border-0 rounded-none">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] font-bold uppercase rounded-none">
-                  Número PHC
-                </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[200px] font-bold uppercase rounded-none">
-                  Nome do Fornecedor
-                </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[250px] font-bold uppercase rounded-none">
-                  Morada
-                </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] font-bold uppercase rounded-none">
-                  Telefone
-                </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[200px] font-bold uppercase rounded-none">
-                  Email
-                </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[140px] font-bold uppercase rounded-none">
-                  Ações
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+        {/* Table */}
+        <div className="bg-background border-border w-full rounded-none border-2">
+          <div className="max-h-[70vh] w-full overflow-y-auto rounded-none">
+            <Table className="w-full rounded-none border-0">
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center h-40 uppercase">
-                    <Loader2 className="animate-spin w-8 h-8 text-muted-foreground mx-auto" />
-                  </TableCell>
+                  <TableHead className="border-border sticky top-0 z-10 w-[120px] rounded-none border-b-2 bg-[var(--orange)] font-bold uppercase">
+                    Número PHC
+                  </TableHead>
+                  <TableHead className="border-border sticky top-0 z-10 min-w-[200px] rounded-none border-b-2 bg-[var(--orange)] font-bold uppercase">
+                    Nome do Fornecedor
+                  </TableHead>
+                  <TableHead className="border-border sticky top-0 z-10 min-w-[250px] rounded-none border-b-2 bg-[var(--orange)] font-bold uppercase">
+                    Morada
+                  </TableHead>
+                  <TableHead className="border-border sticky top-0 z-10 w-[120px] rounded-none border-b-2 bg-[var(--orange)] font-bold uppercase">
+                    Telefone
+                  </TableHead>
+                  <TableHead className="border-border sticky top-0 z-10 min-w-[200px] rounded-none border-b-2 bg-[var(--orange)] font-bold uppercase">
+                    Email
+                  </TableHead>
+                  <TableHead className="border-border sticky top-0 z-10 w-[140px] rounded-none border-b-2 bg-[var(--orange)] font-bold uppercase">
+                    Ações
+                  </TableHead>
                 </TableRow>
-              ) : filteredFornecedores.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500 uppercase">
-                    Nenhum fornecedor encontrado.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredFornecedores.map((fornecedor) => (
-                  <TableRow key={fornecedor.id}>
-                    <TableCell className="uppercase rounded-none">{fornecedor.numero_phc || '-'}</TableCell>
-                    <TableCell className="font-medium uppercase rounded-none">{fornecedor.nome_forn}</TableCell>
-                    <TableCell className="uppercase rounded-none">{fornecedor.morada || '-'}</TableCell>
-                    <TableCell className="uppercase rounded-none">{fornecedor.telefone || '-'}</TableCell>
-                    <TableCell className="lowercase rounded-none">{fornecedor.email || '-'}</TableCell>
-                    <TableCell className="rounded-none">
-                      <div className="flex gap-2">
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="default"
-                                size="icon"
-                                onClick={() => handleEdit(fornecedor)}
-                                aria-label="Ver detalhes do fornecedor"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Ver</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="destructive"
-                                size="icon"
-                                onClick={() => handleDelete(fornecedor.id)}
-                                aria-label="Eliminar fornecedor"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>Eliminar</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </div>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="h-40 text-center uppercase"
+                    >
+                      <Loader2 className="text-muted-foreground mx-auto h-8 w-8 animate-spin" />
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {/* Drawer for add/edit form */}
-      <Drawer open={openDrawer} onOpenChange={(open) => !open && resetForm()}>
-        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0 rounded-none">
-          <div className="w-full px-4 md:px-8 flex flex-col h-full">
-            <DrawerHeader className="flex-none">
-              <div className="flex justify-end items-center gap-2 mb-2">
-                <DrawerClose asChild>
-                  <Button variant="outline" size="sm" aria-label="Fechar">
-                    <X className="w-5 h-5" />
-                  </Button>
-                </DrawerClose>
-              </div>
-              <DrawerTitle>
-                {editingFornecedor ? 'Editar Fornecedor' : 'Novo Fornecedor'}
-              </DrawerTitle>
-              <DrawerDescription>
-                {editingFornecedor 
-                  ? 'Edite as informações do fornecedor abaixo.'
-                  : 'Preencha as informações para criar um novo fornecedor.'
-                }
-              </DrawerDescription>
-            </DrawerHeader>
-
-            <div className="flex-grow overflow-y-auto">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="numero_phc" className="font-base text-sm">
-                      Número PHC
-                    </Label>
-                    <Input
-                      id="numero_phc"
-                      value={formData.numero_phc}
-                      onChange={(e) => setFormData(prev => ({ ...prev, numero_phc: e.target.value }))}
-                      placeholder="Número do sistema PHC"
-                      className="rounded-none"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="nome_forn" className="font-base text-sm">
-                      Nome do Fornecedor *
-                    </Label>
-                    <Input
-                      id="nome_forn"
-                      value={formData.nome_forn}
-                      onChange={(e) => setFormData(prev => ({ ...prev, nome_forn: e.target.value }))}
-                      placeholder="Nome do fornecedor"
-                      required
-                      className="rounded-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="morada" className="font-base text-sm">
-                    Morada
-                  </Label>
-                  <Textarea
-                    id="morada"
-                    value={formData.morada}
-                    onChange={(e) => setFormData(prev => ({ ...prev, morada: e.target.value }))}
-                    placeholder="Morada completa do fornecedor"
-                    className="min-h-[80px] h-24 resize-none w-full rounded-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="codigo_pos" className="font-base text-sm">
-                      Código Postal
-                    </Label>
-                    <Input
-                      id="codigo_pos"
-                      value={formData.codigo_pos}
-                      onChange={(e) => setFormData(prev => ({ ...prev, codigo_pos: e.target.value }))}
-                      placeholder="Ex: 1000-001"
-                      className="rounded-none"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="telefone" className="font-base text-sm">
-                      Telefone
-                    </Label>
-                    <Input
-                      id="telefone"
-                      value={formData.telefone}
-                      onChange={(e) => setFormData(prev => ({ ...prev, telefone: e.target.value }))}
-                      placeholder="Ex: 123456789"
-                      className="rounded-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="email" className="font-base text-sm">
-                      Email
-                    </Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                      placeholder="fornecedor@exemplo.com"
-                      className="rounded-none"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="contacto_principal" className="font-base text-sm">
-                      Contacto Principal
-                    </Label>
-                    <Input
-                      id="contacto_principal"
-                      value={formData.contacto_principal}
-                      onChange={(e) => setFormData(prev => ({ ...prev, contacto_principal: e.target.value }))}
-                      placeholder="Nome do contacto principal"
-                      className="rounded-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" disabled={submitting || !formData.nome_forn.trim()} variant="default">
-                    {submitting ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : null}
-                    {editingFornecedor ? 'Guardar' : 'Criar Fornecedor'}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={resetForm} aria-label="Cancelar">
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </div>
+                ) : filteredFornecedores.length === 0 && editingId !== 'new' ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={6}
+                      className="text-center text-gray-500 uppercase"
+                    >
+                      Nenhum fornecedor encontrado.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  <>
+                    {/* Inline add row at the top if editingId === 'new' */}
+                    {editingId === 'new' && (
+                      <TableRow>
+                        <TableCell className="rounded-none uppercase">
+                          <Input
+                            value={editData.numero_phc}
+                            onChange={(e) =>
+                              setEditData((prev) => ({
+                                ...prev,
+                                numero_phc: e.target.value,
+                              }))
+                            }
+                            className="rounded-none"
+                            disabled={submitting}
+                          />
+                        </TableCell>
+                        <TableCell className="rounded-none font-medium uppercase">
+                          <Input
+                            value={editData.nome_forn}
+                            onChange={(e) =>
+                              setEditData((prev) => ({
+                                ...prev,
+                                nome_forn: e.target.value,
+                              }))
+                            }
+                            className="rounded-none"
+                            autoFocus
+                            required
+                            disabled={submitting}
+                          />
+                        </TableCell>
+                        <TableCell className="rounded-none uppercase">
+                          <Input
+                            value={editData.morada}
+                            onChange={(e) =>
+                              setEditData((prev) => ({
+                                ...prev,
+                                morada: e.target.value,
+                              }))
+                            }
+                            className="rounded-none"
+                            disabled={submitting}
+                          />
+                        </TableCell>
+                        <TableCell className="rounded-none uppercase">
+                          <Input
+                            value={editData.telefone}
+                            onChange={(e) =>
+                              setEditData((prev) => ({
+                                ...prev,
+                                telefone: e.target.value,
+                              }))
+                            }
+                            className="rounded-none"
+                            disabled={submitting}
+                          />
+                        </TableCell>
+                        <TableCell className="rounded-none lowercase">
+                          <Input
+                            value={editData.email}
+                            onChange={(e) =>
+                              setEditData((prev) => ({
+                                ...prev,
+                                email: e.target.value,
+                              }))
+                            }
+                            className="rounded-none"
+                            disabled={submitting}
+                          />
+                        </TableCell>
+                        <TableCell className="rounded-none">
+                          <div className="flex gap-2">
+                            {/* Save button */}
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="default"
+                                    size="icon"
+                                    onClick={handleAddSave}
+                                    disabled={
+                                      submitting || !editData.nome_forn.trim()
+                                    }
+                                    aria-label="Guardar"
+                                  >
+                                    <span className="text-xs">✓</span>
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Guardar</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            {/* Cancel button */}
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={handleEditCancel}
+                                    disabled={submitting}
+                                    aria-label="Cancelar"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Cancelar</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {filteredFornecedores.map((fornecedor) => (
+                      <TableRow key={fornecedor.id}>
+                        <TableCell className="rounded-none uppercase">
+                          {editingId === fornecedor.id ? (
+                            <Input
+                              value={editData.numero_phc}
+                              onChange={(e) =>
+                                setEditData((prev) => ({
+                                  ...prev,
+                                  numero_phc: e.target.value,
+                                }))
+                              }
+                              className="rounded-none"
+                              disabled={submitting}
+                            />
+                          ) : (
+                            fornecedor.numero_phc || '-'
+                          )}
+                        </TableCell>
+                        <TableCell className="rounded-none font-medium uppercase">
+                          {editingId === fornecedor.id ? (
+                            <Input
+                              value={editData.nome_forn}
+                              onChange={(e) =>
+                                setEditData((prev) => ({
+                                  ...prev,
+                                  nome_forn: e.target.value,
+                                }))
+                              }
+                              className="rounded-none"
+                              autoFocus
+                              required
+                              disabled={submitting}
+                            />
+                          ) : (
+                            fornecedor.nome_forn
+                          )}
+                        </TableCell>
+                        <TableCell className="rounded-none uppercase">
+                          {editingId === fornecedor.id ? (
+                            <Input
+                              value={editData.morada}
+                              onChange={(e) =>
+                                setEditData((prev) => ({
+                                  ...prev,
+                                  morada: e.target.value,
+                                }))
+                              }
+                              className="rounded-none"
+                              disabled={submitting}
+                            />
+                          ) : (
+                            fornecedor.morada || '-'
+                          )}
+                        </TableCell>
+                        <TableCell className="rounded-none uppercase">
+                          {editingId === fornecedor.id ? (
+                            <Input
+                              value={editData.telefone}
+                              onChange={(e) =>
+                                setEditData((prev) => ({
+                                  ...prev,
+                                  telefone: e.target.value,
+                                }))
+                              }
+                              className="rounded-none"
+                              disabled={submitting}
+                            />
+                          ) : (
+                            fornecedor.telefone || '-'
+                          )}
+                        </TableCell>
+                        <TableCell className="rounded-none lowercase">
+                          {editingId === fornecedor.id ? (
+                            <Input
+                              value={editData.email}
+                              onChange={(e) =>
+                                setEditData((prev) => ({
+                                  ...prev,
+                                  email: e.target.value,
+                                }))
+                              }
+                              className="rounded-none"
+                              disabled={submitting}
+                            />
+                          ) : (
+                            fornecedor.email || '-'
+                          )}
+                        </TableCell>
+                        <TableCell className="rounded-none">
+                          <div className="flex gap-2">
+                            {editingId === fornecedor.id ? (
+                              <>
+                                {/* Save button */}
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="default"
+                                        size="icon"
+                                        onClick={() =>
+                                          handleEditSave(fornecedor.id)
+                                        }
+                                        disabled={
+                                          submitting ||
+                                          !editData.nome_forn.trim()
+                                        }
+                                        aria-label="Guardar"
+                                      >
+                                        <span className="text-xs">✓</span>
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Guardar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                {/* Cancel button */}
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={handleEditCancel}
+                                        disabled={submitting}
+                                        aria-label="Cancelar"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Cancelar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </>
+                            ) : (
+                              <>
+                                {/* Edit button */}
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="default"
+                                        size="icon"
+                                        onClick={() => handleEdit(fornecedor)}
+                                        aria-label="Editar"
+                                        disabled={editingId !== null}
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Editar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                {/* Delete button */}
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="destructive"
+                                        size="icon"
+                                        onClick={() =>
+                                          handleDelete(fornecedor.id)
+                                        }
+                                        aria-label="Eliminar fornecedor"
+                                        disabled={editingId !== null}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Eliminar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </>
+                )}
+              </TableBody>
+            </Table>
           </div>
-        </DrawerContent>
-      </Drawer>
-    </div>
+        </div>
+
+        {/* Drawer for add/edit form */}
+      </div>
+    </PermissionGuard>
   )
-} 
+}

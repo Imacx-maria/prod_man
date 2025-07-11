@@ -1,34 +1,64 @@
-import React from 'react';
+import React from 'react'
 
 interface StopInDrawerProps {
-  children: React.ReactNode;
-  className?: string;
-  asChild?: boolean;
+  children: React.ReactNode
+  className?: string
+  asChild?: boolean
 }
 
 /**
- * Component that was previously used to prevent click propagation inside drawers.
- * Now simplified since we use Radix UI's modal={false} instead.
+ * A component that prevents the drawer from closing when clicking on its children.
+ *
+ * Use this to wrap interactive elements inside drawers that shouldn't cause the drawer to close
+ * when clicked. This component captures the pointerdown event and stops its propagation.
+ *
+ * @example
+ * <Drawer>
+ *   <DrawerContent>
+ *     <StopInDrawer>
+ *       <Button>Click me safely</Button>
+ *     </StopInDrawer>
+ *   </DrawerContent>
+ * </Drawer>
  */
-const StopInDrawer = React.forwardRef<HTMLDivElement, StopInDrawerProps>(
-  ({ children, className = "", asChild = false }, ref) => {
-    if (asChild && React.isValidElement(children)) {
-      type ChildProps = {
-        className?: string;
-        ref?: React.Ref<any>;
-      };
-      const child = children as React.ReactElement<ChildProps>;
-      return React.cloneElement(child, {
-        className: `${child.props.className || ''} ${className}`.trim() || undefined,
-        ref,
-      });
+const StopInDrawer = ({
+  children,
+  className = '',
+  asChild = false,
+}: StopInDrawerProps) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
+    // Only stop propagation if we're inside a drawer
+    const isInDrawer = !!e.currentTarget.closest('[data-drawer="true"]')
+    if (isInDrawer) {
+      e.stopPropagation()
     }
-    return (
-      <div className={className || undefined} ref={ref}>
-        {children}
-      </div>
-    );
   }
-);
-StopInDrawer.displayName = 'StopInDrawer';
-export default StopInDrawer; 
+
+  // If asChild is true, we clone the child and add the onPointerDown handler
+  if (asChild && React.Children.count(children) === 1) {
+    const child = React.Children.only(children) as React.ReactElement<{
+      onPointerDown?: (e: React.PointerEvent) => void
+      className?: string
+    }>
+
+    return React.cloneElement(child, {
+      onPointerDown: (e: React.PointerEvent) => {
+        handlePointerDown(e)
+        // Call the original onPointerDown if it exists
+        if (child.props.onPointerDown) {
+          child.props.onPointerDown(e)
+        }
+      },
+      className:
+        `${child.props.className || ''} ${className}`.trim() || undefined,
+    })
+  }
+
+  return (
+    <div className={className || undefined} onPointerDown={handlePointerDown}>
+      {children}
+    </div>
+  )
+}
+
+export default StopInDrawer

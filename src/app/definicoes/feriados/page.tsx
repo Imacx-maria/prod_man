@@ -5,11 +5,33 @@ import { createBrowserClient } from '@/utils/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import DatePicker from '@/components/ui/DatePicker'
-import { Plus, Trash2, X, Loader2, Edit, RotateCw, ArrowUp, ArrowDown } from 'lucide-react'
+import {
+  Plus,
+  Trash2,
+  X,
+  Loader2,
+  Edit,
+  RotateCw,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react'
+import PermissionGuard from '@/components/PermissionGuard'
 import { format } from 'date-fns'
 import { pt } from 'date-fns/locale'
 
@@ -29,7 +51,9 @@ export default function FeriadosPage() {
   const [editDate, setEditDate] = useState<Date | undefined>(undefined)
   const [descriptionFilter, setDescriptionFilter] = useState('')
   const [submitting, setSubmitting] = useState(false)
-  const [sortColumn, setSortColumn] = useState<'holiday_date' | 'description'>('holiday_date')
+  const [sortColumn, setSortColumn] = useState<'holiday_date' | 'description'>(
+    'holiday_date',
+  )
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   const supabase = createBrowserClient()
@@ -56,15 +80,15 @@ export default function FeriadosPage() {
     fetchFeriados()
   }, [])
 
-  const filteredFeriados = feriados.filter(feriado =>
-    feriado.description.toLowerCase().includes(descriptionFilter.toLowerCase())
+  const filteredFeriados = feriados.filter((feriado) =>
+    feriado.description.toLowerCase().includes(descriptionFilter.toLowerCase()),
   )
 
   const sortedFeriados = [...filteredFeriados].sort((a, b) => {
     if (sortColumn === 'holiday_date') {
       const aValue = new Date(a.holiday_date).getTime()
       const bValue = new Date(b.holiday_date).getTime()
-      
+
       if (sortDirection === 'asc') {
         return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
       } else {
@@ -73,7 +97,7 @@ export default function FeriadosPage() {
     } else {
       const aValue = a.description.toLowerCase()
       const bValue = b.description.toLowerCase()
-      
+
       if (sortDirection === 'asc') {
         return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
       } else {
@@ -84,7 +108,7 @@ export default function FeriadosPage() {
 
   const handleSort = (column: 'holiday_date' | 'description') => {
     if (sortColumn === column) {
-      setSortDirection(prev => prev === 'asc' ? 'desc' : 'asc')
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
     } else {
       setSortColumn(column)
       setSortDirection('asc')
@@ -111,12 +135,12 @@ export default function FeriadosPage() {
         .from('feriados')
         .insert({
           holiday_date: dateStr,
-          description: description.trim()
+          description: description.trim(),
         })
         .select('*')
 
       if (!error && data && data[0]) {
-        setFeriados(prev => [...prev, data[0]])
+        setFeriados((prev) => [...prev, data[0]])
       }
     } catch (error) {
       console.error('Error creating feriado:', error)
@@ -129,20 +153,15 @@ export default function FeriadosPage() {
     if (!confirm('Tem certeza que deseja excluir este feriado?')) return
 
     try {
-      const { error } = await supabase
-        .from('feriados')
-        .delete()
-        .eq('id', id)
+      const { error } = await supabase.from('feriados').delete().eq('id', id)
 
       if (!error) {
-        setFeriados(prev => prev.filter(f => f.id !== id))
+        setFeriados((prev) => prev.filter((f) => f.id !== id))
       }
     } catch (error) {
       console.error('Error deleting feriado:', error)
     }
   }
-
-
 
   const formatDisplayDate = (dateString: string) => {
     try {
@@ -154,198 +173,241 @@ export default function FeriadosPage() {
   }
 
   return (
-    <div className="w-full space-y-6 p-4 md:p-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Gestão de Feriados</h1>
-        <div className="flex gap-2">
+    <PermissionGuard>
+      <div className="w-full space-y-6 p-4 md:p-8">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Gestão de Feriados</h1>
+          <div className="flex gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={fetchFeriados}
+                    className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Atualizar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleAddNew}
+                    className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                    size="icon"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Novo feriado</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
+
+        {/* Filter bar */}
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Filtrar por descrição..."
+            value={descriptionFilter}
+            onChange={(e) => setDescriptionFilter(e.target.value)}
+            className="h-10 w-[300px] rounded-none"
+          />
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={fetchFeriados}>
-                  <RotateCw className="w-4 h-4" />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setDescriptionFilter('')}
+                  className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                >
+                  <X className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Atualizar</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button onClick={handleAddNew}>
-                  <Plus className="w-4 h-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Novo Feriado</TooltipContent>
+              <TooltipContent>Limpar filtro</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
-      </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-2">
-        <Input
-          placeholder="Filtrar por descrição..."
-          value={descriptionFilter}
-          onChange={(e) => setDescriptionFilter(e.target.value)}
-          className="w-[300px] rounded-none"
-        />
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" onClick={() => setDescriptionFilter('')}>
-                <X className="w-4 h-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Limpar filtro</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-
-      {/* Table */}
-      <div className="bg-background w-full">
-        <div className="max-h-[70vh] overflow-y-auto w-full">
-          <Table className="w-full border-2 border-border">
-            <TableHeader>
-              <TableRow>
-                <TableHead 
-                  className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border cursor-pointer select-none w-[140px] font-bold uppercase"
-                  onClick={() => handleSort('holiday_date')}
-                >
-                  Data
-                  {sortColumn === 'holiday_date' && (
-                    sortDirection === 'asc' ? 
-                    <ArrowUp className="inline w-3 h-3 ml-1" /> : 
-                    <ArrowDown className="inline w-3 h-3 ml-1" />
-                  )}
-                </TableHead>
-                <TableHead 
-                  className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border cursor-pointer select-none min-w-[300px] font-bold uppercase"
-                  onClick={() => handleSort('description')}
-                >
-                  Descrição
-                  {sortColumn === 'description' && (
-                    sortDirection === 'asc' ? 
-                    <ArrowUp className="inline w-3 h-3 ml-1" /> : 
-                    <ArrowDown className="inline w-3 h-3 ml-1" />
-                  )}
-                </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px] font-bold uppercase">
-                  Ações
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+        {/* Table */}
+        <div className="bg-background border-border w-full rounded-none border-2">
+          <div className="w-full rounded-none">
+            <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center h-40 uppercase">
-                    <Loader2 className="animate-spin w-8 h-8 text-muted-foreground mx-auto" />
-                  </TableCell>
-                </TableRow>
-              ) : sortedFeriados.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={3} className="text-center text-gray-500 uppercase">
-                    Nenhum feriado encontrado.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                sortedFeriados.map((feriado) => (
-                  <TableRow key={feriado.id}>
-                    <TableCell className="font-medium uppercase">
-                      {editingId === feriado.id ? (
-                        <DatePicker
-                          selected={editDate}
-                          onSelect={(date) => {
-                            setEditDate(date);
-                          }}
-                          buttonClassName="w-full h-10 border-0 outline-0 focus:ring-0 focus:border-0 rounded-none"
-                        />
+                  <TableHead
+                    className="border-border sticky top-0 z-10 w-[160px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                    onClick={() => handleSort('holiday_date')}
+                  >
+                    Data
+                    {sortColumn === 'holiday_date' &&
+                      (sortDirection === 'asc' ? (
+                        <ArrowUp className="ml-1 inline h-3 w-3" />
                       ) : (
-                        formatDisplayDate(feriado.holiday_date)
-                      )}
+                        <ArrowDown className="ml-1 inline h-3 w-3" />
+                      ))}
+                  </TableHead>
+                  <TableHead
+                    className="border-border sticky top-0 z-10 cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                    onClick={() => handleSort('description')}
+                  >
+                    Descrição
+                    {sortColumn === 'description' &&
+                      (sortDirection === 'asc' ? (
+                        <ArrowUp className="ml-1 inline h-3 w-3" />
+                      ) : (
+                        <ArrowDown className="ml-1 inline h-3 w-3" />
+                      ))}
+                  </TableHead>
+                  <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
+                    Ações
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={3}
+                      className="h-40 text-center uppercase"
+                    >
+                      <Loader2 className="text-muted-foreground mx-auto h-8 w-8 animate-spin" />
                     </TableCell>
-                    <TableCell className="uppercase">
-                      {editingId === feriado.id ? (
-                        <div className="flex gap-2 items-center">
-                          <Input
-                            value={editDescription}
-                            onChange={(e) => setEditDescription(e.target.value)}
-                            className="rounded-none flex-1"
-                            placeholder="Descrição do feriado"
+                  </TableRow>
+                ) : sortedFeriados.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={3}
+                      className="text-center text-gray-500 uppercase"
+                    >
+                      Nenhum feriado encontrado.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  sortedFeriados.map((feriado) => (
+                    <TableRow key={feriado.id}>
+                      <TableCell className="font-medium uppercase">
+                        {editingId === feriado.id ? (
+                          <DatePicker
+                            selected={editDate}
+                            onSelect={(date) => {
+                              setEditDate(date)
+                            }}
+                            buttonClassName="w-full h-10 border-0 outline-0 focus:ring-0 focus:border-0 rounded-none"
                           />
-                          <div className="flex gap-1">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="default"
-                                    size="icon"
-                                    onClick={async () => {
-                                      if (!editDescription.trim()) return;
-                                      
-                                      setSubmitting(true);
-                                      try {
-                                        const isoDate = editDate ? editDate.toISOString().split('T')[0] : feriado.holiday_date;
-                                        const { error } = await supabase
-                                          .from('feriados')
-                                          .update({ 
-                                            holiday_date: isoDate,
-                                            description: editDescription.trim(),
-                                            updated_at: new Date().toISOString().split('T')[0]
-                                          })
-                                          .eq('id', feriado.id);
-                                        
-                                        if (!error) {
-                                          setFeriados(prev => prev.map(f => 
-                                            f.id === feriado.id ? { 
-                                              ...f, 
+                        ) : (
+                          formatDisplayDate(feriado.holiday_date)
+                        )}
+                      </TableCell>
+                      <TableCell className="uppercase">
+                        {editingId === feriado.id ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={editDescription}
+                              onChange={(e) =>
+                                setEditDescription(e.target.value)
+                              }
+                              className="h-10 flex-1 rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                              placeholder="Descrição do feriado"
+                            />
+                            <div className="flex gap-1">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="default"
+                                      size="icon"
+                                      onClick={async () => {
+                                        if (!editDescription.trim()) return
+
+                                        setSubmitting(true)
+                                        try {
+                                          const isoDate = editDate
+                                            ? editDate
+                                                .toISOString()
+                                                .split('T')[0]
+                                            : feriado.holiday_date
+                                          const { error } = await supabase
+                                            .from('feriados')
+                                            .update({
                                               holiday_date: isoDate,
-                                              description: editDescription.trim() 
-                                            } : f
-                                          ));
+                                              description:
+                                                editDescription.trim(),
+                                              updated_at: new Date()
+                                                .toISOString()
+                                                .split('T')[0],
+                                            })
+                                            .eq('id', feriado.id)
+
+                                          if (!error) {
+                                            setFeriados((prev) =>
+                                              prev.map((f) =>
+                                                f.id === feriado.id
+                                                  ? {
+                                                      ...f,
+                                                      holiday_date: isoDate,
+                                                      description:
+                                                        editDescription.trim(),
+                                                    }
+                                                  : f,
+                                              ),
+                                            )
+                                          }
+                                        } catch (error) {
+                                          console.error(
+                                            'Error updating:',
+                                            error,
+                                          )
+                                        } finally {
+                                          setSubmitting(false)
+                                          setEditingId(null)
+                                          setEditDescription('')
+                                          setEditDate(undefined)
                                         }
-                                      } catch (error) {
-                                        console.error('Error updating:', error);
-                                      } finally {
-                                        setSubmitting(false);
-                                        setEditingId(null);
-                                        setEditDescription('');
-                                        setEditDate(undefined);
+                                      }}
+                                      disabled={
+                                        !editDescription.trim() || submitting
                                       }
-                                    }}
-                                    disabled={!editDescription.trim() || submitting}
-                                  >
-                                    <span className="text-xs">✓</span>
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Guardar</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={() => {
-                                      setEditingId(null);
-                                      setEditDescription('');
-                                      setEditDate(undefined);
-                                    }}
-                                  >
-                                    <X className="w-4 h-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Cancelar</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                                      className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                    >
+                                      <span className="text-xs">✓</span>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Guardar</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      onClick={() => {
+                                        setEditingId(null)
+                                        setEditDescription('')
+                                        setEditDate(undefined)
+                                      }}
+                                      className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Cancelar</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        feriado.description
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
+                        ) : (
+                          feriado.description
+                        )}
+                      </TableCell>
+                      <TableCell className="flex justify-center gap-2">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -353,13 +415,14 @@ export default function FeriadosPage() {
                                 variant="default"
                                 size="icon"
                                 onClick={() => {
-                                  setEditingId(feriado.id);
-                                  setEditDescription(feriado.description);
-                                  setEditDate(new Date(feriado.holiday_date));
+                                  setEditingId(feriado.id)
+                                  setEditDescription(feriado.description)
+                                  setEditDate(new Date(feriado.holiday_date))
                                 }}
                                 disabled={editingId !== null}
+                                className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
                               >
-                                <Edit className="w-4 h-4" />
+                                <Edit className="h-4 w-4" />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Editar</TooltipContent>
@@ -373,24 +436,23 @@ export default function FeriadosPage() {
                                 size="icon"
                                 onClick={() => handleDelete(feriado.id)}
                                 disabled={editingId !== null}
+                                className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Excluir</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </div>
-
-
-    </div>
+    </PermissionGuard>
   )
-} 
+}

@@ -90,16 +90,21 @@ Use consistent hover effects across interactive elements:
 ## 📋 Table Design Patterns
 
 ### Standard Table Structure (with 2px Outside Border)
+**CRITICAL: TABLES ARE FULL-WIDTH, ONLY AÇÕES COLUMN IS OPTIMIZED FOR BUTTON SPACING!**
+
 ```tsx
-<div className="rounded-md bg-background w-full border-2 border-border">
-  <div className="max-h-[70vh] overflow-y-auto w-full">
-    <Table className="w-full border-0">
+<div className="rounded-none bg-background w-full border-2 border-border">
+  <div className="w-full rounded-none">
+    <Table className="w-full border-0 rounded-none [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
       <TableHeader>
         <TableRow>
-          <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] font-bold uppercase">
-            Data
+          <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border font-bold uppercase">
+            Data Column (flexible width)
           </TableHead>
           {/* ...other headers... */}
+          <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[90px] font-bold uppercase text-center">
+            Ações
+          </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -110,17 +115,122 @@ Use consistent hover effects across interactive elements:
 </div>
 ```
 
+**Key Table Structure Requirements:**
+- **TABLES ARE FULL-WIDTH**: Always use `w-full` on table containers, wrappers, and Table element
+- **AÇÕES Column Optimization**: Only the AÇÕES column gets specific width constraints to minimize white space after buttons
 - Always use `border-2 border-border` and `rounded-none` on the outer table container for a 2px border and sharp corners.
 - Add `rounded-none` to all scroll wrappers and the `<Table>` element to guarantee sharp corners.
 - Use `border-b-2 border-border` on all `<TableHead>` for a 2px header outline.
 - Set `border-0` on the `<Table>` to avoid double borders.
 - Do not add additional borders to `<TableRow>` or `<TableCell>` unless needed for row/column separation.
+- **CRITICAL:** Remove all height constraints (`max-h-[70vh]`, `overflow-y-auto`) from table containers to allow natural page scrolling
+- **Table Padding**: Use CSS selectors `[&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2` on Table element for consistent padding
 - **Note:** Always check for and override any default or inherited `border-radius` on table, wrapper, or parent elements to ensure perfectly sharp corners.
+
+### AÇÕES Column Requirements (CRITICAL FIX)
+
+**Problem:** AÇÕES columns show excessive white space after action buttons within the column.
+
+**MANDATORY Solution Pattern (NEVER FORGET THIS!):**
+```tsx
+{/* STEP 1: Tables are FULL-WIDTH, only AÇÕES column is constrained */}
+<div className="rounded-none bg-background w-full border-2 border-border">
+  <div className="w-full rounded-none">
+    <Table className="w-full border-0 rounded-none [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+      
+      {/* STEP 2: Main content column(s) - flexible width */}
+      <TableHead className="font-bold uppercase">
+        CONTENT COLUMN
+      </TableHead>
+      
+      {/* STEP 3: AÇÕES column width based on button count */}
+      {/* For 2 buttons: w-[90px] */}
+      <TableHead className="w-[90px] font-bold uppercase text-center">
+        AÇÕES
+      </TableHead>
+      
+      {/* For 3 buttons: w-[140px] */}
+      <TableHead className="w-[140px] font-bold uppercase text-center">
+        AÇÕES
+      </TableHead>
+      
+      {/* STEP 4: Action buttons MUST be perfect squares, cell uses flex */}
+      <TableCell className="flex gap-2 justify-center">
+        <Button 
+          variant="default" 
+          size="icon" 
+          className="!h-10 !w-10 !min-w-10 !max-w-10 !p-0 !rounded-none aspect-square"
+        >
+          <Eye className="w-4 h-4" />
+        </Button>
+        <Button 
+          variant="destructive" 
+          size="icon" 
+          className="!h-10 !w-10 !min-w-10 !max-w-10 !p-0 !rounded-none aspect-square"
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      </TableCell>
+    </Table>
+  </div>
+</div>
+```
+
+**AÇÕES Column Standards (MANDATORY - NEVER FORGET!):**
+- **CRITICAL: Tables are FULL-WIDTH** - Use `w-full` on all table containers
+- **AÇÕES Column Optimization**: Only the AÇÕES column gets width constraints to minimize button white space
+- **Always center-aligned**: Use `text-center` on AÇÕES headers
+- **Width by button count**: 
+  - 2 buttons: `w-[90px]` (tighter spacing)
+  - 3 buttons: `w-[140px]`
+  - 4+ buttons: `w-[180px]`
+- **Button spacing**: Use `flex gap-2 justify-center` directly on TableCell
+- **Perfect square buttons**: All action buttons MUST use `!h-10 !w-10 !min-w-10 !max-w-10 !p-0 !rounded-none aspect-square`
+
+**CHECKLIST FOR EVERY TABLE:**
+- [ ] Container: `w-full` (tables are full-width)
+- [ ] Wrapper: `w-full` (tables are full-width) 
+- [ ] Table: `w-full` (tables are full-width)
+- [ ] AÇÕES header: `text-center` and appropriate width constraint
+- [ ] Action buttons: Perfect square className
+- [ ] Action cells: `flex gap-2 justify-center` (no wrapper div)
+
+### Table Height Policy: Natural Scrolling
+
+**❌ Wrong - Constrained Table Height:**
+```tsx
+<div className="max-h-[70vh] overflow-y-auto w-full">
+  <Table>...</Table>
+</div>
+```
+
+**✅ Correct - Natural Table Height:**
+```tsx
+<div className="w-full rounded-none">
+  <Table>...</Table>
+</div>
+```
+
+**Why Remove Height Constraints:**
+- Tables should expand to show all content naturally without artificial height limits
+- Users should scroll the entire page naturally rather than within small constrained areas
+- Better UX when there's plenty of screen space available
+- Eliminates confusing dual scroll bars (page scroll + table scroll)
+- Allows tables to utilize full available space efficiently
+
+**When to Apply This Fix:**
+- Remove `max-h-[70vh]`, `max-h-[40vh]`, or any other height constraints from table containers
+- Remove `overflow-y-auto` from table wrapper divs
+- Keep only `w-full rounded-none` for the scroll wrapper container
+- Apply this pattern to ALL tables across the application for consistency
 
 ### Column Width Patterns
 ```tsx
 // Fixed widths for specific content types
 <TableHead className="w-[90px]">Date</TableHead>
+<TableHead className="w-[90px]">FO</TableHead>
+<TableHead className="w-[90px]">Guia</TableHead>
+<TableHead className="w-[90px]">ORC</TableHead>
 <TableHead className="w-[60px]">ID</TableHead>
 <TableHead className="w-[140px]">Select</TableHead>
 <TableHead className="w-[180px]">Status</TableHead>
@@ -130,6 +240,48 @@ Use consistent hover effects across interactive elements:
 <TableHead className="min-w-[200px]">Description</TableHead>
 <TableHead className="flex-1">Long Content</TableHead>
 ```
+
+### Standard Column Widths
+- **FO columns:** Always use `w-[90px]` (90px width)
+- **Guia columns:** Always use `w-[90px]` (90px width)  
+- **ORC columns:** Always use `w-[90px]` (90px width)
+- **Date picker columns:** Always use `w-[160px]` (160px width) for consistent date field sizing
+
+### Column Header Alignment
+- **Center-aligned headers:** Use `text-center` for:
+  - **Actions columns (AÇÕES)** - always center-aligned to align with action button pairs
+  - Button columns (Notes, Actions) 
+  - Checkbox columns (Brindes, Concluído, Saiu)
+  - Radio button columns (Source selection)
+  - **Numeric ID columns (FO, ORC, Guia)** - headers are center-aligned, row content is right-aligned
+- **Left-aligned headers:** All other columns use default left alignment  
+  - Text columns (Cliente, Item, Transportadora)
+  - Other numeric columns (Quantidade) - headers are left-aligned, row content is right-aligned
+  
+**Important:** For numeric ID columns like FO, ORC, and Guia:
+- **Header alignment**: Center-aligned using `text-center`
+- **Content alignment**: Right-aligned using `text-right` on table cells for easy comparison
+
+### Header Implementation Pattern
+For proper alignment, both the header class AND the inner div justification must match:
+
+```tsx
+// Center-aligned headers (buttons/checkboxes/numeric IDs)
+<TableHead className="text-center">
+  <div className="flex items-center justify-center">
+    {/* Header content for buttons, checkboxes, FO, ORC, Guia */}
+  </div>
+</TableHead>
+
+// Left-aligned headers (text/other numeric)  
+<TableHead className="">
+  <div className="flex items-center justify-between">
+    {/* Header content for text columns, Quantidade, etc. */}
+  </div>
+</TableHead>
+```
+
+**Critical:** Never use `justify-between` with center-aligned headers as it will override the centering.
 
 ### Sortable Headers
 Always implement sorting for data tables:
@@ -500,6 +652,200 @@ The logistics tab uses a specialized table component with specific requirements:
 - Source/template row functionality required
 - Column visibility needs to be contextually controlled
 
+## 📏 Table Component Consistency Requirements
+
+All tables across the application must maintain visual consistency in interactive elements:
+
+### Height Standardization
+- **All inputs within tables:** Must use `h-10` (40px height)
+- **All buttons within tables:** Must use default `h-10` from Button component
+- **All comboboxes within tables:** Automatically use `h-10` from Button component
+- **All date pickers within tables:** Must specify `buttonClassName="w-full h-10"`
+- **Text areas for wrappable content:** Must use `min-h-[40px]` with `rows={2}`
+
+### Item Field Wrapping
+- **Item/Description columns:** Must use `Textarea` component instead of `Input` for multi-line content
+- **Configuration:** Use `rows={2}`, `resize-none`, and `min-h-[40px]`
+- **Purpose:** Allows long item descriptions to wrap properly without breaking table layout
+
+### Table Input Styling (No Visual Borders)
+All inputs within table cells must use borderless styling:
+```tsx
+className="border-0 outline-0 focus:ring-0 focus:border-0 h-10 text-sm"
+```
+
+### Table Padding Consistency (Critical Fix)
+**CRITICAL:** All tables must use this exact structure to fix padding/margin issues:
+
+#### Standard Table Container Structure:
+```tsx
+<div className="rounded-none bg-background w-full border-2 border-border">
+  <div className="max-h-[70vh] overflow-y-auto w-full">
+    <Table className="w-full table-fixed border-0 uppercase">
+      {/* Headers and content */}
+    </Table>
+  </div>
+</div>
+```
+
+#### Table Cell Padding (Apply to Table element):
+```tsx
+<Table className="w-full table-fixed border-0 uppercase [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+```
+
+**Key Requirements:**
+- **Container**: Must have `border-2 border-border` for 2px outer border
+- **Table**: Must have `border-0` to prevent double borders
+- **Padding**: Use `[&_td]:px-3 [&_td]:py-2` for consistent 12px horizontal, 8px vertical padding
+- **Headers**: Use `[&_th]:px-3 [&_th]:py-2` for matching header padding
+- **No Individual Padding**: NEVER add `p-*` classes to individual TableCell elements
+- **AÇÕES Column Exception**: Action button cells should NOT use the global padding and must use `flex gap-2 justify-center` for proper button alignment
+
+#### Checkbox/Button Column Alignment:
+```tsx
+// Header
+<TableHead className="w-12 text-center bg-[var(--orange)] font-bold">
+  Checkbox Header
+</TableHead>
+
+// Cell
+<TableCell className="text-center">
+  <div className="flex items-center justify-center">
+    <Checkbox />
+  </div>
+</TableCell>
+```
+
+#### DatePicker Column Proper Sizing:
+```tsx
+// Header - give adequate width
+<TableHead className="w-44 bg-[var(--orange)] font-bold">
+  Data
+</TableHead>
+
+// Cell - use constrained button
+<TableCell>
+  <DatePicker
+    buttonClassName="w-full h-10 max-w-[160px]"
+    selected={date}
+    onSelect={handleDateChange}
+  />
+</TableCell>
+<Table className="w-full table-fixed border-0 uppercase [&_td:first-child]:pl-2 [&_td:last-child]:pr-2 [&_td]:px-2 [&_td]:py-2">
+```
+
+**TableCell Elements:** Remove individual padding classes:
+```tsx
+{/* ❌ Wrong - creates inconsistent spacing */}
+<TableCell className="p-2 text-sm">
+
+{/* ✅ Correct - let table handle padding */}
+<TableCell className="text-sm">
+```
+
+#### AÇÕES Column Spacing Fix:
+**Problem:** Action buttons in the last column appear too close to the right table border
+**Solution:** Use the correct AÇÕES column pattern to ensure proper spacing:
+
+```tsx
+{/* ✅ Correct AÇÕES Header */}
+<TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[100px] font-bold uppercase text-center">
+  Ações
+</TableHead>
+
+{/* ✅ Correct AÇÕES Cell with proper spacing */}
+<TableCell className="flex gap-2 justify-center">
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="default" size="icon" className="h-10 w-10 rounded-none">
+          <Eye className="w-4 h-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>Ver</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+  <TooltipProvider>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button variant="destructive" size="icon" className="h-10 w-10 rounded-none">
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>Eliminar</TooltipContent>
+    </Tooltip>
+  </TooltipProvider>
+</TableCell>
+```
+
+**Critical Requirements for AÇÕES Column:**
+- **Header**: Always use `w-[100px]` width and `text-center` alignment
+- **Cell**: Use `flex gap-2 justify-center` to center buttons with proper spacing
+- **Buttons**: Use `h-10 w-10 rounded-none` for square, sharp-cornered buttons
+- **Spacing**: The `gap-2` provides 8px spacing between buttons
+- **NO padding classes**: Action cells should NOT have `px-*` classes that interfere with button alignment
+
+**CSS Selector Explanation:**
+- `[&_td:first-child]:pl-2` - Left padding only on first column
+- `[&_td:last-child]:pr-2` - Right padding only on last column  
+- `[&_td]:px-2` - Horizontal padding on all columns
+- `[&_td]:py-2` - Vertical padding on all columns
+
+This approach ensures:
+- **Consistent spacing** between content and table borders
+- **No extra padding** on the last column that creates unwanted space
+- **Uniform padding** across all table cells
+- **Responsive behavior** that works with different table structures
+- **Proper button alignment** in AÇÕES columns using flexbox centering
+
+### Component Import Requirements
+For tables with wrappable content, ensure these imports:
+```tsx
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+```
+
+### Example Implementation
+```tsx
+{/* Standard table input - single line */}
+<TableCell className="p-2 text-sm">
+  <Input
+    className="border-0 outline-0 focus:ring-0 focus:border-0 h-10 text-sm"
+    value={row.field}
+    onChange={handleChange}
+  />
+</TableCell>
+
+{/* Item field - wrappable */}
+<TableCell className="p-2 text-sm">
+  <Textarea
+    className="border-0 outline-0 focus:ring-0 focus:border-0 min-h-[40px] resize-none text-sm"
+    value={row.description}
+    onChange={handleChange}
+    rows={2}
+  />
+</TableCell>
+
+{/* Numeric input - right aligned */}
+<TableCell className="p-2 text-sm">
+  <Input
+    type="text"
+    className="border-0 outline-0 focus:ring-0 focus:border-0 h-10 text-sm text-right"
+    value={row.quantity}
+    onChange={handleChange}
+  />
+</TableCell>
+```
+
+### Consistency Checklist for Tables
+- [ ] All inputs use `h-10` height
+- [ ] All buttons use default `h-10` height
+- [ ] Item/description fields use `Textarea` with wrapping capability
+- [ ] Date pickers specify `buttonClassName="w-full h-10"`
+- [ ] All table inputs use borderless styling
+- [ ] Numeric fields are right-aligned
+- [ ] Visual alignment is consistent across all interactive elements
+
 ### When to Use Drawer Tabs:
 - **Related Data Views:** Different aspects of the same entity (production vs. logistics)
 - **Workflow Stages:** Sequential steps in a process
@@ -675,42 +1021,59 @@ const handleSave = async () => {
 ```
 
 ### Button Patterns
+
+#### Icon Buttons - Must Be Perfect SQUARES
+All icon buttons must use this exact pattern to ensure they are truly square (not rectangular):
+
 ```tsx
-{/* Primary actions */}
-<Button variant="default" size="icon">
+{/* CRITICAL: All icon buttons must use this exact className pattern */}
+<Button 
+  variant="default" 
+  size="icon" 
+  className="!h-10 !w-10 !min-w-10 !max-w-10 !p-0 !rounded-none aspect-square"
+>
   <Plus className="w-4 h-4" />
 </Button>
 
-{/* Edit button (always icon-only with tooltip) */}
+{/* Action buttons in AÇÕES columns - PERFECT SQUARES */}
 <TooltipProvider>
   <Tooltip>
     <TooltipTrigger asChild>
-      <Button variant="default" size="icon">
-        <Edit className="w-4 h-4" />
+      <Button 
+        variant="default" 
+        size="icon" 
+        className="!h-10 !w-10 !min-w-10 !max-w-10 !p-0 !rounded-none aspect-square"
+      >
+        <Eye className="w-4 h-4" />
       </Button>
     </TooltipTrigger>
-    <TooltipContent>Editar</TooltipContent>
+    <TooltipContent>Ver</TooltipContent>
   </Tooltip>
 </TooltipProvider>
 
-{/* Refresh button (always icon-only, no text) */}
-<Button variant="outline" size="icon" onClick={refreshTable}>
+{/* Header buttons - PERFECT SQUARES */}
+<Button 
+  variant="outline" 
+  size="icon" 
+  className="!h-10 !w-10 !min-w-10 !max-w-10 !p-0 !rounded-none aspect-square"
+>
   <RotateCw className="w-4 h-4" />
 </Button>
+```
 
-{/* Secondary actions */}
-<Button variant="outline" size="icon">
-  <Eye className="w-4 h-4" />
+#### Text Buttons - Sharp Corners Only
+```tsx
+{/* Icon with text - use default height, no width constraint, SHARP CORNERS */}
+<Button variant="default" className="h-10 rounded-none gap-2">
+  <Plus className="w-4 h-4" /> Add Item
 </Button>
 
-{/* Destructive actions */}
-<Button variant="destructive" size="icon">
-  <Trash2 className="w-4 h-4" />
+{/* Form buttons - SHARP CORNERS */}
+<Button type="submit" variant="default" className="h-10 rounded-none">
+  Save
 </Button>
-
-{/* Icon with text */}
-<Button variant="default" size="sm">
-  <Plus className="w-4 h-4 mr-2" /> Add Item
+<Button type="button" variant="outline" className="h-10 rounded-none">
+  Cancel
 </Button>
 ```
 
@@ -877,34 +1240,169 @@ The notes button must follow these exact specifications for consistency across a
 
 ## 🗂️ Drawer/Modal Patterns
 
-### Standard Drawer Structure
+### Drawer Content Structure & Spacing
+
+All drawers should follow consistent structure patterns for headers, entity information, and content spacing:
+
+#### Pattern 1: Form Drawers (Settings/CRUD)
+For forms, settings pages, and simple CRUD operations:
+
 ```tsx
-<Drawer open={!!openId} onOpenChange={(open) => !open && setOpenId(null)}>
-  <DrawerContent className="h-screen min-h-screen !top-0 !mt-0">
+<Drawer open={openDrawer} onOpenChange={(open) => !open && resetForm()}>
+  <DrawerContent className="h-screen min-h-screen !top-0 !mt-0 rounded-none">
     <div className="w-full px-4 md:px-8 flex flex-col h-full">
       <DrawerHeader className="flex-none">
         <div className="flex justify-end items-center gap-2 mb-2">
-          <Button variant="outline" size="sm" onClick={addItem}>
-            Add Item
-          </Button>
           <DrawerClose asChild>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" aria-label="Fechar">
               <X className="w-5 h-5" />
             </Button>
           </DrawerClose>
         </div>
-        <DrawerTitle>Title</DrawerTitle>
-        <DrawerDescription>Description</DrawerDescription>
+        <DrawerTitle>
+          {editing ? 'Editar Item' : 'Novo Item'}
+        </DrawerTitle>
+        <DrawerDescription>
+          {editing 
+            ? 'Edite as informações do item abaixo.'
+            : 'Preencha as informações para criar um novo item.'
+          }
+        </DrawerDescription>
       </DrawerHeader>
       
-      {/* Content */}
       <div className="flex-grow overflow-y-auto">
-        {/* Drawer content */}
+        {/* Form content */}
       </div>
     </div>
   </DrawerContent>
 </Drawer>
 ```
+
+#### Pattern 2: Entity Detail Drawers (Production/Logistics)
+For complex entity details with tabs and data tables:
+
+```tsx
+<Drawer open={!!openId} onOpenChange={(open) => !open && setOpenId(null)}>
+  <DrawerContent className="h-[98vh] min-h-[98vh] max-h-[98vh] !top-0 overflow-y-auto">
+    <DrawerHeader className="sr-only">
+      <DrawerTitle>Entity Details</DrawerTitle>
+      <DrawerDescription>Detailed view description</DrawerDescription>
+    </DrawerHeader>
+    
+    <div className="p-6 space-y-6 relative">
+      {/* Close button - top right */}
+      <Button size="icon" variant="outline" onClick={onClose} className="absolute top-6 right-6 z-10">
+        <X className="w-4 h-4" />
+      </Button>
+      
+      {/* Entity info header */}
+      <div className="mb-6 p-4 uppercase">
+        <div className="flex gap-8 items-center mb-2">
+          <div>
+            <div className="text-xs font-bold">Field Label</div>
+            <div className="font-mono">{fieldValue}</div>
+          </div>
+          <div className="flex-1">
+            <div className="text-xs font-bold">Long Field</div>
+            <div className="font-mono truncate">{longFieldValue}</div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Content with tabs or tables */}
+      <Tabs defaultValue="tab1" className="w-full pl-4">
+        {/* Tab content */}
+      </Tabs>
+    </div>
+  </DrawerContent>
+</Drawer>
+```
+
+#### Pattern 3: Full-Screen Modal Drawers (Complex Operations)
+For specialized operations with toolbars and action buttons:
+
+```tsx
+<Drawer open={open} onOpenChange={onOpenChange} shouldScaleBackground>
+  <DrawerContent className="overflow-hidden h-screen min-h-screen !top-0 !mt-0 max-w-[95vw] mx-auto bg-background p-0 border border-border shadow-md">
+    <DrawerHeader>
+      <DrawerTitle className="text-xl font-bold">Operation Title</DrawerTitle>
+      <DrawerDescription>
+        Operation description and context.
+      </DrawerDescription>
+      
+      {/* Toolbar section */}
+      <div className="flex items-center gap-2 mt-4 mb-2 w-full">
+        <div className="flex items-center gap-2">
+          {/* Navigation or input controls */}
+        </div>
+        <div className="flex-1" />
+        <div className="flex items-center gap-2 justify-end">
+          {/* Action buttons */}
+        </div>
+      </div>
+    </DrawerHeader>
+    
+    <div className="p-4">
+      {/* Main content */}
+    </div>
+    
+    <DrawerClose asChild>
+      <Button variant="outline" size="icon" className="absolute top-4 right-4">
+        <X className="h-4 w-4" />
+      </Button>
+    </DrawerClose>
+  </DrawerContent>
+</Drawer>
+```
+
+### Key Spacing & Structure Rules
+
+#### Entity Information Header Pattern
+For entity details, use this standardized header structure:
+
+```tsx
+<div className="mb-6 p-4 uppercase">
+  <div className="flex gap-8 items-center mb-2">
+    <div>
+      <div className="text-xs font-bold">FIELD LABEL</div>
+      <div className="font-mono">{fieldValue}</div>
+    </div>
+    <div className="flex-1">
+      <div className="text-xs font-bold">LONG FIELD LABEL</div>
+      <div className="font-mono truncate">{longFieldValue}</div>
+    </div>
+  </div>
+</div>
+```
+
+**Key Characteristics:**
+- **Container**: `mb-6 p-4 uppercase` for consistent spacing and typography
+- **Field Layout**: `flex gap-8 items-center mb-2` for horizontal field arrangement
+- **Labels**: `text-xs font-bold` for small, bold field labels
+- **Values**: `font-mono` for monospace field values, `truncate` for long content
+- **Flexible Fields**: Use `flex-1` for fields that should expand
+
+#### Vertical Spacing Standards
+- **Main container**: `p-6 space-y-6 relative` for consistent outer spacing
+- **Entity header**: `mb-6` bottom margin to separate from content
+- **Tab content**: `mt-6` top margin for tab content sections
+- **Section headers**: `mb-6` for section title spacing
+- **Action toolbars**: `mt-4 mb-2` for toolbar sections in headers
+
+#### Typography Hierarchy
+- **Drawer titles**: `text-xl font-bold` for main drawer titles
+- **Section titles**: `text-lg font-semibold` for content section titles
+- **Field labels**: `text-xs font-bold uppercase` for entity field labels
+- **Field values**: `font-mono` for data values (IDs, codes, etc.)
+- **Descriptions**: `text-sm text-muted-foreground` for subtitle text
+
+### Content Alignment with Tables
+When tables are present in drawers:
+
+- **Table spacing**: Use `mt-6` to separate tables from their headers
+- **Table container**: Always use `rounded-none bg-background w-full border-2 border-border`
+- **Content padding**: Maintain `p-4` or `p-6` container padding around tables
+- **Header alignment**: Section headers should align with table edges
 
 ## 📝 Form Patterns
 
@@ -1082,11 +1580,39 @@ Use `w-4 h-4` for most icons, `w-5 h-5` for larger elements
 - **View/Open Drawer**: `Eye` (always variant="default", with appropriate tooltip) - for opening detailed view in drawer
 - Delete: `Trash2`
 - Refresh: `RotateCw`
-- Close: `X`
+- Clear/Close: `X`
 - Sort: `ArrowUp`, `ArrowDown`
 - Status: Use colored dots instead of icons
 - File: `FileText`, `FilePlus`
 - Notes: `FileText` (always, handled by SimpleNotasPopover/NotasPopover)
+
+### Button Shape Requirements
+
+**CRITICAL: All icon-only buttons MUST be square (same width and height)**
+
+```tsx
+{/* ✅ Correct - Square icon button */}
+<Button variant="outline" size="icon" className="h-10 w-10">
+  <RotateCw className="w-4 h-4" />
+</Button>
+
+{/* ❌ Wrong - Rectangular icon button */}
+<Button variant="outline" size="icon">
+  <RotateCw className="w-4 h-4" />
+</Button>
+```
+
+**Why Square Buttons Are Required:**
+- **Visual Consistency**: Creates uniform, predictable interface elements
+- **Better Alignment**: Square buttons align properly in button groups and toolbars
+- **Professional Appearance**: Maintains clean, geometric design language
+- **Accessibility**: Provides consistent click targets for users
+
+**Implementation:**
+- Always add `className="h-10 w-10"` to icon-only buttons
+- Use `size="icon"` combined with explicit width/height classes
+- This applies to ALL icon buttons: refresh, clear, edit, delete, view, etc.
+- Text buttons (with icons) should NOT have width constraints - only height
 
 ## 🎨 CSS Custom Properties
 
@@ -1122,7 +1648,30 @@ Use these custom properties consistently:
 - [ ] All tables use consistent action button patterns based on their functionality (inline edit vs drawer view)
 - [ ] All export-to-Excel actions use the standard Exportar Excel button: icon-only, FileSpreadsheet icon, variant="default" (primary color), size="icon", always wrapped in a Tooltip with label 'Exportar Excel'
 - [ ] All notas (notes) buttons follow the style: icon-only, FileText icon, buttonSize="icon", className="mx-auto aspect-square", variant="link" if notes exist, variant="ghost" if empty, always wrapped in a Tooltip showing full notes content on hover
-- [ ] All icon-only buttons are wrapped in a Tooltip with a clear, descriptive label.
+- [ ] All icon-only buttons are wrapped in a Tooltip with a clear, descriptive label
+- [ ] **Table Component Consistency**: All inputs use `h-10` height, item fields use `Textarea` for wrapping, date pickers specify `buttonClassName="w-full h-10"`
+- [ ] **Table Input Styling**: All table inputs use borderless styling: `border-0 outline-0 focus:ring-0 focus:border-0`
+- [ ] **Item Field Wrapping**: Use `Textarea` with `rows={2}`, `resize-none`, and `min-h-[40px]` for item/description columns
+- [ ] **Visual Alignment**: All interactive elements within tables have consistent 40px (`h-10`) height
+- [ ] **Button Height Consistency**: Never use `size="sm"`, use default or `size="icon"` to maintain `h-10` height
+- [ ] **Header Button Standards**: All header buttons use proper Button components and match combobox heights
+- [ ] **Navigation Buttons**: Use Button components instead of custom `<button>` elements for consistent styling
+- [ ] **DatePicker Height**: Always specify `buttonClassName="...h-10"` for explicit height control
+- [ ] **Table Padding Consistency**: Use CSS selectors on Table element, remove individual `p-2` from TableCell elements
+- [ ] **Spacing Standards**: No extra padding on last column that creates unwanted space between content and table border
+- [ ] **AÇÕES Column Fix**: Use `flex gap-2 justify-center` for action button cells, NO px-* padding classes, buttons use `h-10 w-10 rounded-none`
+- [ ] **Standard Column Widths**: FO, Guia, and ORC columns always use `w-[90px]` (90px width), date picker columns always use `w-[160px]` (160px width)
+- [ ] **Numeric Column Alignment**: FO, ORC, Guia headers are center-aligned with `text-center`, other numeric headers are left-aligned (default), all numeric content is right-aligned with `text-right`
+- [ ] **Table Height Policy**: Remove all height constraints (`max-h-[70vh]`, `overflow-y-auto`) from table containers to allow natural page scrolling
+- [ ] **Square Icon Buttons**: ALL icon-only buttons must be square using `className="h-10 w-10"` for consistent visual alignment
+
+## 🗂️ Drawer Structure Checklist
+- [ ] **Drawer Type**: Use appropriate pattern (Form, Entity Detail, or Full-Screen Modal)
+- [ ] **Entity Headers**: Use `mb-6 p-4 uppercase` container with `text-xs font-bold` labels and `font-mono` values
+- [ ] **Vertical Spacing**: Main containers use `p-6 space-y-6 relative` for consistent spacing
+- [ ] **Typography Hierarchy**: Drawer titles use `text-xl font-bold`, section titles use `text-lg font-semibold`
+- [ ] **Table Integration**: Tables use `mt-6` spacing from headers and proper container structure
+- [ ] **Close Button**: Always positioned `absolute top-6 right-6 z-10` for entity detail drawers
 
 ## 🔗 Component Dependencies
 
@@ -1150,78 +1699,167 @@ import { Plus, Eye, Trash2, X, RotateCw, ArrowUp, ArrowDown, Loader2, FileText, 
 
 ## 🟧 Border Radius Policy
 
-- All components must use sharp corners: always use `rounded-none`.
+- **CRITICAL:** All components must use sharp corners: always use `rounded-none`.
 - Do not use `rounded`, `rounded-md`, `rounded-base`, or any other border radius utility.
-- This applies to all containers, tables, buttons, cards, modals, etc. 
+- This applies to all containers, tables, **buttons**, cards, modals, inputs, etc.
+- **ALL BUTTONS must include `rounded-none`** in their className to override default button styling. 
 
-## 📝 Input Field Styling
+## 📝 Input Field and Component Height Consistency
 
-All input fields must follow these conventions to ensure visual consistency across the application:
+All form inputs, interactive components, and table elements must follow these conventions to ensure visual consistency:
 
-- **Sharp Corners:** Always use `rounded-none` to remove border radius.
-- **No Borders:** Do not use `border`, `border-2`, `border-input`, or any border classes. Input fields should have no visible borders.
-- **No Outlines:** Input fields should have no focus outlines or any other outline styles.
-- **No Extra Backgrounds:** Do not add custom background classes unless specified.
-- **No Placeholder Dashes:** Do not use placeholder dashes (e.g., `placeholder="-"`). Use meaningful placeholders or none as appropriate.
-- **No Duplicate className:** Each input should have only one `className` attribute.
+### Component Height Standards
+- **Standard Height:** All buttons, inputs, comboboxes, and date pickers must use `h-10` (40px) for consistent alignment
+- **Table Inputs:** All input fields within tables must use `h-10` to match combobox heights
+- **Textarea for Long Content:** Use `Textarea` with `min-h-[40px]` and `rows={2}` for fields that need text wrapping (like Item descriptions)
+
+### Input Field Styling
+- **Sharp Corners:** Always use `rounded-none` to remove border radius
+- **Consistent Height:** Always use `h-10` for standard inputs
+- **No Borders in Tables:** Table inputs should use `border-0 outline-0 focus:ring-0 focus:border-0` for borderless appearance
+- **No Extra Backgrounds:** Do not add custom background classes unless specified
+- **No Placeholder Dashes:** Do not use placeholder dashes (e.g., `placeholder="-"`). Use meaningful placeholders or none as appropriate
 
 ### Examples
 
-**Standard Input:**
+**Standard Input (Forms):**
 ```tsx
 <Input
   placeholder="Enter value..."
   value={inputValue}
   onChange={handleChange}
-  className="rounded-none"
+  className="h-10 rounded-none"
 />
 ```
 
-**Table Cell Input:**
+**Table Cell Input (Consistent Height):**
 ```tsx
 <Input
   value={cellValue}
   onChange={handleCellChange}
   onBlur={handleCellSave}
-  className="rounded-none w-full"
+  className="border-0 outline-0 focus:ring-0 focus:border-0 h-10 text-sm"
 />
 ```
 
-**Numeric Input (right-aligned):**
+**Table Cell Textarea (Wrappable Content):**
+```tsx
+<Textarea
+  value={longContent}
+  onChange={handleChange}
+  onBlur={handleSave}
+  className="border-0 outline-0 focus:ring-0 focus:border-0 min-h-[40px] resize-none text-sm"
+  rows={2}
+/>
+```
+
+**Numeric Input (Right-aligned, Consistent Height):**
 ```tsx
 <Input
   type="text"
   value={numericValue}
   onChange={handleChange}
-  className="rounded-none text-right"
+  className="border-0 outline-0 focus:ring-0 focus:border-0 h-10 text-sm text-right"
 />
 ```
 
-**Filter Input (fixed width):**
+**Filter Input (Fixed width, Standard Height):**
 ```tsx
 <Input
   placeholder="Filter field..."
   value={filterValue}
   onChange={handleFilter}
-  className="rounded-none w-28"
+  className="h-10 rounded-none w-28"
 />
 ```
 
-> **Note:** Never use `rounded`, `rounded-md`, or any border radius utility for input fields. All input fields must have sharp corners with no visible borders or outlines as per the design system. This ensures a clean, minimal appearance across all tables and forms.
+**DatePicker (Consistent Height):**
+```tsx
+<DatePicker
+  selected={date}
+  onSelect={handleDateChange}
+  buttonClassName="w-full h-10"
+/>
+```
+
+### Component Height Requirements
+- **Buttons:** Use default `h-10` from Button component variants (never use `size="sm"`)
+- **Comboboxes:** Use default `h-10` from Button component (automatically applied)
+- **Date Pickers:** Always specify `buttonClassName="w-full h-10"` or similar
+- **Form Inputs:** Always use `h-10` for consistency
+- **Table Inputs:** Always use `h-10` to match other interactive elements
+- **Textareas:** Use `min-h-[40px]` to match the 40px standard height baseline
+
+### Button Height Consistency Rules
+- **Never use `size="sm"`:** This creates 36px height buttons that break visual alignment
+- **Default buttons:** Use no size prop (defaults to `h-10`)
+- **Icon buttons:** Use `size="icon"` (maintains `h-10` height)
+- **Header buttons:** Must match combobox heights - always use default or icon sizing
+- **Navigation buttons:** Use proper Button components instead of custom `<button>` elements
+
+### Common Header Button Patterns
+```tsx
+{/* Text button - default height */}
+<Button variant="outline" onClick={handleAction}>
+  <RefreshCcw className="w-4 h-4 mr-2" />
+  Refresh
+</Button>
+
+{/* Icon-only button - maintains h-10 */}
+<Button variant="outline" size="icon" onClick={handleAction}>
+  <Plus className="w-4 h-4" />
+</Button>
+
+{/* Navigation buttons */}
+<Button variant="outline" size="icon" aria-label="Previous">
+  <ArrowLeft className="w-4 h-4" />
+</Button>
+
+{/* Close button in drawer */}
+<DrawerClose asChild>
+  <Button variant="outline" size="icon" className="absolute top-4 right-4">
+    <X className="w-4 h-4" />
+  </Button>
+</DrawerClose>
+```
+
+### DatePicker Height Specification
+Always specify height explicitly for DatePickers:
+```tsx
+<DatePicker
+  selected={date}
+  onSelect={handleDateChange}
+  buttonClassName="w-auto h-10"  {/* Must specify h-10 */}
+/>
+```
+
+> **Critical:** All interactive form elements must use the same 40px (`h-10`) height for perfect visual alignment. Use `Textarea` with `min-h-[40px]` for content that needs to wrap, ensuring the baseline height matches other components.
 
 ## 📋 Table Numeric Alignment
 
-- **Right-align all numeric data:** For any table column that displays numbers (quantities, prices, totals, etc.), always use `text-right` on both `<TableHead>` and `<TableCell>`.
-- This ensures numbers are visually aligned for easier comparison and a professional look.
-- Apply this rule to all tables in the application.
+### Header vs Content Alignment
+Different numeric column types have different alignment patterns:
 
-### Example
+**Numeric ID Columns (FO, ORC, Guia):**
+- **Headers:** Center-aligned using `text-center`
+- **Content:** Right-aligned using `text-right`
+
+**Other Numeric Columns (Quantidade, Preços, Totais):**
+- **Headers:** Left-aligned (default)
+- **Content:** Right-aligned using `text-right`
+
+### Examples
 ```tsx
-<TableHead className="text-right w-[120px]">Quantidade</TableHead>
+// Numeric ID columns (FO, ORC, Guia)
+<TableHead className="text-center w-[90px]">FO</TableHead>
+<TableCell className="text-right">{item.numero_fo}</TableCell>
+
+// Other numeric columns (Quantidade, etc.)
+<TableHead className="w-[120px]">Quantidade</TableHead>
 <TableCell className="text-right">{item.quantidade}</TableCell>
 ```
 
-> **Note:** Always review table columns and add `text-right` to any numeric field, including calculated values, prices, and totals. 
+> **Note:** This creates visual hierarchy where ID columns are centrally prominent while maintaining right-alignment for easy numeric comparison in content. 
 
 ## Tooltips
 

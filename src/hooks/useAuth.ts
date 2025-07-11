@@ -12,34 +12,65 @@ export function useAuth() {
   const supabase = createBrowserClient()
 
   useEffect(() => {
+    let mounted = true
+
     const getUser = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser()
-        setUser(user)
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        if (mounted) {
+          setUser(user)
+          setLoading(false)
+        }
       } catch (error) {
         console.error('Error getting user:', error)
-        setUser(null)
-      } finally {
-        setLoading(false)
+        if (mounted) {
+          setUser(null)
+          setLoading(false)
+        }
       }
     }
 
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+    // Set up auth state listener with better session handling
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (mounted) {
         setUser(session?.user ?? null)
         setLoading(false)
+
+        // Log auth events for debugging
+        console.log('Auth state change:', event, {
+          hasSession: !!session,
+          userId: session?.user?.id,
+          expiresAt: session?.expires_at
+            ? new Date(session.expires_at * 1000)
+            : null,
+        })
+
+        // Handle token refresh automatically
+        if (event === 'TOKEN_REFRESHED') {
+          console.log('Token refreshed successfully')
+        }
+
+        if (event === 'SIGNED_OUT') {
+          console.log('User signed out')
+        }
       }
-    )
+    })
 
     getUser()
 
     // Fallback timeout to ensure loading state resolves
     const timeoutId = setTimeout(() => {
-      setLoading(false)
-    }, 500)
+      if (mounted) {
+        setLoading(false)
+      }
+    }, 1000) // Increased timeout for more stability
 
     return () => {
+      mounted = false
       subscription.unsubscribe()
       clearTimeout(timeoutId)
     }
@@ -56,4 +87,4 @@ export function useAuth() {
     signOut,
     isAuthenticated: !!user,
   }
-} 
+}

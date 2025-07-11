@@ -15,27 +15,33 @@ export const createBrowserClient = () =>
         persistSession: true,
         autoRefreshToken: true,
         detectSessionInUrl: true,
-        flowType: 'implicit'
-      }
-    }
+        flowType: 'implicit',
+        // Store session in local storage for better persistence
+        storage:
+          typeof window !== 'undefined' ? window.localStorage : undefined,
+      },
+    },
   )
 
-export const createServerClient = async (cookieStore: ReturnType<typeof cookies>) => {
+export const createServerClient = async (
+  cookieStore: ReturnType<typeof cookies>,
+) => {
   // In Next.js 15, cookies() needs to be awaited
-  const cookieStoreAsync = cookieStore instanceof Promise ? await cookieStore : cookieStore;
-  
+  const cookieStoreAsync =
+    cookieStore instanceof Promise ? await cookieStore : cookieStore
+
   return serverClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
         async get(name: string) {
-          const cookie = await cookieStoreAsync.get(name);
-          return cookie?.value;
+          const cookie = await cookieStoreAsync.get(name)
+          return cookie?.value
         },
         async set(name: string, value: string, options: CookieOptions) {
           try {
-            await cookieStoreAsync.set({ name, value, ...options });
+            await cookieStoreAsync.set({ name, value, ...options })
           } catch (error) {
             // The `set` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing
@@ -44,7 +50,7 @@ export const createServerClient = async (cookieStore: ReturnType<typeof cookies>
         },
         async remove(name: string, options: CookieOptions) {
           try {
-            await cookieStoreAsync.set({ name, value: '', ...options });
+            await cookieStoreAsync.set({ name, value: '', ...options })
           } catch (error) {
             // The `delete` method was called from a Server Component.
             // This can be ignored if you have middleware refreshing
@@ -53,7 +59,7 @@ export const createServerClient = async (cookieStore: ReturnType<typeof cookies>
         },
       },
     },
-  );
+  )
 }
 
 export const createMiddlewareClient = (request: NextRequest) => {

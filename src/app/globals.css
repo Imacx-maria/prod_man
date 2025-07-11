@@ -30,7 +30,7 @@
   --tile: rgba(0, 0, 0, 0.1);
   --tile-border: rgba(0, 0, 0, 0.05);
   --dropdown-bg: var(--background);
-  --orange: oklch(0.7771 0.1729 66.06);
+  --orange: oklch(0.7997 0.1725 75.18);
   --orange-dark: #ff9c00;
   --blue-light: oklch(0.67 0.1759 250.15);
   color-scheme: dark;

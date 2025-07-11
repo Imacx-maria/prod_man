@@ -5,10 +5,22 @@ import { createBrowserClient } from '@/utils/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import { Plus, Trash2, X, Loader2, Edit, RotateCw } from 'lucide-react'
+import PermissionGuard from '@/components/PermissionGuard'
 
 interface Complexidade {
   id: string
@@ -47,8 +59,8 @@ export default function ComplexidadePage() {
     fetchComplexidades()
   }, [])
 
-  const filteredComplexidades = complexidades.filter(complexidade =>
-    complexidade.grau.toLowerCase().includes(grauFilter.toLowerCase())
+  const filteredComplexidades = complexidades.filter((complexidade) =>
+    complexidade.grau.toLowerCase().includes(grauFilter.toLowerCase()),
   )
 
   const handleAddNew = async () => {
@@ -60,12 +72,12 @@ export default function ComplexidadePage() {
       const { data, error } = await supabase
         .from('complexidade')
         .insert({
-          grau: newGrau.trim()
+          grau: newGrau.trim(),
         })
         .select('*')
 
       if (!error && data && data[0]) {
-        setComplexidades(prev => [...prev, data[0]])
+        setComplexidades((prev) => [...prev, data[0]])
       }
     } catch (error) {
       console.error('Error creating complexidade:', error)
@@ -75,7 +87,8 @@ export default function ComplexidadePage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este nível de complexidade?')) return
+    if (!confirm('Tem certeza que deseja excluir este nível de complexidade?'))
+      return
 
     try {
       const { error } = await supabase
@@ -84,135 +97,195 @@ export default function ComplexidadePage() {
         .eq('id', id)
 
       if (!error) {
-        setComplexidades(prev => prev.filter(c => c.id !== id))
+        setComplexidades((prev) => prev.filter((c) => c.id !== id))
       }
     } catch (error) {
       console.error('Error deleting complexidade:', error)
     }
   }
 
+  const handleSave = async () => {
+    if (!editValue.trim() || !editingId) return
+
+    setSubmitting(true)
+    try {
+      const { error } = await supabase
+        .from('complexidade')
+        .update({ grau: editValue.trim() })
+        .eq('id', editingId)
+
+      if (!error) {
+        setComplexidades((prev) =>
+          prev.map((c) =>
+            c.id === editingId ? { ...c, grau: editValue.trim() } : c,
+          ),
+        )
+      }
+    } catch (error) {
+      console.error('Error updating:', error)
+    } finally {
+      setSubmitting(false)
+      setEditingId(null)
+      setEditValue('')
+    }
+  }
+
+  const handleCancel = () => {
+    setEditingId(null)
+    setEditValue('')
+  }
+
   return (
-    <div className="w-full space-y-6 p-4 md:p-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Gestão de Complexidade</h1>
-        <div className="flex gap-2">
+    <PermissionGuard>
+      <div className="w-full space-y-6 p-4 md:p-8">
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold">Gestão de Complexidade</h1>
+          <div className="flex gap-2">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={fetchComplexidades}
+                    className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                  >
+                    <RotateCw className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Atualizar</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    onClick={handleAddNew}
+                    className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                    size="icon"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Novo nível</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </div>
+
+        {/* Filter bar */}
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Filtrar por grau..."
+            value={grauFilter}
+            onChange={(e) => setGrauFilter(e.target.value)}
+            className="h-10 w-[300px] rounded-none"
+          />
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={fetchComplexidades}>
-                  <RotateCw className="w-4 h-4" />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setGrauFilter('')}
+                  className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                >
+                  <X className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>Atualizar</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                          <Button onClick={handleAddNew}>
-            <Plus className="w-4 h-4" />
-          </Button>
-              </TooltipTrigger>
-              <TooltipContent>Novo Nível</TooltipContent>
+              <TooltipContent>Limpar filtro</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
-      </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-2">
-        <Input
-          placeholder="Filtrar por grau..."
-          value={grauFilter}
-          onChange={(e) => setGrauFilter(e.target.value)}
-          className="w-[300px] rounded-none"
-        />
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" onClick={() => setGrauFilter('')}>
-                <X className="w-4 h-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Limpar filtro</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
-
-      {/* Table */}
-      <div className="bg-background w-full">
-        <div className="max-h-[70vh] overflow-y-auto w-full">
-          <Table className="w-full border-2 border-border">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border min-w-[300px] font-bold">
-                  Grau de Complexidade
-                </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-t-2 border-border w-[140px] font-bold">
-                  Ações
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+        {/* Table */}
+        <div className="bg-background border-border w-full rounded-none border-2">
+          <div className="w-full rounded-none">
+            <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={2} className="text-center h-40">
-                    <Loader2 className="animate-spin w-8 h-8 text-muted-foreground mx-auto" />
-                  </TableCell>
+                  <TableHead className="border-border sticky top-0 z-10 border-b-2 bg-[var(--orange)] font-bold uppercase">
+                    Grau de Complexidade
+                  </TableHead>
+                  <TableHead className="border-border sticky top-0 z-10 w-[140px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
+                    Ações
+                  </TableHead>
                 </TableRow>
-              ) : filteredComplexidades.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={2} className="text-center text-gray-500">
-                    Nenhum nível de complexidade encontrado.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredComplexidades.map((complexidade) => (
-                  <TableRow key={complexidade.id}>
-                    <TableCell className="font-medium">
-                      {editingId === complexidade.id ? (
-                        <Input
-                          value={editValue}
-                          onChange={(e) => setEditValue(e.target.value)}
-                          onKeyDown={async (e) => {
-                            if (e.key === 'Enter' && editValue.trim()) {
-                              setSubmitting(true);
-                              try {
-                                const { error } = await supabase
-                                  .from('complexidade')
-                                  .update({ grau: editValue.trim() })
-                                  .eq('id', complexidade.id);
-                                
-                                if (!error) {
-                                  setComplexidades(prev => prev.map(c => 
-                                    c.id === complexidade.id ? { ...c, grau: editValue.trim() } : c
-                                  ));
-                                }
-                              } catch (error) {
-                                console.error('Error updating:', error);
-                              } finally {
-                                setSubmitting(false);
-                                setEditingId(null);
-                                setEditValue('');
-                              }
-                            } else if (e.key === 'Escape') {
-                              setEditingId(null);
-                              setEditValue('');
-                            }
-                          }}
-                          onBlur={() => {
-                            setEditingId(null);
-                            setEditValue('');
-                          }}
-                          className="rounded-none"
-                          autoFocus
-                        />
-                      ) : (
-                        complexidade.grau
-                      )}
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={2} className="h-40 text-center">
+                      <Loader2 className="text-muted-foreground mx-auto h-8 w-8 animate-spin" />
                     </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
+                  </TableRow>
+                ) : filteredComplexidades.length === 0 ? (
+                  <TableRow>
+                    <TableCell
+                      colSpan={2}
+                      className="text-center text-gray-500"
+                    >
+                      Nenhum nível de complexidade encontrado.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredComplexidades.map((complexidade) => (
+                    <TableRow key={complexidade.id}>
+                      <TableCell className="font-medium">
+                        {editingId === complexidade.id ? (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && editValue.trim()) {
+                                  handleSave()
+                                } else if (e.key === 'Escape') {
+                                  handleCancel()
+                                }
+                              }}
+                              className="h-10 flex-1 rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                              autoFocus
+                            />
+                            <div className="flex gap-1">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="default"
+                                      size="icon"
+                                      onClick={handleSave}
+                                      disabled={!editValue.trim() || submitting}
+                                      className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                    >
+                                      <span className="text-xs">✓</span>
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Guardar</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="outline"
+                                      size="icon"
+                                      onClick={handleCancel}
+                                      className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Cancelar</TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            </div>
+                          </div>
+                        ) : (
+                          complexidade.grau
+                        )}
+                      </TableCell>
+                      <TableCell className="flex justify-center gap-2">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -220,12 +293,13 @@ export default function ComplexidadePage() {
                                 variant="default"
                                 size="icon"
                                 onClick={() => {
-                                  setEditingId(complexidade.id);
-                                  setEditValue(complexidade.grau);
+                                  setEditingId(complexidade.id)
+                                  setEditValue(complexidade.grau)
                                 }}
                                 disabled={editingId !== null}
+                                className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
                               >
-                                <Edit className="w-4 h-4" />
+                                <Edit className="h-4 w-4" />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Editar</TooltipContent>
@@ -239,24 +313,23 @@ export default function ComplexidadePage() {
                                 size="icon"
                                 onClick={() => handleDelete(complexidade.id)}
                                 disabled={editingId !== null}
+                                className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="h-4 w-4" />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Excluir</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       </div>
-
-
-    </div>
+    </PermissionGuard>
   )
-} 
+}

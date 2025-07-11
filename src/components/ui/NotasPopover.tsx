@@ -1,55 +1,63 @@
-"use client"
+'use client'
 
 import React, { useState, useRef, useEffect } from 'react'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
-import { FileText, FilePlus, Check, CalendarIcon, TriangleAlertIcon, CircleAlertIcon, BellRingIcon, MessageCircleIcon } from 'lucide-react'
+import {
+  FileText,
+  Check,
+  TriangleAlertIcon,
+  CircleAlertIcon,
+  BellRingIcon,
+  MessageCircleIcon,
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import DatePicker from '@/components/ui/DatePicker'
-import { parseDateFromYYYYMMDD, formatDateToYYYYMMDD } from '@/utils/date'
-import { format } from 'date-fns'
 import { Portal } from '@radix-ui/react-popover'
 
 export interface NotasPopoverProps {
-  value: string;
-  onChange: (val: string) => void;
+  value: string
+  onChange: (val: string) => void
   onSave: (fields: {
-    outras: string;
-    contacto: string;
-    telefone: string;
-    contacto_entrega: string;
-    telefone_entrega: string;
-    data?: string | null;
-  }) => Promise<void> | void;
-  placeholder?: string;
-  disabled?: boolean;
-  className?: string;
-  iconType?: 'warning' | 'error' | 'info' | 'notification' | 'file' | 'auto';
-  label?: string;
-  buttonSize?: 'default' | 'sm' | 'lg' | 'icon';
-  maxTextareaHeight?: string;
-  saveOnBlur?: boolean;
-  contacto?: string;
-  telefone?: string;
-  contacto_entrega?: string;
-  telefone_entrega?: string;
-  data?: string | null;
+    outras: string
+    contacto: string
+    telefone: string
+    contacto_entrega: string
+    telefone_entrega: string
+    data?: string | null
+  }) => Promise<void> | void
+  placeholder?: string
+  disabled?: boolean
+  className?: string
+  iconType?: 'warning' | 'error' | 'info' | 'notification' | 'file' | 'auto'
+  label?: string
+  buttonSize?: 'default' | 'sm' | 'lg' | 'icon'
+  maxTextareaHeight?: string
+  saveOnBlur?: boolean
+  contacto?: string
+  telefone?: string
+  contacto_entrega?: string
+  telefone_entrega?: string
+  data?: string | null
   onFieldChange?: (fields: {
-    outras: string;
-    contacto: string;
-    telefone: string;
-    contacto_entrega: string;
-    telefone_entrega: string;
-    data?: string | null;
-  }) => void;
-  popoverContainer?: HTMLElement | null;
-  modal?: boolean;
+    outras: string
+    contacto: string
+    telefone: string
+    contacto_entrega: string
+    telefone_entrega: string
+    data?: string | null
+  }) => void
+  popoverContainer?: HTMLElement | null
+  modal?: boolean
   /**
    * If true, the popover content is rendered centered in the viewport using a Portal.
    * Useful for usage inside Drawers or modals to avoid clipping/freeze issues.
    */
-  centered?: boolean;
+  centered?: boolean
 }
 
 const NotasPopover: React.FC<NotasPopoverProps> = ({
@@ -72,42 +80,40 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
   onFieldChange,
   popoverContainer,
   modal = true,
-  centered = false
+  centered = false,
 }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [localNovaData, setLocalNovaData] = useState<Date | null>(data ? parseDateFromYYYYMMDD(data) : null)
   const [localOutras, setLocalOutras] = useState(value)
   const [localContacto, setLocalContacto] = useState(contacto)
   const [localTelefone, setLocalTelefone] = useState(telefone)
-  const [localContactoEntrega, setLocalContactoEntrega] = useState(contacto_entrega)
-  const [localTelefoneEntrega, setLocalTelefoneEntrega] = useState(telefone_entrega)
+  const [localContactoEntrega, setLocalContactoEntrega] =
+    useState(contacto_entrega)
+  const [localTelefoneEntrega, setLocalTelefoneEntrega] =
+    useState(telefone_entrega)
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [originalFields, setOriginalFields] = useState({
-    data: data ?? null,
     outras: value,
     contacto,
     telefone,
     contacto_entrega,
     telefone_entrega,
   })
-  
+
   // Generate unique IDs for accessibility
   const popoverDescriptionId = React.useId()
   const labelId = React.useId()
-  
+
   // Only sync local state when popover is opened
   useEffect(() => {
     if (isOpen) {
-      setLocalNovaData(data ? parseDateFromYYYYMMDD(data) : null)
       setLocalOutras(value)
       setLocalContacto(contacto)
       setLocalTelefone(telefone)
       setLocalContactoEntrega(contacto_entrega)
       setLocalTelefoneEntrega(telefone_entrega)
       setOriginalFields({
-        data: data ?? null,
         outras: value,
         contacto,
         telefone,
@@ -128,7 +134,7 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
     try {
       setIsSaving(true)
       const fields = {
-        data: formatDateToYYYYMMDD(localNovaData),
+        data: null, // No longer managing data in this component
         outras: localOutras,
         contacto: localContacto,
         telefone: localTelefone,
@@ -136,11 +142,10 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
         telefone_entrega: localTelefoneEntrega,
       }
       // Only save if any value has changed
-      const changed = Object.keys(fields).some(
-        key => fields[key as keyof typeof fields] !==
-          (key === 'data'
-            ? formatDateToYYYYMMDD(originalFields.data ? parseDateFromYYYYMMDD(originalFields.data) : null)
-            : originalFields[key as keyof typeof fields])
+      const changed = Object.keys(originalFields).some(
+        (key) =>
+          fields[key as keyof typeof originalFields] !==
+          originalFields[key as keyof typeof originalFields],
       )
       if (changed) {
         await onSave(fields)
@@ -161,18 +166,16 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
   // Save on blur if enabled
   const handleBlur = () => {
     const fields = {
-      data: formatDateToYYYYMMDD(localNovaData),
       outras: localOutras,
       contacto: localContacto,
       telefone: localTelefone,
       contacto_entrega: localContactoEntrega,
       telefone_entrega: localTelefoneEntrega,
     }
-    const changed = Object.keys(fields).some(
-      key => fields[key as keyof typeof fields] !==
-        (key === 'data'
-          ? formatDateToYYYYMMDD(originalFields.data ? parseDateFromYYYYMMDD(originalFields.data) : null)
-          : originalFields[key as keyof typeof fields])
+    const changed = Object.keys(originalFields).some(
+      (key) =>
+        fields[key as keyof typeof originalFields] !==
+        originalFields[key as keyof typeof originalFields],
     )
     if (saveOnBlur && changed && !isSaving) {
       handleSave()
@@ -180,29 +183,27 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
   }
 
   // Handle field changes
-  const handleFieldChange = (field: keyof typeof originalFields, value: string | Date | null | undefined) => {
-    let dataValue: string | null | undefined = formatDateToYYYYMMDD(localNovaData);
-    if (field === 'data') {
-      if (value instanceof Date) dataValue = formatDateToYYYYMMDD(value);
-      else if (typeof value === 'string') dataValue = value;
-      else dataValue = null;
-    }
+  const handleFieldChange = (
+    field: keyof typeof originalFields,
+    value: string,
+  ) => {
     const newFields = {
-      data: dataValue,
-      outras: field === 'outras' ? value as string : localOutras,
-      contacto: field === 'contacto' ? value as string : localContacto,
-      telefone: field === 'telefone' ? value as string : localTelefone,
-      contacto_entrega: field === 'contacto_entrega' ? value as string : localContactoEntrega,
-      telefone_entrega: field === 'telefone_entrega' ? value as string : localTelefoneEntrega,
+      data: null, // No longer managing data in this component
+      outras: field === 'outras' ? value : localOutras,
+      contacto: field === 'contacto' ? value : localContacto,
+      telefone: field === 'telefone' ? value : localTelefone,
+      contacto_entrega:
+        field === 'contacto_entrega' ? value : localContactoEntrega,
+      telefone_entrega:
+        field === 'telefone_entrega' ? value : localTelefoneEntrega,
     }
-    if (field === 'data') setLocalNovaData(value instanceof Date ? value : null)
     setLocalOutras(newFields.outras)
     setLocalContacto(newFields.contacto)
     setLocalTelefone(newFields.telefone)
     setLocalContactoEntrega(newFields.contacto_entrega)
     setLocalTelefoneEntrega(newFields.telefone_entrega)
     if (onFieldChange) onFieldChange(newFields)
-    if (field === 'outras') onChange(value as string)
+    if (field === 'outras') onChange(value)
   }
 
   // Choose icon based on type and content
@@ -234,7 +235,7 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
       e.preventDefault()
       handleSave()
     }
-    
+
     // Close on Escape, but only if not handled by Popover already
     if (e.key === 'Escape') {
       if (localOutras !== originalFields.outras) {
@@ -252,10 +253,13 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
     <Popover open={isOpen} onOpenChange={setIsOpen} modal={false}>
       <PopoverTrigger asChild>
         <Button
-          variant={value && value.trim() !== "" ? "link" : "ghost"}
+          variant={value && value.trim() !== '' ? 'link' : 'ghost'}
           size={buttonSize}
           className={className}
-          aria-label={label || (value ? 'Ver ou editar outras existentes' : 'Adicionar outras')}
+          aria-label={
+            label ||
+            (value ? 'Ver ou editar outras existentes' : 'Adicionar outras')
+          }
           disabled={disabled}
         >
           {getIcon()}
@@ -267,11 +271,10 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
           <PopoverContent
             side={undefined}
             align={undefined}
-            className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-96 p-4 bg-background border-2 border-border z-[9999] max-h-[70vh] overflow-auto shadow-2xl"
+            className="bg-background border-border fixed top-1/2 left-1/2 z-[9999] max-h-[70vh] w-96 -translate-x-1/2 -translate-y-1/2 overflow-auto border-2 p-4 shadow-2xl"
             aria-describedby={popoverDescriptionId}
             data-no-aria-hidden="true"
             onEscapeKeyDown={() => {
-              setLocalNovaData(originalFields.data ? parseDateFromYYYYMMDD(originalFields.data) : null)
               setLocalOutras(originalFields.outras)
               setLocalContacto(originalFields.contacto)
               setLocalTelefone(originalFields.telefone)
@@ -283,31 +286,20 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
               Editor de outras: {label || 'Editar e guardar outras'}
             </div>
             {label && (
-              <div
-                id={labelId}
-                className="font-medium mb-2"
-              >
+              <div id={labelId} className="mb-2 font-medium">
                 {label}
               </div>
             )}
+
             <div className="mb-6">
-              <label className="block text-xs font-semibold mb-1">Data de Saída</label>
-              <DatePicker
-                selected={localNovaData ?? undefined}
-                onSelect={date => handleFieldChange('data', date ?? null)}
-                placeholder="Selecionar data"
-                buttonClassName="w-auto"
-              />
-            </div>
-            <div className="mb-6">
-              <label className="block text-xs font-semibold mb-1">Outras</label>
+              <label className="mb-1 block text-xs font-semibold">Outras</label>
               <Textarea
                 ref={textareaRef}
                 value={localOutras}
                 placeholder={placeholder}
                 className={`min-h-[80px] max-h-[${maxTextareaHeight}]`}
                 style={{ maxHeight: maxTextareaHeight }}
-                onChange={e => handleFieldChange('outras', e.target.value)}
+                onChange={(e) => handleFieldChange('outras', e.target.value)}
                 onBlur={handleBlur}
                 onKeyDown={handleKeyDown}
                 disabled={disabled || isSaving}
@@ -316,47 +308,59 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
               />
             </div>
             <div className="mb-2">
-              <label className="block text-xs font-semibold mb-1">Contacto Recolha</label>
+              <label className="mb-1 block text-xs font-semibold">
+                Contacto Recolha
+              </label>
               <Input
                 type="text"
                 value={localContacto}
-                onChange={e => handleFieldChange('contacto', e.target.value)}
+                onChange={(e) => handleFieldChange('contacto', e.target.value)}
                 disabled={disabled || isSaving}
                 placeholder="Nome do contacto de recolha"
               />
             </div>
             <div className="mb-2">
-              <label className="block text-xs font-semibold mb-1">Telefone Recolha</label>
+              <label className="mb-1 block text-xs font-semibold">
+                Telefone Recolha
+              </label>
               <Input
                 type="text"
                 value={localTelefone}
-                onChange={e => handleFieldChange('telefone', e.target.value)}
+                onChange={(e) => handleFieldChange('telefone', e.target.value)}
                 disabled={disabled || isSaving}
                 placeholder="Telefone de recolha"
               />
             </div>
             <div className="mb-2">
-              <label className="block text-xs font-semibold mb-1">Contacto Entrega</label>
+              <label className="mb-1 block text-xs font-semibold">
+                Contacto Entrega
+              </label>
               <Input
                 type="text"
                 value={localContactoEntrega}
-                onChange={e => handleFieldChange('contacto_entrega', e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange('contacto_entrega', e.target.value)
+                }
                 disabled={disabled || isSaving}
                 placeholder="Nome do contacto de entrega"
               />
             </div>
             <div className="mb-4">
-              <label className="block text-xs font-semibold mb-1">Telefone Entrega</label>
+              <label className="mb-1 block text-xs font-semibold">
+                Telefone Entrega
+              </label>
               <Input
                 type="text"
                 value={localTelefoneEntrega}
-                onChange={e => handleFieldChange('telefone_entrega', e.target.value)}
+                onChange={(e) =>
+                  handleFieldChange('telefone_entrega', e.target.value)
+                }
                 disabled={disabled || isSaving}
                 placeholder="Telefone de entrega"
               />
             </div>
-            <div className="flex justify-between items-center mt-2">
-              <div className="text-xs text-muted-foreground">
+            <div className="mt-2 flex items-center justify-between">
+              <div className="text-muted-foreground text-xs">
                 {isSaving
                   ? 'A guardar...'
                   : saveOnBlur
@@ -364,7 +368,7 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
                     : ''}
               </div>
               <Button
-                variant={saveSuccess ? "outline" : "default"}
+                variant={saveSuccess ? 'outline' : 'default'}
                 size="sm"
                 onClick={handleSave}
                 disabled={disabled || isSaving}
@@ -373,7 +377,7 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
               >
                 {saveSuccess ? (
                   <>
-                    <Check className="h-4 w-4 mr-1" />
+                    <Check className="mr-1 h-4 w-4" />
                     Guardado
                   </>
                 ) : isSaving ? (
@@ -386,14 +390,13 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
           </PopoverContent>
         </Portal>
       ) : (
-        <PopoverContent 
+        <PopoverContent
           side="top"
           align="center"
-          className="w-96 p-4 bg-background border-2 border-border z-[9999] max-h-[70vh] overflow-auto"
+          className="bg-background border-border z-[9999] max-h-[70vh] w-96 overflow-auto border-2 p-4"
           aria-describedby={popoverDescriptionId}
           data-no-aria-hidden="true"
           onEscapeKeyDown={() => {
-            setLocalNovaData(originalFields.data ? parseDateFromYYYYMMDD(originalFields.data) : null)
             setLocalOutras(originalFields.outras)
             setLocalContacto(originalFields.contacto)
             setLocalTelefone(originalFields.telefone)
@@ -405,31 +408,19 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
             Editor de outras: {label || 'Editar e guardar outras'}
           </div>
           {label && (
-            <div
-              id={labelId}
-              className="font-medium mb-2"
-            >
+            <div id={labelId} className="mb-2 font-medium">
               {label}
             </div>
           )}
           <div className="mb-6">
-            <label className="block text-xs font-semibold mb-1">Data de Saída</label>
-            <DatePicker
-              selected={localNovaData ?? undefined}
-              onSelect={date => handleFieldChange('data', date ?? null)}
-              placeholder="Selecionar data"
-              buttonClassName="w-auto"
-            />
-          </div>
-          <div className="mb-6">
-            <label className="block text-xs font-semibold mb-1">Outras</label>
+            <label className="mb-1 block text-xs font-semibold">Outras</label>
             <Textarea
               ref={textareaRef}
               value={localOutras}
               placeholder={placeholder}
               className={`min-h-[80px] max-h-[${maxTextareaHeight}]`}
               style={{ maxHeight: maxTextareaHeight }}
-              onChange={e => handleFieldChange('outras', e.target.value)}
+              onChange={(e) => handleFieldChange('outras', e.target.value)}
               onBlur={handleBlur}
               onKeyDown={handleKeyDown}
               disabled={disabled || isSaving}
@@ -438,47 +429,59 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
             />
           </div>
           <div className="mb-2">
-            <label className="block text-xs font-semibold mb-1">Contacto Recolha</label>
+            <label className="mb-1 block text-xs font-semibold">
+              Contacto Recolha
+            </label>
             <Input
               type="text"
               value={localContacto}
-              onChange={e => handleFieldChange('contacto', e.target.value)}
+              onChange={(e) => handleFieldChange('contacto', e.target.value)}
               disabled={disabled || isSaving}
               placeholder="Nome do contacto de recolha"
             />
           </div>
           <div className="mb-2">
-            <label className="block text-xs font-semibold mb-1">Telefone Recolha</label>
+            <label className="mb-1 block text-xs font-semibold">
+              Telefone Recolha
+            </label>
             <Input
               type="text"
               value={localTelefone}
-              onChange={e => handleFieldChange('telefone', e.target.value)}
+              onChange={(e) => handleFieldChange('telefone', e.target.value)}
               disabled={disabled || isSaving}
               placeholder="Telefone de recolha"
             />
           </div>
           <div className="mb-2">
-            <label className="block text-xs font-semibold mb-1">Contacto Entrega</label>
+            <label className="mb-1 block text-xs font-semibold">
+              Contacto Entrega
+            </label>
             <Input
               type="text"
               value={localContactoEntrega}
-              onChange={e => handleFieldChange('contacto_entrega', e.target.value)}
+              onChange={(e) =>
+                handleFieldChange('contacto_entrega', e.target.value)
+              }
               disabled={disabled || isSaving}
               placeholder="Nome do contacto de entrega"
             />
           </div>
           <div className="mb-4">
-            <label className="block text-xs font-semibold mb-1">Telefone Entrega</label>
+            <label className="mb-1 block text-xs font-semibold">
+              Telefone Entrega
+            </label>
             <Input
               type="text"
               value={localTelefoneEntrega}
-              onChange={e => handleFieldChange('telefone_entrega', e.target.value)}
+              onChange={(e) =>
+                handleFieldChange('telefone_entrega', e.target.value)
+              }
               disabled={disabled || isSaving}
               placeholder="Telefone de entrega"
             />
           </div>
-          <div className="flex justify-between items-center mt-2">
-            <div className="text-xs text-muted-foreground">
+          <div className="mt-2 flex items-center justify-between">
+            <div className="text-muted-foreground text-xs">
               {isSaving
                 ? 'A guardar...'
                 : saveOnBlur
@@ -486,7 +489,7 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
                   : ''}
             </div>
             <Button
-              variant={saveSuccess ? "outline" : "default"}
+              variant={saveSuccess ? 'outline' : 'default'}
               size="sm"
               onClick={handleSave}
               disabled={disabled || isSaving}
@@ -495,7 +498,7 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
             >
               {saveSuccess ? (
                 <>
-                  <Check className="h-4 w-4 mr-1" />
+                  <Check className="mr-1 h-4 w-4" />
                   Guardado
                 </>
               ) : isSaving ? (
@@ -511,4 +514,4 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
   )
 }
 
-export default NotasPopover 
+export default NotasPopover
