@@ -10,6 +10,7 @@ import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose, DrawerDe
 import { Textarea } from '@/components/ui/textarea'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Plus, Eye, Trash2, X, Loader2, Edit, RotateCw } from 'lucide-react'
+import PermissionGuard from '@/components/PermissionGuard'
 
 interface Armazem {
   id: string
@@ -157,14 +158,15 @@ export default function ArmazensPage() {
   }
 
   return (
-    <div className="w-full space-y-6 p-4 md:p-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Gestão de Armazéns</h1>
-        <div className="flex gap-2">
-          <TooltipProvider>
+    <PermissionGuard>
+      <div className="w-full space-y-6 p-4 md:p-8">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">Gestão de Armazéns</h1>
+          <div className="flex gap-2">
+                      <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="outline" size="icon" onClick={fetchArmazens} aria-label="Atualizar lista">
+                <Button variant="outline" size="icon" onClick={fetchArmazens} aria-label="Atualizar lista" className="!h-10 !w-10 !min-w-10 !max-w-10 !p-0 !rounded-none aspect-square">
                   <RotateCw className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
@@ -174,81 +176,80 @@ export default function ArmazensPage() {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button onClick={openNewForm} variant="default" size="icon" aria-label="Adicionar">
+                <Button onClick={openNewForm} variant="default" size="icon" aria-label="Adicionar" className="!h-10 !w-10 !min-w-10 !max-w-10 !p-0 !rounded-none aspect-square">
                   <Plus className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Adicionar</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          </div>
         </div>
-      </div>
 
-      {/* Filter bar */}
-      <div className="flex items-center gap-2 mb-6">
-        <Input
-          placeholder="Filtrar por nome ou número PHC..."
-          value={nameFilter}
-          onChange={(e) => setNameFilter(e.target.value)}
-          className="w-[300px] rounded-none"
-        />
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="outline" size="icon" onClick={() => setNameFilter('')} aria-label="Limpar filtro">
-                <X className="w-4 h-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Limpar filtro</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      </div>
+        {/* Filter bar */}
+        <div className="flex items-center gap-2 mb-6">
+          <Input
+            placeholder="Filtrar por nome ou número PHC..."
+            value={nameFilter}
+            onChange={(e) => setNameFilter(e.target.value)}
+            className="w-[300px] h-10 rounded-none"
+          />
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="outline" size="icon" onClick={() => setNameFilter('')} aria-label="Limpar filtro" className="!h-10 !w-10 !min-w-10 !max-w-10 !p-0 !rounded-none aspect-square">
+                  <X className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Limpar filtro</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
 
-      {/* Table */}
-      <div className="rounded-none bg-background w-full border-2 border-border">
-        <div className="max-h-[70vh] overflow-y-auto w-full rounded-none">
-          <Table className="w-full border-0 rounded-none">
-            <TableHeader>
-              <TableRow>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] font-bold uppercase rounded-none">
-                  Número PHC
-                </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[200px] font-bold uppercase rounded-none">
-                  Nome do Armazém
-                </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[250px] font-bold uppercase rounded-none">
-                  Morada
-                </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] font-bold uppercase rounded-none">
-                  Código Postal
-                </TableHead>
-                <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[140px] font-bold uppercase rounded-none">
-                  Ações
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+        {/* Table */}
+        <div className="rounded-none bg-background w-full border-2 border-border">
+          <div className="w-full rounded-none">
+            <Table className="w-full border-0 rounded-none [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center h-40 uppercase">
-                    <Loader2 className="animate-spin w-8 h-8 text-muted-foreground mx-auto" />
-                  </TableCell>
+                  <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] font-bold uppercase rounded-none">
+                    Número PHC
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[200px] font-bold uppercase rounded-none">
+                    Nome do Armazém
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border min-w-[250px] font-bold uppercase rounded-none">
+                    Morada
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[120px] font-bold uppercase rounded-none">
+                    Código Postal
+                  </TableHead>
+                  <TableHead className="sticky top-0 z-10 bg-[var(--orange)] border-b-2 border-border w-[90px] font-bold uppercase text-center rounded-none">
+                    Ações
+                  </TableHead>
                 </TableRow>
-              ) : filteredArmazens.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center text-gray-500 uppercase">
-                    Nenhum armazém encontrado.
-                  </TableCell>
-                </TableRow>
-              ) : (
-                filteredArmazens.map((armazem) => (
-                  <TableRow key={armazem.id}>
-                    <TableCell className="uppercase rounded-none">{armazem.numero_phc || '-'}</TableCell>
-                    <TableCell className="font-medium uppercase rounded-none">{armazem.nome_arm}</TableCell>
-                    <TableCell className="uppercase rounded-none">{armazem.morada || '-'}</TableCell>
-                    <TableCell className="uppercase rounded-none">{armazem.codigo_pos || '-'}</TableCell>
-                    <TableCell className="rounded-none">
-                      <div className="flex gap-2">
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center h-40 uppercase">
+                      <Loader2 className="animate-spin w-8 h-8 text-muted-foreground mx-auto" />
+                    </TableCell>
+                  </TableRow>
+                ) : filteredArmazens.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-gray-500 uppercase">
+                      Nenhum armazém encontrado.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredArmazens.map((armazem) => (
+                    <TableRow key={armazem.id} className="hover:bg-[var(--main)]">
+                      <TableCell className="uppercase rounded-none">{armazem.numero_phc || '-'}</TableCell>
+                      <TableCell className="font-medium uppercase rounded-none">{armazem.nome_arm}</TableCell>
+                      <TableCell className="uppercase rounded-none">{armazem.morada || '-'}</TableCell>
+                      <TableCell className="uppercase rounded-none">{armazem.codigo_pos || '-'}</TableCell>
+                      <TableCell className="flex gap-2 justify-center rounded-none">
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -257,6 +258,7 @@ export default function ArmazensPage() {
                                 size="icon"
                                 onClick={() => handleEdit(armazem)}
                                 aria-label="Ver detalhes do armazém"
+                                className="!h-10 !w-10 !min-w-10 !max-w-10 !p-0 !rounded-none aspect-square"
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
@@ -272,6 +274,7 @@ export default function ArmazensPage() {
                                 size="icon"
                                 onClick={() => handleDelete(armazem.id)}
                                 aria-label="Eliminar armazém"
+                                className="!h-10 !w-10 !min-w-10 !max-w-10 !p-0 !rounded-none aspect-square"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </Button>
@@ -279,112 +282,112 @@ export default function ArmazensPage() {
                             <TooltipContent>Eliminar</TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
-
-      {/* Drawer for add/edit form */}
-      <Drawer open={openDrawer} onOpenChange={(open) => !open && resetForm()}>
-        <DrawerContent className="h-screen min-h-screen !top-0 !mt-0 rounded-none">
-          <div className="w-full px-4 md:px-8 flex flex-col h-full">
-            <DrawerHeader className="flex-none">
-              <div className="flex justify-end items-center gap-2 mb-2">
-                <DrawerClose asChild>
-                  <Button variant="outline" size="sm" aria-label="Fechar">
-                    <X className="w-5 h-5" />
-                  </Button>
-                </DrawerClose>
-              </div>
-              <DrawerTitle>
-                {editingArmazem ? 'Editar Armazém' : 'Novo Armazém'}
-              </DrawerTitle>
-              <DrawerDescription>
-                {editingArmazem 
-                  ? 'Edite as informações do armazém abaixo.'
-                  : 'Preencha as informações para criar um novo armazém.'
-                }
-              </DrawerDescription>
-            </DrawerHeader>
-
-            <div className="flex-grow overflow-y-auto">
-              <form onSubmit={handleSubmit} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="numero_phc" className="font-base text-sm">
-                      Número PHC
-                    </Label>
-                    <Input
-                      id="numero_phc"
-                      value={formData.numero_phc}
-                      onChange={(e) => setFormData(prev => ({ ...prev, numero_phc: e.target.value }))}
-                      placeholder="Número do sistema PHC"
-                      className="rounded-none"
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="nome_arm" className="font-base text-sm">
-                      Nome do Armazém *
-                    </Label>
-                    <Input
-                      id="nome_arm"
-                      value={formData.nome_arm}
-                      onChange={(e) => setFormData(prev => ({ ...prev, nome_arm: e.target.value }))}
-                      placeholder="Nome do armazém"
-                      required
-                      className="rounded-none"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="morada" className="font-base text-sm">
-                    Morada
-                  </Label>
-                  <Textarea
-                    id="morada"
-                    value={formData.morada}
-                    onChange={(e) => setFormData(prev => ({ ...prev, morada: e.target.value }))}
-                    placeholder="Morada completa do armazém"
-                    className="min-h-[80px] h-24 resize-none w-full rounded-none"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="codigo_pos" className="font-base text-sm">
-                    Código Postal
-                  </Label>
-                  <Input
-                    id="codigo_pos"
-                    value={formData.codigo_pos}
-                    onChange={(e) => setFormData(prev => ({ ...prev, codigo_pos: e.target.value }))}
-                    placeholder="Ex: 1000-001"
-                    className="rounded-none"
-                  />
-                </div>
-
-                <div className="flex gap-2 pt-4">
-                  <Button type="submit" disabled={submitting || !formData.nome_arm.trim()} variant="default">
-                    {submitting ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : null}
-                    {editingArmazem ? 'Guardar' : 'Criar Armazém'}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={resetForm} aria-label="Cancelar">
-                    Cancelar
-                  </Button>
-                </div>
-              </form>
-            </div>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
           </div>
-        </DrawerContent>
-      </Drawer>
-    </div>
+        </div>
+
+        {/* Drawer for add/edit form */}
+        <Drawer open={openDrawer} onOpenChange={(open) => !open && resetForm()}>
+          <DrawerContent className="h-screen min-h-screen !top-0 !mt-0 rounded-none">
+            <div className="w-full px-4 md:px-8 flex flex-col h-full">
+              <DrawerHeader className="flex-none">
+                <div className="flex justify-end items-center gap-2 mb-2">
+                  <DrawerClose asChild>
+                    <Button variant="outline" size="icon" aria-label="Fechar" className="h-10 w-10">
+                      <X className="w-5 h-5" />
+                    </Button>
+                  </DrawerClose>
+                </div>
+                <DrawerTitle>
+                  {editingArmazem ? 'Editar Armazém' : 'Novo Armazém'}
+                </DrawerTitle>
+                <DrawerDescription>
+                  {editingArmazem 
+                    ? 'Edite as informações do armazém abaixo.'
+                    : 'Preencha as informações para criar um novo armazém.'
+                  }
+                </DrawerDescription>
+              </DrawerHeader>
+
+              <div className="flex-grow overflow-y-auto">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="numero_phc" className="font-base text-sm">
+                        Número PHC
+                      </Label>
+                      <Input
+                        id="numero_phc"
+                        value={formData.numero_phc}
+                        onChange={(e) => setFormData(prev => ({ ...prev, numero_phc: e.target.value }))}
+                        placeholder="Número do sistema PHC"
+                        className="h-10 rounded-none"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="nome_arm" className="font-base text-sm">
+                        Nome do Armazém *
+                      </Label>
+                      <Input
+                        id="nome_arm"
+                        value={formData.nome_arm}
+                        onChange={(e) => setFormData(prev => ({ ...prev, nome_arm: e.target.value }))}
+                        placeholder="Nome do armazém"
+                        required
+                        className="h-10 rounded-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="morada" className="font-base text-sm">
+                      Morada
+                    </Label>
+                    <Textarea
+                      id="morada"
+                      value={formData.morada}
+                      onChange={(e) => setFormData(prev => ({ ...prev, morada: e.target.value }))}
+                      placeholder="Morada completa do armazém"
+                      className="min-h-[80px] h-24 resize-none w-full rounded-none"
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="codigo_pos" className="font-base text-sm">
+                      Código Postal
+                    </Label>
+                    <Input
+                      id="codigo_pos"
+                      value={formData.codigo_pos}
+                      onChange={(e) => setFormData(prev => ({ ...prev, codigo_pos: e.target.value }))}
+                      placeholder="Ex: 1000-001"
+                      className="h-10 rounded-none"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 pt-4">
+                    <Button type="submit" disabled={submitting || !formData.nome_arm.trim()} variant="default" className="h-10">
+                      {submitting ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : null}
+                      {editingArmazem ? 'Guardar' : 'Criar Armazém'}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={resetForm} aria-label="Cancelar" className="h-10">
+                      Cancelar
+                    </Button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </DrawerContent>
+        </Drawer>
+      </div>
+    </PermissionGuard>
   )
 } 
