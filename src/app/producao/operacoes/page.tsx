@@ -40,6 +40,7 @@ import {
   RefreshCcw,
   Loader2,
   Copy,
+  Check,
 } from 'lucide-react'
 import DatePicker from '@/components/ui/DatePicker'
 import {
@@ -1103,6 +1104,22 @@ function OperationsTable({
   // Loading state to prevent rapid updates
   const [isUpdating, setIsUpdating] = useState(false)
 
+  // NEW: Pending operations state for unsaved records
+  const [pendingOperations, setPendingOperations] = useState<{
+    [tempId: string]: Partial<ProductionOperation & { isPending: boolean }>
+  }>({})
+
+  // Combine pending and saved operations for display
+  const displayOperations = useMemo(() => {
+    const saved = operations.filter(
+      (op) => op.Tipo_Op === (type === 'impressao' ? 'Impressao' : 'Corte'),
+    )
+    const pending = Object.values(pendingOperations).filter(
+      (op) => op.Tipo_Op === (type === 'impressao' ? 'Impressao' : 'Corte'),
+    )
+    return [...saved, ...(pending as ProductionOperation[])]
+  }, [operations, pendingOperations, type])
+
   // Initialize material selections and notes - simplified approach
   useEffect(() => {
     if (isUpdating) return // Skip if currently updating to prevent loops
@@ -1116,7 +1133,7 @@ function OperationsTable({
     } = {}
     const newNotesValues: { [operationId: string]: string } = {}
 
-    operations.forEach((operation) => {
+    displayOperations.forEach((operation) => {
       if (operation.material_id && materials.length > 0) {
         const material = materials.find((m) => m.id === operation.material_id)
         if (material) {
@@ -1151,51 +1168,154 @@ function OperationsTable({
 
     setMaterialSelections(newSelections)
     setNotesValues(newNotesValues)
-  }, [operations.length, materials.length])
+  }, [displayOperations.length, materials.length])
 
-  const addOperation = async () => {
+  const addOperation = () => {
     if (isUpdating) return
 
+    // Use the passed item to build the no_interno field
+    if (!item) {
+      alert('Item não encontrado')
+      return
+    }
+
+    // Create temporary ID for pending operation
+    const tempId = `temp_${Date.now()}`
+
+    // Create pending operation (not saved to database)
+    const pendingOp = {
+      id: tempId,
+      item_id: itemId,
+      folha_obra_id: item.folha_obra_id,
+      no_interno: `${item.folhas_obras?.numero_fo || 'FO'}-${item.descricao?.substring(0, 10) || 'ITEM'}`,
+      [quantityField]: 1,
+      data_operacao: new Date().toISOString().split('T')[0],
+      Tipo_Op: type === 'impressao' ? 'Impressao' : 'Corte',
+      isPending: true, // Flag to identify pending operations
+    }
+
+    // Add to pending operations (local state only)
+    setPendingOperations((prev) => ({
+      ...prev,
+      [tempId]: pendingOp,
+    }))
+  }
+
+  // NEW: Accept operation function (Save + Copy for Impressão)
+  const acceptOperation = async (
+    pendingOperation: ProductionOperation & { isPending?: boolean },
+  ) => {
     try {
       setIsUpdating(true)
 
-      // Use the passed item to build the no_interno field
-      if (!item) {
-        alert('Item não encontrado')
-        return
+      // 1. Save the operation to database
+      const operationData = {
+        item_id: pendingOperation.item_id,
+        folha_obra_id: pendingOperation.folha_obra_id,
+        no_interno: pendingOperation.no_interno,
+        material_id: pendingOperation.material_id,
+        [quantityField]: pendingOperation[quantityField],
+        [notesField]: pendingOperation[notesField],
+        data_operacao: pendingOperation.data_operacao,
+        operador_id: pendingOperation.operador_id,
+        maquina: pendingOperation.maquina,
+        Tipo_Op: pendingOperation.Tipo_Op,
       }
 
-      const newOperation = {
-        item_id: itemId,
-        folha_obra_id: item.folha_obra_id,
-        no_interno: `${item.folhas_obras?.numero_fo || 'FO'}-${item.descricao?.substring(0, 10) || 'ITEM'}`,
-        [quantityField]: 1,
-        data_operacao: new Date().toISOString().split('T')[0],
-        Tipo_Op: type === 'impressao' ? 'Impressao' : 'Corte',
-      }
-
-      const { data, error } = await supabase
+      const { data: savedOperation, error: saveError } = await supabase
         .from('producao_operacoes')
-        .insert(newOperation)
+        .insert(operationData)
         .select()
+        .single()
 
-      if (error) {
-        console.error('Error adding operation:', error?.message || error)
-        alert(
-          `Erro ao adicionar operação: ${error?.message || JSON.stringify(error)}`,
-        )
-      } else {
-        onRefresh()
+      if (saveError) throw saveError
+
+      // 2. If this is an Impressão operation, automatically create corresponding Corte operation
+      if (type === 'impressao' && savedOperation) {
+        const corteOperation = {
+          item_id: pendingOperation.item_id,
+          folha_obra_id: pendingOperation.folha_obra_id,
+          no_interno: pendingOperation.no_interno,
+          material_id: pendingOperation.material_id, // Copy material
+          num_placas_corte: pendingOperation.num_placas_print, // Copy quantity
+          notas: pendingOperation.notas_imp, // Copy notes
+          data_operacao: new Date().toISOString().split('T')[0], // Today's date
+          Tipo_Op: 'Corte',
+          // operador_id and maquina left empty for cutting operator
+        }
+
+        const { error: corteError } = await supabase
+          .from('producao_operacoes')
+          .insert(corteOperation)
+
+        if (corteError) {
+          console.error('Error creating Corte operation:', corteError)
+          // Don't throw here - the Impressão operation was saved successfully
+        }
       }
+
+      // 3. Remove from pending operations
+      setPendingOperations((prev) => {
+        const updated = { ...prev }
+        delete updated[pendingOperation.id]
+        return updated
+      })
+
+      // 4. Refresh both tabs
+      onRefresh()
     } catch (error) {
-      console.error('Error adding operation:', error)
-      alert(`Erro ao adicionar operação: ${error}`)
+      console.error('Error accepting operation:', error)
+      alert('Erro ao aceitar operação')
     } finally {
       setIsUpdating(false)
     }
   }
 
-  // Add automatic stock management functions
+  // NEW: Cancel operation function
+  const cancelOperation = (tempId: string) => {
+    setPendingOperations((prev) => {
+      const updated = { ...prev }
+      delete updated[tempId]
+      return updated
+    })
+  }
+
+  // NEW: Update pending operation function
+  const updatePendingOperation = (
+    tempId: string,
+    field: string,
+    value: any,
+  ) => {
+    setPendingOperations((prev) => ({
+      ...prev,
+      [tempId]: {
+        ...prev[tempId],
+        [field]: value,
+      },
+    }))
+
+    // Also update local state for material selections and notes
+    if (field === 'material_id') {
+      const material = materials.find((m) => m.id === value)
+      if (material) {
+        setMaterialSelections((prev) => ({
+          ...prev,
+          [tempId]: {
+            material: material.material,
+            caracteristica: material.carateristica,
+            cor: material.cor,
+          },
+        }))
+      }
+    } else if (field === notesField) {
+      setNotesValues((prev) => ({
+        ...prev,
+        [tempId]: value,
+      }))
+    }
+  }
+
+  // Stock management functions
   const updateStockOnOperation = async (
     materialId: string,
     oldQuantity: number = 0,
@@ -1217,7 +1337,7 @@ function OperationsTable({
         .single()
 
       if (materialError) {
-        console.error('Error fetching material stock_correct:', materialError)
+        console.error('Error fetching stock_correct:', materialError)
         return
       }
 
@@ -1225,7 +1345,7 @@ function OperationsTable({
       let currentStockCorrect = materialData?.stock_correct
 
       if (currentStockCorrect === null || currentStockCorrect === undefined) {
-        // Calculate current stock the traditional way
+        // Calculate current stock in a traditional way
         const [stocksResult, operationsResult] = await Promise.all([
           supabase
             .from('stocks')
@@ -1242,6 +1362,7 @@ function OperationsTable({
             (sum: number, stock: any) => sum + (stock.quantidade || 0),
             0,
           ) || 0
+
         const operationsTotal =
           operationsResult.data?.reduce(
             (sum: number, op: any) => sum + (op.num_placas_corte || 0),
@@ -1265,7 +1386,6 @@ function OperationsTable({
 
       if (updateError) {
         console.error('Error updating stock_correct:', updateError)
-        return
       }
     } catch (error) {
       console.error('Error in updateStockOnOperation:', error)
@@ -1280,6 +1400,12 @@ function OperationsTable({
     console.log(
       `🚀 updateOperation called: operationId=${operationId}, field=${field}, value="${value}", isUpdating=${isUpdating}`,
     )
+
+    // Check if this is a pending operation
+    if (operationId.startsWith('temp_')) {
+      updatePendingOperation(operationId, field, value)
+      return
+    }
 
     if (isUpdating) {
       console.log(`⏸️ Update blocked - already updating`)
@@ -1511,14 +1637,17 @@ function OperationsTable({
                 <TableHead className="border-border border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
                   {type === 'impressao' ? 'Notas Imp.' : 'Notas'}
                 </TableHead>
-                <TableHead className="border-border w-[60px] min-w-[60px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
+                <TableHead className="border-border w-[90px] min-w-[90px] border-b-2 bg-[var(--orange)] p-2 text-center text-sm text-black uppercase">
                   Ações
                 </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {operations.map((operation) => (
-                <TableRow key={operation.id}>
+              {displayOperations.map((operation) => (
+                <TableRow
+                  key={operation.id}
+                  className={`${(operation as any).isPending ? 'border-l-4 border-l-yellow-400 bg-yellow-50' : ''}`}
+                >
                   <TableCell className="w-[150px] min-w-[150px] p-2 text-sm">
                     <DatePicker
                       selected={
@@ -1806,14 +1935,59 @@ function OperationsTable({
                       className="h-8 w-full rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
                     />
                   </TableCell>
-                  <TableCell className="w-[60px] min-w-[60px] p-2 text-sm">
-                    <Button
-                      size="icon"
-                      variant="destructive"
-                      onClick={() => deleteOperation(operation.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                  <TableCell className="w-[90px] min-w-[90px] p-2 text-sm">
+                    {(operation as any).isPending ? (
+                      // For pending operations: Accept and Cancel buttons
+                      <div className="flex justify-center gap-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="default"
+                                onClick={() =>
+                                  acceptOperation(
+                                    operation as ProductionOperation & {
+                                      isPending?: boolean
+                                    },
+                                  )
+                                }
+                                disabled={isUpdating}
+                                className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {type === 'impressao'
+                                ? 'Aceitar e copiar para corte'
+                                : 'Aceitar'}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => cancelOperation(operation.id)}
+                          className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      // For saved operations: Only delete button
+                      <div className="flex justify-center gap-2">
+                        <Button
+                          size="icon"
+                          variant="destructive"
+                          onClick={() => deleteOperation(operation.id)}
+                          className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}

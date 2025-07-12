@@ -26,6 +26,7 @@ import {
   RefreshCcw,
   CheckSquare,
   Square,
+  X,
 } from 'lucide-react'
 import NotasPopover from '@/components/ui/NotasPopover'
 import ClienteCombobox from '@/components/ClienteCombobox'
@@ -110,6 +111,14 @@ export const DashboardLogisticaTable: React.FC<
   const [transportadoras, setTransportadoras] = useState<Transportadora[]>([])
   const [loading, setLoading] = useState(true)
   const [showDispatched, setShowDispatched] = useState(false)
+
+  // Filter state
+  const [filters, setFilters] = useState({
+    cliente: '',
+    nomeCampanha: '',
+    item: '',
+    codigo: '',
+  })
 
   // Updated sorting state to match main production table pattern
   const [sortCol, setSortCol] = useState<SortableLogisticaKey>('numero_fo')
@@ -355,9 +364,44 @@ export const DashboardLogisticaTable: React.FC<
     return lookup
   }, [transportadoras])
 
+  // Client-side filtering logic
+  const filteredRecords = useMemo(() => {
+    return records.filter((record) => {
+      // Cliente filter - search both direct cliente field and resolved client name
+      const clienteMatch =
+        !filters.cliente ||
+        record.cliente?.toLowerCase().includes(filters.cliente.toLowerCase()) ||
+        (record.id_cliente &&
+          clienteLookup[record.id_cliente]
+            ?.toLowerCase()
+            .includes(filters.cliente.toLowerCase()))
+
+      // Nome Campanha filter
+      const campanhaMatch =
+        !filters.nomeCampanha ||
+        record.nome_campanha
+          ?.toLowerCase()
+          .includes(filters.nomeCampanha.toLowerCase())
+
+      // Item filter
+      const itemMatch =
+        !filters.item ||
+        record.item_descricao
+          ?.toLowerCase()
+          .includes(filters.item.toLowerCase())
+
+      // Código filter
+      const codigoMatch =
+        !filters.codigo ||
+        record.codigo?.toLowerCase().includes(filters.codigo.toLowerCase())
+
+      return clienteMatch && campanhaMatch && itemMatch && codigoMatch
+    })
+  }, [records, filters, clienteLookup])
+
   // Updated sorting logic following the same pattern as main production table
   const sorted = useMemo(() => {
-    const arr = [...records]
+    const arr = [...filteredRecords]
     arr.sort((a, b) => {
       let A: any, B: any
       switch (sortCol) {
@@ -422,7 +466,17 @@ export const DashboardLogisticaTable: React.FC<
       return 0
     })
     return arr
-  }, [records, sortCol, sortDir, clienteLookup, transportadoraLookup])
+  }, [filteredRecords, sortCol, sortDir, clienteLookup, transportadoraLookup])
+
+  // Clear filters function
+  const clearFilters = useCallback(() => {
+    setFilters({
+      cliente: '',
+      nomeCampanha: '',
+      item: '',
+      codigo: '',
+    })
+  }, [])
 
   // Handle refresh
   const handleRefresh = useCallback(() => {
@@ -536,6 +590,57 @@ export const DashboardLogisticaTable: React.FC<
             </Tooltip>
           </TooltipProvider>
         </div>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="mb-4 flex items-center gap-2">
+        <Input
+          placeholder="Cliente"
+          className="w-[200px] rounded-none"
+          value={filters.cliente}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, cliente: e.target.value }))
+          }
+        />
+        <Input
+          placeholder="Nome Campanha"
+          className="flex-1 rounded-none"
+          value={filters.nomeCampanha}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, nomeCampanha: e.target.value }))
+          }
+        />
+        <Input
+          placeholder="Item"
+          className="flex-1 rounded-none"
+          value={filters.item}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, item: e.target.value }))
+          }
+        />
+        <Input
+          placeholder="Código"
+          className="w-[140px] rounded-none"
+          value={filters.codigo}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, codigo: e.target.value }))
+          }
+        />
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={clearFilters}
+                className="rounded-none"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Limpar Filtros</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       <div className="bg-background border-border w-full rounded-none border-2">

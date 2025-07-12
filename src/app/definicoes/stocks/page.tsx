@@ -1147,9 +1147,9 @@ export default function StocksPage() {
 
           <TabsContent value="entries" className="space-y-4">
             {/* stocks table */}
-            <div className="bg-background border-border w-fit rounded-none border-2">
-              <div className="w-fit rounded-none">
-                <Table className="w-fit rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+            <div className="bg-background border-border w-full rounded-none border-2">
+              <div className="w-full rounded-none">
+                <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
                   <TableHeader>
                     <TableRow>
                       <TableHead
@@ -1260,7 +1260,7 @@ export default function StocksPage() {
                             <ArrowDown className="ml-1 inline h-3 w-3" />
                           ))}
                       </TableHead>
-                      <TableHead className="border-border sticky top-0 z-10 w-[100px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
+                      <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
                         Ações
                       </TableHead>
                     </TableRow>
@@ -1317,23 +1317,23 @@ export default function StocksPage() {
                           <TableCell className="text-right">
                             {stock.n_palet || '-'}
                           </TableCell>
-                          <TableCell className="!p-0">
-                            <div className="flex">
-                              <Button
-                                variant="outline"
-                                className="!inline-flex !h-10 !w-10 !max-w-[40px] !min-w-[40px] !items-center !justify-center !gap-0 !rounded-none !p-0"
-                                onClick={() => handleEdit(stock)}
-                              >
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="destructive"
-                                className="!inline-flex !h-10 !w-10 !max-w-[40px] !min-w-[40px] !items-center !justify-center !gap-0 !rounded-none !p-0"
-                                onClick={() => handleDelete(stock.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
+                          <TableCell className="flex justify-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                              onClick={() => handleEdit(stock)}
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                              onClick={() => handleDelete(stock.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       ))
@@ -1346,9 +1346,9 @@ export default function StocksPage() {
 
           <TabsContent value="current" className="space-y-4">
             {/* current stocks table */}
-            <div className="bg-background border-border w-fit rounded-none border-2">
-              <div className="w-fit rounded-none">
-                <Table className="w-fit rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+            <div className="bg-background border-border w-full rounded-none border-2">
+              <div className="w-full rounded-none">
+                <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
                   <TableHeader>
                     <TableRow>
                       <TableHead
