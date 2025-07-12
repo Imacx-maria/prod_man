@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useEffect, useState } from 'react'
 import {
   Menubar,
   MenubarContent,
@@ -116,32 +117,72 @@ const MENU_STRUCTURE = [
 export default function MenubarDemo() {
   const { canAccessPage, loading, userProfile, permissions } =
     usePermissionsContext()
+  const [forceRender, setForceRender] = useState(0)
+
+  // Listen for permissions loaded event to force re-render
+  useEffect(() => {
+    const handlePermissionsLoaded = (event: CustomEvent) => {
+      console.log('🎯 Menu received permissionsLoaded event:', event.detail)
+      setForceRender((prev) => prev + 1)
+    }
+
+    const handleRefreshPermissions = () => {
+      console.log('🔄 Menu received refreshPermissions event')
+      setForceRender((prev) => prev + 1)
+    }
+
+    window.addEventListener(
+      'permissionsLoaded',
+      handlePermissionsLoaded as EventListener,
+    )
+    window.addEventListener('refreshPermissions', handleRefreshPermissions)
+
+    return () => {
+      window.removeEventListener(
+        'permissionsLoaded',
+        handlePermissionsLoaded as EventListener,
+      )
+      window.removeEventListener('refreshPermissions', handleRefreshPermissions)
+    }
+  }, [])
 
   // Debug navigation
-  if (!loading && userProfile) {
-    console.log('🔍 Navigation Debug:')
-    console.log('- User Role:', userProfile.roles?.name)
-    console.log('- User Permissions:', permissions?.length || 0, 'permissions')
-    console.log('- Can access /producao:', canAccessPage('/producao'))
-    console.log(
-      '- Can access /producao/operacoes:',
-      canAccessPage('/producao/operacoes'),
-    )
-    console.log('- Can access armazens:', canAccessPage('/definicoes/armazens'))
-    console.log('- Can access clientes:', canAccessPage('/definicoes/clientes'))
-    console.log(
-      '- Can access utilizadores:',
-      canAccessPage('/definicoes/utilizadores'),
-    )
-  }
+  useEffect(() => {
+    if (!loading && userProfile) {
+      console.log('🔍 Navigation Debug (render #' + forceRender + '):')
+      console.log('- User Role:', userProfile.roles?.name)
+      console.log(
+        '- User Permissions:',
+        permissions?.length || 0,
+        'permissions',
+      )
+      console.log('- Can access /producao:', canAccessPage('/producao'))
+      console.log(
+        '- Can access /producao/operacoes:',
+        canAccessPage('/producao/operacoes'),
+      )
+      console.log(
+        '- Can access armazens:',
+        canAccessPage('/definicoes/armazens'),
+      )
+      console.log(
+        '- Can access clientes:',
+        canAccessPage('/definicoes/clientes'),
+      )
+      console.log(
+        '- Can access utilizadores:',
+        canAccessPage('/definicoes/utilizadores'),
+      )
+    }
+  }, [loading, userProfile, permissions, canAccessPage, forceRender])
 
-  // Don't render menu while permissions are loading
-  if (loading) {
+  // Show loading state while permissions are being fetched
+  if (loading || (!userProfile && !loading)) {
     return (
       <Menubar className="border-none">
         <MenubarMenu>
           <MenubarTrigger className="whitespace-nowrap">
-            Loading...
+            {loading ? 'Loading...' : 'Initializing...'}
           </MenubarTrigger>
         </MenubarMenu>
       </Menubar>
@@ -167,8 +208,29 @@ export default function MenubarDemo() {
 
   const visibleMenuItems = filterMenuItems(MENU_STRUCTURE)
 
+  // If we have a user profile but no visible menu items, show a fallback menu
+  if (userProfile && visibleMenuItems.length === 0) {
+    console.log(
+      '⚠️ User profile loaded but no accessible menu items, showing fallback menu',
+    )
+    return (
+      <Menubar className="border-none">
+        <MenubarMenu>
+          <Link href="/dashboard" className="flex w-full">
+            <MenubarTrigger className="cursor-pointer whitespace-nowrap">
+              Dashboard
+            </MenubarTrigger>
+          </Link>
+        </MenubarMenu>
+      </Menubar>
+    )
+  }
+
   return (
-    <Menubar className="border-none">
+    <Menubar
+      className="border-none"
+      key={`menu-${forceRender}-${userProfile?.id || 'no-user'}`}
+    >
       {visibleMenuItems.map((menuItem, index) => {
         if (menuItem.type === 'single') {
           return (

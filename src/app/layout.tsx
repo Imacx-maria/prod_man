@@ -80,7 +80,7 @@ export default function RootLayout({
                       </Link>
                     </div>
                     <div className="flex flex-grow justify-center">
-                      <MenubarDemo />
+                      <MenubarDemo key="main-menu" />
                     </div>
                     <div className="flex flex-shrink-0 items-center gap-2">
                       <AuthDropdown />

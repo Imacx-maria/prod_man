@@ -2,89 +2,196 @@
 
 import { createBrowserClient } from '@/utils/supabase'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import type { User } from '@supabase/supabase-js'
 
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
+  const [initialized, setInitialized] = useState(false)
   const router = useRouter()
   const supabase = createBrowserClient()
+
+  // Force refresh auth state
+  const refreshAuth = useCallback(async () => {
+    try {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession()
+      if (error) {
+        console.error('Error refreshing session:', error)
+        setUser(null)
+        return
+      }
+
+      if (session?.user) {
+        setUser(session.user)
+        console.log('🔄 Auth refreshed successfully:', session.user.id)
+      } else {
+        setUser(null)
+        console.log('🔄 No session found during refresh')
+      }
+    } catch (error) {
+      console.error('Error in refreshAuth:', error)
+      setUser(null)
+    }
+  }, [supabase.auth])
 
   useEffect(() => {
     let mounted = true
 
-    const getUser = async () => {
+    const initializeAuth = async () => {
       try {
+        setLoading(true)
+
+        // First, try to get existing session
         const {
-          data: { user },
-        } = await supabase.auth.getUser()
+          data: { session },
+          error,
+        } = await supabase.auth.getSession()
+
+        if (error) {
+          console.error('Error getting session:', error)
+          if (mounted) {
+            setUser(null)
+            setLoading(false)
+            setInitialized(true)
+          }
+          return
+        }
+
         if (mounted) {
-          setUser(user)
+          setUser(session?.user ?? null)
           setLoading(false)
+          setInitialized(true)
+
+          console.log('🔐 Auth initialized:', {
+            hasSession: !!session,
+            userId: session?.user?.id,
+            expiresAt: session?.expires_at
+              ? new Date(session.expires_at * 1000).toLocaleString()
+              : null,
+          })
         }
       } catch (error) {
-        console.error('Error getting user:', error)
+        console.error('Error initializing auth:', error)
         if (mounted) {
           setUser(null)
           setLoading(false)
+          setInitialized(true)
         }
       }
     }
 
-    // Set up auth state listener with better session handling
+    // Set up auth state listener with improved session handling
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (mounted) {
-        setUser(session?.user ?? null)
+      if (!mounted) return
+
+      console.log('🔐 Auth state change:', event, {
+        hasSession: !!session,
+        userId: session?.user?.id,
+        expiresAt: session?.expires_at
+          ? new Date(session.expires_at * 1000).toLocaleString()
+          : null,
+      })
+
+      // Update user state
+      setUser(session?.user ?? null)
+
+      // Only set loading to false after we've initialized
+      if (initialized || event === 'INITIAL_SESSION') {
         setLoading(false)
+      }
 
-        // Log auth events for debugging
-        console.log('Auth state change:', event, {
-          hasSession: !!session,
-          userId: session?.user?.id,
-          expiresAt: session?.expires_at
-            ? new Date(session.expires_at * 1000)
-            : null,
-        })
+      // Handle specific auth events
+      switch (event) {
+        case 'SIGNED_IN':
+          console.log('✅ User signed in successfully')
+          // Force a small delay to ensure all providers are ready
+          setTimeout(() => {
+            if (mounted) {
+              setLoading(false)
+              setInitialized(true)
+            }
+          }, 100)
+          break
 
-        // Handle token refresh automatically
-        if (event === 'TOKEN_REFRESHED') {
-          console.log('Token refreshed successfully')
-        }
+        case 'SIGNED_OUT':
+          console.log('👋 User signed out')
+          setUser(null)
+          setLoading(false)
+          break
 
-        if (event === 'SIGNED_OUT') {
-          console.log('User signed out')
-        }
+        case 'TOKEN_REFRESHED':
+          console.log('🔄 Token refreshed successfully')
+          break
+
+        case 'USER_UPDATED':
+          console.log('👤 User updated')
+          break
+
+        case 'PASSWORD_RECOVERY':
+          console.log('🔑 Password recovery initiated')
+          break
       }
     })
 
-    getUser()
+    // Initialize auth
+    initializeAuth()
 
     // Fallback timeout to ensure loading state resolves
     const timeoutId = setTimeout(() => {
-      if (mounted) {
+      if (mounted && !initialized) {
+        console.warn('⚠️ Auth initialization timeout, forcing completion')
         setLoading(false)
+        setInitialized(true)
       }
-    }, 1000) // Increased timeout for more stability
+    }, 2000)
+
+    // Listen for custom refresh events
+    const handleRefreshAuth = () => {
+      if (mounted) {
+        refreshAuth()
+      }
+    }
+
+    window.addEventListener('refreshAuth', handleRefreshAuth)
 
     return () => {
       mounted = false
       subscription.unsubscribe()
       clearTimeout(timeoutId)
+      window.removeEventListener('refreshAuth', handleRefreshAuth)
     }
-  }, [supabase.auth])
+  }, [supabase.auth, initialized, refreshAuth])
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    router.push('/login')
+    try {
+      setLoading(true)
+      const { error } = await supabase.auth.signOut()
+      if (error) {
+        console.error('Error signing out:', error)
+      }
+      // Clear local state immediately
+      setUser(null)
+      setInitialized(false)
+      router.push('/login')
+    } catch (error) {
+      console.error('Unexpected error during sign out:', error)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return {
     user,
     loading,
+    initialized,
     signOut,
-    isAuthenticated: !!user,
+    refreshAuth,
+    isAuthenticated: !!user && initialized,
   }
 }

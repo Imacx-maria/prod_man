@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { createBrowserClient } from '@/utils/supabase'
 import { useAuth } from './useAuth'
 
@@ -25,47 +25,63 @@ export const usePermissions = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { user } = useAuth()
+  const [retryCount, setRetryCount] = useState(0)
+  const { user, initialized } = useAuth()
+  const fetchingRef = useRef(false)
+  const lastUserIdRef = useRef<string | null>(null)
 
   const supabase = createBrowserClient()
 
-  useEffect(() => {
-    if (!user) {
-      setPermissions([])
-      setUserProfile(null)
-      setLoading(false)
-      return
-    }
+  const fetchUserPermissions = useCallback(
+    async (userId: string, attempt = 0) => {
+      // Prevent concurrent fetches
+      if (fetchingRef.current) {
+        console.log('🔒 Permissions fetch already in progress, skipping')
+        return
+      }
 
-    // Don't reset state if we already have this user's data
-    if (userProfile && userProfile.user_id === user.id) {
-      setLoading(false)
-      return
-    }
-
-    const fetchUserPermissions = async () => {
       try {
+        fetchingRef.current = true
         setLoading(true)
         setError(null)
+
+        console.log(
+          `🔍 Fetching permissions for user ${userId} (attempt ${attempt + 1})`,
+        )
 
         // First, get the user's profile and role
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select(
             `
-            *,
-            roles (
-              id,
-              name,
-              description
-            )
-          `,
+          *,
+          roles (
+            id,
+            name,
+            description
           )
-          .eq('user_id', user.id)
+        `,
+          )
+          .eq('user_id', userId)
           .single()
 
         if (profileError || !profile) {
           console.error('Error fetching user profile:', profileError)
+
+          // Retry logic for profile fetch
+          if (attempt < 2 && profileError?.code !== 'PGRST116') {
+            // Don't retry if no rows found
+            console.log(
+              `⏳ Retrying profile fetch in 1 second (attempt ${attempt + 1})`,
+            )
+            setTimeout(() => {
+              if (lastUserIdRef.current === userId) {
+                fetchUserPermissions(userId, attempt + 1)
+              }
+            }, 1000)
+            return
+          }
+
           setError('Failed to fetch user profile')
           return
         }
@@ -73,7 +89,7 @@ export const usePermissions = () => {
         setUserProfile(profile)
 
         console.log('🔍 usePermissions Debug:')
-        console.log('- User ID:', user.id)
+        console.log('- User ID:', userId)
         console.log('- Profile:', profile)
         console.log('- Role name:', profile.roles?.name)
         console.log('- Role ID:', profile.role_id)
@@ -88,11 +104,25 @@ export const usePermissions = () => {
 
         if (permissionsError) {
           console.error('Error fetching permissions:', permissionsError)
+
+          // Retry logic for permissions fetch
+          if (attempt < 2) {
+            console.log(
+              `⏳ Retrying permissions fetch in 1 second (attempt ${attempt + 1})`,
+            )
+            setTimeout(() => {
+              if (lastUserIdRef.current === userId) {
+                fetchUserPermissions(userId, attempt + 1)
+              }
+            }, 1000)
+            return
+          }
+
           setError('Failed to fetch permissions')
           return
         }
 
-        console.log('- Fetched permissions:', rolePermissions)
+        console.log('✅ Permissions loaded successfully:')
         console.log('- Permission count:', rolePermissions?.length || 0)
         console.log(
           '- Production permissions:',
@@ -108,16 +138,101 @@ export const usePermissions = () => {
         )
 
         setPermissions(rolePermissions || [])
+        setRetryCount(0) // Reset retry count on success
+
+        // Dispatch event to notify menu to re-render
+        window.dispatchEvent(
+          new CustomEvent('permissionsLoaded', {
+            detail: { userId, permissions: rolePermissions },
+          }),
+        )
       } catch (err) {
         console.error('Error in fetchUserPermissions:', err)
+
+        // Retry logic for unexpected errors
+        if (attempt < 2) {
+          console.log(
+            `⏳ Retrying after unexpected error in 1 second (attempt ${attempt + 1})`,
+          )
+          setTimeout(() => {
+            if (lastUserIdRef.current === userId) {
+              fetchUserPermissions(userId, attempt + 1)
+            }
+          }, 1000)
+          return
+        }
+
         setError('An unexpected error occurred')
+        setRetryCount((prev) => prev + 1)
       } finally {
+        fetchingRef.current = false
         setLoading(false)
+      }
+    },
+    [supabase],
+  )
+
+  useEffect(() => {
+    // Wait for auth to be initialized
+    if (!initialized) {
+      console.log('⏳ Waiting for auth to initialize...')
+      return
+    }
+
+    if (!user) {
+      console.log('👤 No user found, clearing permissions')
+      setPermissions([])
+      setUserProfile(null)
+      setLoading(false)
+      setError(null)
+      lastUserIdRef.current = null
+      return
+    }
+
+    // Check if we already have data for this user and it's fresh
+    if (
+      userProfile &&
+      userProfile.user_id === user.id &&
+      permissions.length > 0
+    ) {
+      console.log('✅ Using cached permissions for user:', user.id)
+      setLoading(false)
+      return
+    }
+
+    // Check if this is a different user
+    if (lastUserIdRef.current !== user.id) {
+      console.log('🔄 New user detected, fetching permissions:', user.id)
+      lastUserIdRef.current = user.id
+      setPermissions([])
+      setUserProfile(null)
+      setError(null)
+      setRetryCount(0)
+    }
+
+    // Fetch permissions for the current user
+    fetchUserPermissions(user.id)
+  }, [user, initialized, fetchUserPermissions, userProfile, permissions.length])
+
+  // Listen for refresh events
+  useEffect(() => {
+    const handleRefreshPermissions = () => {
+      if (user?.id) {
+        console.log('🔄 Refreshing permissions on demand')
+        lastUserIdRef.current = null // Force refresh
+        setPermissions([])
+        setUserProfile(null)
+        setError(null)
+        fetchUserPermissions(user.id)
       }
     }
 
-    fetchUserPermissions()
-  }, [user])
+    window.addEventListener('refreshPermissions', handleRefreshPermissions)
+
+    return () => {
+      window.removeEventListener('refreshPermissions', handleRefreshPermissions)
+    }
+  }, [user?.id, fetchUserPermissions])
 
   // Helper function to check if user can access a specific page
   const canAccessPage = (pagePath: string): boolean => {
