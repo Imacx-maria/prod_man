@@ -1,22 +1,46 @@
-"use client"
-import React from 'react'
+'use client'
+import React, { useEffect } from 'react'
 import dynamic from 'next/dynamic'
 
 interface Holiday {
-  id: string;
-  holiday_date: string;
-  description?: string;
+  id: string
+  holiday_date: string
+  description?: string
 }
 
 interface ClientDashboardShellProps {
-  holidays: Holiday[];
+  holidays: Holiday[]
 }
 
 const ClientIndex = dynamic(() => import('./ClientIndex'), { ssr: false })
 
-const ClientDashboardShell: React.FC<ClientDashboardShellProps> = ({ holidays }) => {
+const ClientDashboardShell: React.FC<ClientDashboardShellProps> = ({
+  holidays,
+}) => {
+  // Force refresh permissions and auth state on mount to ensure fresh data after login
+  useEffect(() => {
+    // Check if we just came from a login (URL contains login redirect or fresh session)
+    const urlParams = new URLSearchParams(window.location.search)
+    const isFromLogin =
+      urlParams.has('from_login') ||
+      sessionStorage.getItem('just_logged_in') === 'true'
+
+    if (isFromLogin) {
+      console.log('🔄 Detected fresh login, forcing permissions refresh')
+
+      // Clear the login flag
+      sessionStorage.removeItem('just_logged_in')
+
+      // Force refresh of auth and permissions
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('refreshAuth'))
+        window.dispatchEvent(new CustomEvent('refreshPermissions'))
+      }, 200)
+    }
+  }, [])
+
   return (
-    <div className="flex flex-col items-center w-full">
+    <div className="flex w-full flex-col items-center">
       <main role="main" className="w-full">
         <ClientIndex holidays={holidays} />
       </main>
@@ -24,4 +48,4 @@ const ClientDashboardShell: React.FC<ClientDashboardShellProps> = ({ holidays })
   )
 }
 
-export default ClientDashboardShell; 
+export default ClientDashboardShell

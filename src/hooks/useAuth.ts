@@ -154,6 +154,7 @@ export function useAuth() {
     // Listen for custom refresh events
     const handleRefreshAuth = () => {
       if (mounted) {
+        console.log('🔄 Force refreshing auth state')
         refreshAuth()
       }
     }

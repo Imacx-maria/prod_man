@@ -131,11 +131,17 @@ export default function MenubarDemo() {
       setForceRender((prev) => prev + 1)
     }
 
+    const handleClearPermissions = () => {
+      console.log('🧹 Menu received clearPermissions event')
+      setForceRender((prev) => prev + 1)
+    }
+
     window.addEventListener(
       'permissionsLoaded',
       handlePermissionsLoaded as EventListener,
     )
     window.addEventListener('refreshPermissions', handleRefreshPermissions)
+    window.addEventListener('clearPermissions', handleClearPermissions)
 
     return () => {
       window.removeEventListener(
@@ -143,6 +149,7 @@ export default function MenubarDemo() {
         handlePermissionsLoaded as EventListener,
       )
       window.removeEventListener('refreshPermissions', handleRefreshPermissions)
+      window.removeEventListener('clearPermissions', handleClearPermissions)
     }
   }, [])
 

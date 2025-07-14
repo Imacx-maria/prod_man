@@ -193,7 +193,8 @@ export const usePermissions = () => {
     if (
       userProfile &&
       userProfile.user_id === user.id &&
-      permissions.length > 0
+      permissions.length > 0 &&
+      !loading
     ) {
       console.log('✅ Using cached permissions for user:', user.id)
       setLoading(false)
@@ -212,9 +213,29 @@ export const usePermissions = () => {
 
     // Fetch permissions for the current user
     fetchUserPermissions(user.id)
-  }, [user, initialized, fetchUserPermissions, userProfile, permissions.length])
 
-  // Listen for refresh events
+    // Add a timeout to prevent infinite loading state
+    const timeoutId = setTimeout(() => {
+      if (loading && !userProfile) {
+        console.warn('⚠️ Permissions loading timeout, forcing completion')
+        setLoading(false)
+        setError('Permissions loading timeout')
+      }
+    }, 5000)
+
+    return () => {
+      clearTimeout(timeoutId)
+    }
+  }, [
+    user,
+    initialized,
+    fetchUserPermissions,
+    userProfile,
+    permissions.length,
+    loading,
+  ])
+
+  // Listen for refresh and clear events
   useEffect(() => {
     const handleRefreshPermissions = () => {
       if (user?.id) {
@@ -227,10 +248,22 @@ export const usePermissions = () => {
       }
     }
 
+    const handleClearPermissions = () => {
+      console.log('🧹 Clearing permissions cache')
+      lastUserIdRef.current = null
+      setPermissions([])
+      setUserProfile(null)
+      setError(null)
+      setLoading(true)
+      fetchingRef.current = false
+    }
+
     window.addEventListener('refreshPermissions', handleRefreshPermissions)
+    window.addEventListener('clearPermissions', handleClearPermissions)
 
     return () => {
       window.removeEventListener('refreshPermissions', handleRefreshPermissions)
+      window.removeEventListener('clearPermissions', handleClearPermissions)
     }
   }, [user?.id, fetchUserPermissions])
 

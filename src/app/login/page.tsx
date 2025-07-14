@@ -1,7 +1,7 @@
-import Link from 'next/link'
-import { headers, cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
-import { createServerClient } from '@/utils/supabase'
+'use client'
+
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,87 +13,62 @@ import {
   CardContent,
 } from '@/components/ui/card'
 
-// Add metadata for login page
-export const metadata = {
-  title: 'Login | IMACX',
-  description:
-    'Faça login na sua conta IMACX para aceder ao painel de gestão de produção',
-  keywords: 'login, entrar, autenticação, IMACX, acesso',
-}
-
-// Helper function to get user-friendly error messages
-const getErrorMessage = (error: any): string => {
-  if (!error) return 'Ocorreu um erro inesperado'
-
-  const message = error.message?.toLowerCase() || ''
-
-  if (
-    message.includes('invalid_credentials') ||
-    message.includes('invalid login')
-  ) {
-    return 'Email ou palavra-passe inválidos. Verifique as suas credenciais e tente novamente.'
-  }
-  if (message.includes('email not confirmed')) {
-    return 'Verifique o seu email e clique no link de confirmação antes de fazer login.'
-  }
-  if (message.includes('too many requests')) {
-    return 'Demasiadas tentativas de login. Aguarde alguns minutos antes de tentar novamente.'
-  }
-  if (message.includes('network')) {
-    return 'Erro de rede. Verifique a sua ligação e tente novamente.'
-  }
-
-  return 'Não foi possível fazer login. Tente novamente ou contacte o suporte se o problema persistir.'
-}
-
 export default function Login({
   searchParams,
 }: {
   searchParams: { message?: string }
 }) {
-  const signIn = async (formData: FormData) => {
-    'use server'
+  const [showPassword, setShowPassword] = useState(false)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [isMounted, setIsMounted] = useState(false)
+  const router = useRouter()
 
-    const email = formData.get('email') as string
-    const password = formData.get('password') as string
+  // Ensure component is mounted before rendering interactive elements
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
-    // Basic server-side validation
-    if (!email || !password) {
-      return redirect('/login?message=Email e palavra-passe são obrigatórios')
-    }
-
-    if (!email.includes('@')) {
-      return redirect(
-        '/login?message=Por favor, introduza um endereço de email válido',
-      )
-    }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
 
     try {
-      const cookieStore = cookies()
-      const supabase = await createServerClient(cookieStore)
+      const formData = new FormData()
+      formData.append('email', email)
+      formData.append('password', password)
 
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim().toLowerCase(),
-        password,
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        body: formData,
       })
 
-      if (error) {
-        console.error('Login error:', error.message)
-        const userMessage = encodeURIComponent(getErrorMessage(error))
-        return redirect(`/login?message=${userMessage}`)
-      }
+      const result = await response.json()
 
-      return redirect('/')
-    } catch (error: any) {
-      // Don't log NEXT_REDIRECT as an error - it's expected behavior for redirects
-      if (error?.digest?.includes('NEXT_REDIRECT')) {
-        throw error // Re-throw to let Next.js handle the redirect
-      }
+      if (result.error) {
+        router.push(`/login?message=${encodeURIComponent(result.error)}`)
+      } else {
+        // Clear any cached permissions and force refresh
+        localStorage.removeItem('permissions_cache')
+        sessionStorage.removeItem('permissions_cache')
 
-      console.error('Unexpected login error:', error)
-      return redirect(
-        '/login?message=Ocorreu um erro inesperado. Tente novamente.',
-      )
+        // Set flag to indicate fresh login
+        sessionStorage.setItem('just_logged_in', 'true')
+
+        // Dispatch events to clear auth and permissions state
+        window.dispatchEvent(new CustomEvent('clearPermissions'))
+        window.dispatchEvent(new CustomEvent('refreshAuth'))
+
+        // Small delay to ensure events are processed, then force refresh
+        setTimeout(() => {
+          window.location.href = '/'
+        }, 100)
+      }
+    } catch (error) {
+      router.push('/login?message=Ocorreu um erro inesperado. Tente novamente.')
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -108,7 +83,7 @@ export default function Login({
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <form action={signIn}>
+        <form onSubmit={handleSubmit}>
           <div className="flex flex-col gap-6">
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
@@ -122,21 +97,79 @@ export default function Login({
                 autoCapitalize="none"
                 autoCorrect="off"
                 className="lowercase"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={!isMounted || isLoading}
               />
             </div>
             <div className="grid gap-2">
               <Label htmlFor="password">Palavra-passe</Label>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                required
-                autoComplete="current-password"
-                minLength={6}
-              />
+              <div className="relative">
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? 'text' : 'password'}
+                  required
+                  autoComplete="current-password"
+                  minLength={6}
+                  className="pr-10 normal-case"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={!isMounted || isLoading}
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-500 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={
+                    showPassword
+                      ? 'Ocultar palavra-passe'
+                      : 'Mostrar palavra-passe'
+                  }
+                  disabled={!isMounted || isLoading}
+                >
+                  {showPassword ? (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                      <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                      <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                      <line x1="2" x2="22" y1="2" y2="22" />
+                    </svg>
+                  ) : (
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="20"
+                      height="20"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
-            <Button type="submit" className="w-full">
-              Entrar
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={!isMounted || isLoading}
+            >
+              {isLoading ? 'A entrar...' : 'Entrar'}
             </Button>
           </div>
 
