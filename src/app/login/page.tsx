@@ -28,6 +28,17 @@ export default function Login({
   // Ensure component is mounted before rendering interactive elements
   useEffect(() => {
     setIsMounted(true)
+
+    // Clear any residual auth/permissions state when login page loads
+    // This ensures a clean state especially after logout
+    localStorage.removeItem('permissions_cache')
+    sessionStorage.removeItem('permissions_cache')
+    sessionStorage.removeItem('just_logged_in')
+
+    // Dispatch clear events to ensure all components reset
+    window.dispatchEvent(new CustomEvent('clearPermissions'))
+
+    console.log('🧹 Login page loaded - cleared all cached state')
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {

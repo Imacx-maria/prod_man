@@ -172,16 +172,31 @@ export function useAuth() {
   const signOut = async () => {
     try {
       setLoading(true)
+
+      // Clear all cached data before signing out
+      localStorage.removeItem('permissions_cache')
+      sessionStorage.removeItem('permissions_cache')
+      sessionStorage.removeItem('just_logged_in')
+
+      // Dispatch events to clear all state
+      window.dispatchEvent(new CustomEvent('clearPermissions'))
+
       const { error } = await supabase.auth.signOut()
       if (error) {
         console.error('Error signing out:', error)
       }
+
       // Clear local state immediately
       setUser(null)
       setInitialized(false)
-      router.push('/login')
+
+      // Force a complete page refresh to ensure clean state
+      console.log('👋 Signing out and forcing page refresh')
+      window.location.href = '/login'
     } catch (error) {
       console.error('Unexpected error during sign out:', error)
+      // Even if there's an error, force refresh to login page
+      window.location.href = '/login'
     } finally {
       setLoading(false)
     }
