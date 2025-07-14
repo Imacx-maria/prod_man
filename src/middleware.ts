@@ -22,6 +22,7 @@ export async function middleware(request: NextRequest) {
     const protectedRoutes = [
       '/dashboard',
       '/producao',
+      '/gestao',
       '/definicoes',
       '/designer-flow',
       '/team',
@@ -82,6 +83,7 @@ export async function middleware(request: NextRequest) {
     const protectedRoutes = [
       '/dashboard',
       '/producao',
+      '/gestao',
       '/definicoes',
       '/designer-flow',
       '/team',

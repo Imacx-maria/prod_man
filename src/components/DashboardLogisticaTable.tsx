@@ -18,19 +18,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import {
-  ArrowUp,
-  ArrowDown,
-  Trash2,
-  Copy,
-  RefreshCcw,
-  CheckSquare,
-  Square,
-  X,
-} from 'lucide-react'
-import NotasPopover from '@/components/ui/NotasPopover'
-import ClienteCombobox from '@/components/ClienteCombobox'
-import Combobox from '@/components/ui/Combobox'
+import { ArrowUp, ArrowDown, RefreshCcw, Eye, EyeOff, X } from 'lucide-react'
 import DatePicker from '@/components/ui/DatePicker'
 import { createBrowserClient } from '@/utils/supabase'
 
@@ -563,12 +551,12 @@ export const DashboardLogisticaTable: React.FC<
                       ? 'Mostrar Não Despachados'
                       : 'Mostrar Despachados'
                   }
-                  className="border-border border-2"
+                  className={`border-border border-2 ${showDispatched ? 'bg-[var(--main)]' : ''}`}
                 >
                   {showDispatched ? (
-                    <CheckSquare className="h-5 w-5" />
+                    <Eye className="h-5 w-5" />
                   ) : (
-                    <Square className="h-5 w-5" />
+                    <EyeOff className="h-5 w-5" />
                   )}
                 </Button>
               </TooltipTrigger>
@@ -644,7 +632,7 @@ export const DashboardLogisticaTable: React.FC<
       </div>
 
       <div className="bg-background border-border w-full rounded-none border-2">
-        <div className="max-h-[70vh] w-full overflow-y-auto">
+        <div className="w-full rounded-none">
           <Table className="w-full table-fixed border-0 uppercase [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
             <TableHeader>
               <TableRow>

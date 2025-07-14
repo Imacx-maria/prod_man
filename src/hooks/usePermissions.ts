@@ -295,11 +295,12 @@ export const usePermissions = () => {
       ) {
         return true
       }
-      // Temporary: Allow PRODUCAO role access to all production/definicoes pages
+      // Temporary: Allow PRODUCAO role access to all production/definicoes/gestao pages
       if (
         userProfile.roles?.name === 'PRODUCAO' &&
         (pagePath.startsWith('/producao') ||
           pagePath.startsWith('/definicoes') ||
+          pagePath.startsWith('/gestao') ||
           pagePath === '/designer-flow')
       ) {
         console.log('🛡️ PRODUCAO role fallback: allowing access to', pagePath)

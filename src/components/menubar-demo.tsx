@@ -45,6 +45,17 @@ const MENU_STRUCTURE = [
     ],
   },
   {
+    type: 'dropdown' as const,
+    label: 'Gestão',
+    items: [
+      {
+        label: 'Faturação',
+        path: '/gestao/faturacao',
+        requiredPath: '/gestao/faturacao',
+      },
+    ],
+  },
+  {
     type: 'single' as const,
     label: 'Designer Flow',
     path: '/designer-flow',

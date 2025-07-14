@@ -143,6 +143,15 @@ const PAGE_CATEGORIES = {
       },
     ],
   },
+  Gestão: {
+    pages: [
+      {
+        path: '/gestao/faturacao',
+        name: 'Faturação',
+        description: 'Gestão de faturação de trabalhos concluídos',
+      },
+    ],
+  },
   Design: {
     pages: [
       {
