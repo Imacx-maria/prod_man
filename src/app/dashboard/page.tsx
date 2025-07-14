@@ -4,76 +4,84 @@ import { createServerClient } from '@/utils/supabase'
 
 // Add metadata for dashboard page
 export const metadata = {
-  title: 'Dashboard | IMACX',
-  description: 'User dashboard with account information and recent activity',
-  keywords: 'dashboard, account, user, profile, IMACX',
+  title: 'Painel | IMACX',
+  description:
+    'Painel de utilizador com informações da conta e atividade recente',
+  keywords: 'painel, conta, utilizador, perfil, IMACX',
 }
 
 // Helper function for safe date formatting
 const formatLastSignIn = (dateString: string | null | undefined): string => {
-  if (!dateString) return 'Never';
-  
+  if (!dateString) return 'Nunca'
+
   try {
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return 'Invalid date';
-    
-    return date.toLocaleString('en-US', {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return 'Data inválida'
+
+    return date.toLocaleString('pt-PT', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
-    });
+      minute: '2-digit',
+    })
   } catch {
-    return 'Unable to display date';
+    return 'Não foi possível exibir a data'
   }
-};
+}
 
 export default async function Dashboard() {
   const cookieStore = cookies()
   const supabase = await createServerClient(cookieStore)
-  
+
   try {
-    const { data: { user }, error } = await supabase.auth.getUser()
-    
+    const {
+      data: { user },
+      error,
+    } = await supabase.auth.getUser()
+
     if (error) {
-      console.error('Failed to fetch user data:', error.message);
+      console.error('Falha ao obter dados do utilizador:', error.message)
     }
-    
+
     return (
       <ProtectedRoute>
         <div className="container mx-auto pt-4 pb-10">
-          <h1 className="mb-8 text-3xl font-bold">Dashboard</h1>
-          
+          <h1 className="mb-8 text-3xl font-bold">Painel</h1>
+
           <div className="rounded-lg border p-6 shadow-sm">
             <h2 className="mb-4 text-xl font-semibold">
-              Welcome{user?.email ? `, ${user.email}` : ''}
+              Bem-vindo{user?.email ? `, ${user.email}` : ''}
             </h2>
             <p className="text-muted-foreground mb-6">
-              This is a protected page that only authenticated users can access.
+              Esta é uma página protegida que apenas utilizadores autenticados
+              podem aceder.
             </p>
-            
+
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <div className="rounded-md border p-4">
-                <h3 className="font-medium mb-2">Your Account</h3>
-                <div className="space-y-1 text-sm text-muted-foreground">
-                  <p>Email: {user?.email || 'Not available'}</p>
-                  <p>User ID: {user?.id ? `${user.id.slice(0, 8)}...` : 'Not available'}</p>
+                <h3 className="mb-2 font-medium">A Sua Conta</h3>
+                <div className="text-muted-foreground space-y-1 text-sm">
+                  <p>Email: {user?.email || 'Não disponível'}</p>
+                  <p>
+                    ID do Utilizador:{' '}
+                    {user?.id ? `${user.id.slice(0, 8)}...` : 'Não disponível'}
+                  </p>
                 </div>
               </div>
-              
+
               <div className="rounded-md border p-4">
-                <h3 className="font-medium mb-2">Last Sign In</h3>
-                <p className="text-sm text-muted-foreground">
+                <h3 className="mb-2 font-medium">Último Acesso</h3>
+                <p className="text-muted-foreground text-sm">
                   {formatLastSignIn(user?.last_sign_in_at)}
                 </p>
               </div>
-              
+
               <div className="rounded-md border p-4">
-                <h3 className="font-medium mb-2">Account Status</h3>
+                <h3 className="mb-2 font-medium">Estado da Conta</h3>
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-sm text-muted-foreground">Active</span>
+                  <div className="h-2 w-2 rounded-full bg-green-500"></div>
+                  <span className="text-muted-foreground text-sm">Ativa</span>
                 </div>
               </div>
             </div>
@@ -82,22 +90,23 @@ export default async function Dashboard() {
       </ProtectedRoute>
     )
   } catch (error) {
-    console.error('Dashboard error:', error);
-    
+    console.error('Erro no painel:', error)
+
     return (
       <ProtectedRoute>
         <div className="container mx-auto pt-4 pb-10">
-          <h1 className="mb-8 text-3xl font-bold">Dashboard</h1>
-          <div className="rounded-lg border border-red-200 p-6 bg-red-50">
-            <h2 className="text-lg font-semibold text-red-800 mb-2">
-              Unable to Load Dashboard
+          <h1 className="mb-8 text-3xl font-bold">Painel</h1>
+          <div className="rounded-lg border border-red-200 bg-red-50 p-6">
+            <h2 className="mb-2 text-lg font-semibold text-red-800">
+              Não foi possível carregar o painel
             </h2>
             <p className="text-red-600">
-              There was an issue loading your dashboard. Please try refreshing the page.
+              Ocorreu um problema ao carregar o seu painel. Por favor, tente
+              atualizar a página.
             </p>
           </div>
         </div>
       </ProtectedRoute>
     )
   }
-} 
+}

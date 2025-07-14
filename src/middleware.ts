@@ -67,12 +67,8 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(url)
       }
 
-      // For root path, redirect authenticated users to dashboard
-      if (pathname === '/') {
-        console.log('✅ Authenticated user on root, redirecting to dashboard')
-        url.pathname = '/dashboard'
-        return NextResponse.redirect(url)
-      }
+      // For root path, allow authenticated users to stay on root
+      // No redirect needed - let them access the root page
     }
 
     // Continue with the request
