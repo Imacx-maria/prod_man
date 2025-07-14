@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/table'
 import {
   Eye,
+  EyeOff,
   Trash2,
   X,
   RotateCw,
@@ -1030,7 +1031,7 @@ export default function DesignerFlow() {
                 <Button
                   variant={showFechados ? 'default' : 'outline'}
                   size="icon"
-                  className={`h-10 w-10 rounded-none ${showFechados ? 'bg-yellow-400' : ''}`}
+                  className={`h-10 w-10 rounded-none ${showFechados ? 'bg-[var(--main)]' : ''}`}
                   onClick={() => {
                     setShowFechados((prevState) => !prevState)
                     // The filtering is now handled automatically by the useEffect that listens to showFechados
@@ -1040,9 +1041,9 @@ export default function DesignerFlow() {
                   }
                 >
                   {showFechados ? (
-                    <CheckCircle className="h-5 w-5" />
+                    <Eye className="h-5 w-5" />
                   ) : (
-                    <Clock className="h-5 w-5" />
+                    <EyeOff className="h-5 w-5" />
                   )}
                 </Button>
               </TooltipTrigger>
