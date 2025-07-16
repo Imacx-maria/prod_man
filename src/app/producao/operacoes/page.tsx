@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import Combobox from '@/components/ui/Combobox'
 import {
   Tooltip,
   TooltipContent,
@@ -106,6 +107,7 @@ interface ProductionOperation {
   stock_consumido_id?: string | null
   num_placas_print?: number | null
   num_placas_corte?: number | null
+  QT_print?: number | null
   observacoes?: string | null
   notas?: string | null
   notas_imp?: string | null
@@ -144,6 +146,17 @@ interface Material {
   cor?: string
   tipo?: string
   carateristica?: string
+  referencia?: string
+}
+
+interface Palete {
+  id: string
+  no_palete: string
+  ref_cartao?: string | null
+  fornecedor_id?: string | null
+  fornecedores?: {
+    nome_forn: string
+  } | null
 }
 
 type Holiday = {
@@ -901,6 +914,10 @@ function ItemDrawerContent({
   const [machines, setMachines] = useState<any[]>([])
   const [materials, setMaterials] = useState<any[]>([])
 
+  // State to track totals from each table component
+  const [totalQuantidadeImpressao, setTotalQuantidadeImpressao] = useState(0)
+  const [totalQuantidadeCorte, setTotalQuantidadeCorte] = useState(0)
+
   // Fetch operations and reference data
   const fetchOperations = useCallback(async () => {
     if (!item) return
@@ -912,7 +929,7 @@ function ItemDrawerContent({
         .select(
           `
            id, data_operacao, operador_id, folha_obra_id, item_id, no_interno,
-           Tipo_Op, maquina, material_id, stock_consumido_id, num_placas_print, num_placas_corte,
+           Tipo_Op, maquina, material_id, stock_consumido_id, num_placas_print, num_placas_corte, QT_print,
            observacoes, notas, notas_imp, status, concluido, data_conclusao, created_at, updated_at, N_Pal,
            profiles!operador_id (first_name, last_name),
            materiais (material, cor)
@@ -924,16 +941,6 @@ function ItemDrawerContent({
       if (error) {
         console.error('Error fetching operations:', error)
       } else {
-        // Debug log to verify fields are loaded
-        console.log(
-          '📊 Fetched operations data:',
-          operationsData?.map((op: any) => ({
-            id: op.id,
-            Tipo_Op: op.Tipo_Op,
-            notas: op.notas,
-            notas_imp: op.notas_imp,
-          })),
-        )
         setOperations(operationsData || [])
       }
     } catch (error) {
@@ -954,7 +961,7 @@ function ItemDrawerContent({
         supabase.from('maquinas_operacao').select('id, nome_maquina, tipo'),
         supabase
           .from('materiais')
-          .select('id, material, cor, tipo, carateristica'),
+          .select('id, material, cor, tipo, carateristica, referencia'),
       ])
 
       if (!operatorsRes.error) setOperators(operatorsRes.data || [])
@@ -979,14 +986,6 @@ function ItemDrawerContent({
     (op) => op.Tipo_Op === 'Impressao',
   )
   const corteOperations = operations.filter((op) => op.Tipo_Op === 'Corte')
-  const totalQuantidadeImpressao = impressaoOperations.reduce(
-    (sum, op) => sum + (op.num_placas_print || 0),
-    0,
-  )
-  const totalQuantidadeCorte = corteOperations.reduce(
-    (sum, op) => sum + (op.num_placas_corte || 0),
-    0,
-  )
 
   return (
     <div className="relative space-y-6 p-6">
@@ -1037,6 +1036,7 @@ function ItemDrawerContent({
             materials={materials}
             supabase={supabase}
             onRefresh={fetchOperations}
+            onTotalChange={setTotalQuantidadeImpressao}
           />
         </TabsContent>
 
@@ -1051,6 +1051,7 @@ function ItemDrawerContent({
             materials={materials}
             supabase={supabase}
             onRefresh={fetchOperations}
+            onTotalChange={setTotalQuantidadeCorte}
           />
         </TabsContent>
       </Tabs>
@@ -1069,6 +1070,7 @@ interface OperationsTableProps {
   materials: any[]
   supabase: any
   onRefresh: () => void
+  onTotalChange?: (total: number) => void
 }
 
 function OperationsTable({
@@ -1081,6 +1083,7 @@ function OperationsTable({
   materials,
   supabase,
   onRefresh,
+  onTotalChange,
 }: OperationsTableProps) {
   const quantityField =
     type === 'impressao' ? 'num_placas_print' : 'num_placas_corte'
@@ -1109,6 +1112,15 @@ function OperationsTable({
     [tempId: string]: Partial<ProductionOperation & { isPending: boolean }>
   }>({})
 
+  // NEW: State for paletes data (only for Impressão tab)
+  const [paletes, setPaletes] = useState<Palete[]>([])
+  const [paletesLoading, setPaletesLoading] = useState(true)
+
+  // NEW: State to track palette selections for each operation
+  const [paletteSelections, setPaletteSelections] = useState<{
+    [operationId: string]: string
+  }>({})
+
   // Combine pending and saved operations for display
   const displayOperations = useMemo(() => {
     const saved = operations.filter(
@@ -1119,6 +1131,38 @@ function OperationsTable({
     )
     return [...saved, ...(pending as ProductionOperation[])]
   }, [operations, pendingOperations, type])
+
+  // NEW: Fetch paletes data (for both Impressão and Corte tabs)
+  const fetchPaletes = useCallback(async () => {
+    setPaletesLoading(true)
+    try {
+      const { data, error } = await supabase
+        .from('paletes')
+        .select(
+          `
+          id,
+          no_palete,
+          ref_cartao,
+          fornecedor_id,
+          fornecedores(nome_forn)
+        `,
+        )
+        .order('no_palete', { ascending: true })
+
+      if (!error && data) {
+        setPaletes(data)
+      }
+    } catch (error) {
+      console.error('Error fetching paletes:', error)
+    } finally {
+      setPaletesLoading(false)
+    }
+  }, [supabase])
+
+  // NEW: useEffect to fetch paletes data for both tabs
+  useEffect(() => {
+    fetchPaletes()
+  }, [fetchPaletes])
 
   // Initialize material selections and notes - simplified approach
   useEffect(() => {
@@ -1132,8 +1176,10 @@ function OperationsTable({
       }
     } = {}
     const newNotesValues: { [operationId: string]: string } = {}
+    const newPaletteSelections: { [operationId: string]: string } = {}
 
     displayOperations.forEach((operation) => {
+      // Initialize material selections
       if (operation.material_id && materials.length > 0) {
         const material = materials.find((m) => m.id === operation.material_id)
         if (material) {
@@ -1145,6 +1191,14 @@ function OperationsTable({
         }
       } else {
         newSelections[operation.id] = {}
+      }
+
+      // Initialize palette selections from N_Pal field
+      if (operation.N_Pal && paletes.length > 0) {
+        const palette = paletes.find((p) => p.no_palete === operation.N_Pal)
+        if (palette) {
+          newPaletteSelections[operation.id] = palette.id
+        }
       }
 
       // Use the appropriate notes field based on operation type
@@ -1168,7 +1222,19 @@ function OperationsTable({
 
     setMaterialSelections(newSelections)
     setNotesValues(newNotesValues)
-  }, [displayOperations.length, materials.length])
+    setPaletteSelections(newPaletteSelections)
+  }, [displayOperations, materials.length, paletes.length, isUpdating, type])
+
+  // Calculate and report total quantity including pending operations
+  useEffect(() => {
+    const quantityField =
+      type === 'impressao' ? 'num_placas_print' : 'num_placas_corte'
+    const total = displayOperations.reduce(
+      (sum, op) => sum + (op[quantityField] || 0),
+      0,
+    )
+    onTotalChange?.(total)
+  }, [displayOperations, type, onTotalChange])
 
   const addOperation = () => {
     if (isUpdating) return
@@ -1220,6 +1286,7 @@ function OperationsTable({
         operador_id: pendingOperation.operador_id,
         maquina: pendingOperation.maquina,
         Tipo_Op: pendingOperation.Tipo_Op,
+        N_Pal: pendingOperation.N_Pal,
       }
 
       const { data: savedOperation, error: saveError } = await supabase
@@ -1232,17 +1299,28 @@ function OperationsTable({
 
       // 2. If this is an Impressão operation, automatically create corresponding Corte operation
       if (type === 'impressao' && savedOperation) {
+        console.log('🔄 Creating Corte operation from Impressão:', {
+          pendingOperation_material_id: pendingOperation.material_id,
+          pendingOperation_num_placas_print: pendingOperation.num_placas_print,
+          pendingOperation_N_Pal: pendingOperation.N_Pal,
+          copying_to_QT_print: pendingOperation.num_placas_print,
+        })
+
         const corteOperation = {
           item_id: pendingOperation.item_id,
           folha_obra_id: pendingOperation.folha_obra_id,
           no_interno: pendingOperation.no_interno,
           material_id: pendingOperation.material_id, // Copy material
-          num_placas_corte: pendingOperation.num_placas_print, // Copy quantity
+          QT_print: pendingOperation.num_placas_print, // Copy quantity to QT_print field
+          // num_placas_corte: leave empty - don't copy quantity here
           notas: pendingOperation.notas_imp, // Copy notes
+          N_Pal: pendingOperation.N_Pal, // Copy palette number
           data_operacao: new Date().toISOString().split('T')[0], // Today's date
           Tipo_Op: 'Corte',
           // operador_id and maquina left empty for cutting operator
         }
+
+        console.log('📋 Corte operation to be created:', corteOperation)
 
         const { error: corteError } = await supabase
           .from('producao_operacoes')
@@ -1280,19 +1358,89 @@ function OperationsTable({
     })
   }
 
+  // NEW: Duplicate operation function
+  const duplicateOperation = (sourceOperation: ProductionOperation) => {
+    if (isUpdating) return
+
+    // Create temporary ID for the duplicated operation
+    const tempId = `temp_${Date.now()}`
+
+    // Create duplicated operation (as pending)
+    const duplicatedOp = {
+      id: tempId,
+      item_id: sourceOperation.item_id,
+      folha_obra_id: sourceOperation.folha_obra_id,
+      no_interno: sourceOperation.no_interno,
+      material_id: sourceOperation.material_id,
+      [quantityField]: sourceOperation[quantityField] || 1,
+      [notesField]: sourceOperation[notesField] || '',
+      data_operacao: new Date().toISOString().split('T')[0], // Today's date
+      operador_id: sourceOperation.operador_id,
+      maquina: sourceOperation.maquina,
+      Tipo_Op: sourceOperation.Tipo_Op,
+      N_Pal: sourceOperation.N_Pal,
+      QT_print: sourceOperation.QT_print,
+      isPending: true, // Flag to identify as pending operation
+    }
+
+    console.log(`📋 Duplicating operation:`, sourceOperation)
+    console.log(`✨ Created duplicate:`, duplicatedOp)
+
+    // Add to pending operations (local state only)
+    setPendingOperations((prev) => ({
+      ...prev,
+      [tempId]: duplicatedOp,
+    }))
+
+    // Copy material selections if they exist
+    if (sourceOperation.material_id && sourceOperation.materiais) {
+      setMaterialSelections((prev) => ({
+        ...prev,
+        [tempId]: {
+          material: sourceOperation.materiais?.material || '',
+          caracteristica: sourceOperation.materiais?.cor || '', // Note: this might need adjustment based on your data structure
+          cor: sourceOperation.materiais?.cor || '',
+        },
+      }))
+    }
+
+    // Copy notes values if they exist
+    if (sourceOperation[notesField]) {
+      setNotesValues((prev) => ({
+        ...prev,
+        [tempId]: sourceOperation[notesField] || '',
+      }))
+    }
+
+    // Copy palette selection if it exists
+    if (sourceOperation.N_Pal) {
+      setPaletteSelections((prev) => ({
+        ...prev,
+        [tempId]: sourceOperation.N_Pal || '',
+      }))
+    }
+  }
+
   // NEW: Update pending operation function
   const updatePendingOperation = (
     tempId: string,
     field: string,
     value: any,
   ) => {
-    setPendingOperations((prev) => ({
-      ...prev,
-      [tempId]: {
-        ...prev[tempId],
-        [field]: value,
-      },
-    }))
+    console.log(`📝 Updating pending operation ${tempId}: ${field} = ${value}`)
+
+    setPendingOperations((prev) => {
+      const updated = {
+        ...prev,
+        [tempId]: {
+          ...prev[tempId],
+          [field]: value,
+        },
+      }
+
+      console.log(`📊 Updated pending operation:`, updated[tempId])
+      return updated
+    })
 
     // Also update local state for material selections and notes
     if (field === 'material_id') {
@@ -1416,12 +1564,20 @@ function OperationsTable({
       console.log(`⏳ Setting isUpdating to true and starting update...`)
       setIsUpdating(true)
 
-      // Get the current operation to compare values - only if needed for stock operations
+      // Get the current operation to compare values - needed for stock operations AND sync logic
       let currentOperation = null
-      if (field === 'material_id' || field === 'num_placas_corte') {
+      if (
+        field === 'material_id' ||
+        field === 'num_placas_corte' ||
+        field === 'num_placas_print' ||
+        field === 'notas_imp' ||
+        field === 'N_Pal'
+      ) {
         const { data } = await supabase
           .from('producao_operacoes')
-          .select('material_id, num_placas_corte, Tipo_Op')
+          .select(
+            'id, material_id, num_placas_corte, num_placas_print, Tipo_Op, item_id, folha_obra_id, no_interno, N_Pal',
+          )
           .eq('id', operationId)
           .single()
         currentOperation = data
@@ -1493,6 +1649,76 @@ function OperationsTable({
           }
         }
 
+        // NEW: Auto-sync Impressão changes to corresponding Corte operation
+        if (currentOperation && currentOperation.Tipo_Op === 'Impressao') {
+          if (
+            field === 'material_id' ||
+            field === 'num_placas_print' ||
+            field === 'notas_imp' ||
+            field === 'N_Pal'
+          ) {
+            console.log(`🔄 Impressão operation updated, syncing to Corte...`)
+
+            // Find corresponding Corte operation
+            const { data: corteOperations } = await supabase
+              .from('producao_operacoes')
+              .select('id')
+              .eq('item_id', currentOperation.item_id || itemId)
+              .eq(
+                'folha_obra_id',
+                currentOperation.folha_obra_id || item.folha_obra_id,
+              )
+              .eq(
+                'no_interno',
+                currentOperation.no_interno ||
+                  `${item.folhas_obras?.numero_fo || 'FO'}-${item.descricao?.substring(0, 10) || 'ITEM'}`,
+              )
+              .eq('Tipo_Op', 'Corte')
+
+            if (corteOperations && corteOperations.length > 0) {
+              const corteId = corteOperations[0].id
+              console.log(`✅ Found corresponding Corte operation: ${corteId}`)
+
+              // Prepare update data for Corte operation
+              const corteUpdateData: any = {}
+
+              if (field === 'material_id') {
+                corteUpdateData.material_id = value
+                console.log(`📦 Syncing material_id: ${value}`)
+              }
+
+              if (field === 'num_placas_print') {
+                corteUpdateData.QT_print = value
+                console.log(`🔢 Syncing quantity to QT_print: ${value}`)
+              }
+
+              if (field === 'notas_imp') {
+                corteUpdateData.notas = value
+                console.log(`📝 Syncing notes: ${value}`)
+              }
+
+              if (field === 'N_Pal') {
+                corteUpdateData.N_Pal = value
+                console.log(`🎨 Syncing palette: ${value}`)
+              }
+
+              // Update the Corte operation
+              const { error: corteError } = await supabase
+                .from('producao_operacoes')
+                .update(corteUpdateData)
+                .eq('id', corteId)
+
+              if (corteError) {
+                console.error('Error syncing to Corte operation:', corteError)
+              } else {
+                console.log(`✅ Successfully synced changes to Corte operation`)
+              }
+            } else {
+              console.log(`ℹ️ No corresponding Corte operation found to sync`)
+            }
+          }
+        }
+
         // Update local state immediately for notes fields
         if (field === 'notas' || field === 'notas_imp') {
           setNotesValues((prev) => ({
@@ -1511,43 +1737,213 @@ function OperationsTable({
     }
   }
 
+  // NEW: Handle palette selection and auto-fill materials
+  const handlePaletteSelection = async (
+    operationId: string,
+    paletteId: string,
+  ) => {
+    console.log(
+      `🎨 Palette selection: operation=${operationId}, palette=${paletteId}`,
+    )
+
+    // Find the selected palette
+    const selectedPalette = paletes.find((p) => p.id === paletteId)
+    if (!selectedPalette) {
+      console.log(`❌ Palette not found: ${paletteId}`)
+      return
+    }
+
+    console.log(`✅ Found palette:`, selectedPalette)
+
+    // Update palette selection in local state immediately
+    setPaletteSelections((prev) => ({
+      ...prev,
+      [operationId]: paletteId,
+    }))
+
+    // Check if this is a pending operation
+    if (operationId.startsWith('temp_')) {
+      // For pending operations, update the pending state
+      updatePendingOperation(operationId, 'N_Pal', selectedPalette.no_palete)
+
+      // If the palette has a reference, also update material for pending operation
+      if (selectedPalette.ref_cartao) {
+        console.log(
+          `🔍 Looking for material with ref_cartao: ${selectedPalette.ref_cartao}`,
+        )
+        console.log(
+          `📦 Available materials:`,
+          materials
+            .filter((m) => m.tipo === 'RÍGIDOS')
+            .map((m) => ({
+              id: m.id,
+              referencia: m.referencia,
+              material: m.material,
+              carateristica: m.carateristica,
+              cor: m.cor,
+            })),
+        )
+
+        const matchingMaterial = materials.find(
+          (m) =>
+            m.referencia === selectedPalette.ref_cartao && m.tipo === 'RÍGIDOS',
+        )
+
+        console.log(`🎯 Found matching material:`, matchingMaterial)
+
+        if (matchingMaterial) {
+          console.log(
+            `🎯 Auto-filling material for pending operation:`,
+            matchingMaterial,
+          )
+          // IMPORTANT: Save the material_id to the pending operation data
+          updatePendingOperation(
+            operationId,
+            'material_id',
+            matchingMaterial.id,
+          )
+
+          // Update material selections immediately for UI display
+          setMaterialSelections((prev) => ({
+            ...prev,
+            [operationId]: {
+              material: matchingMaterial.material || '',
+              caracteristica: matchingMaterial.carateristica || '',
+              cor: matchingMaterial.cor || '',
+            },
+          }))
+        }
+      }
+    } else {
+      // For saved operations, save to database
+      console.log(`💾 Saving palette to database: ${selectedPalette.no_palete}`)
+      // updateOperation will automatically sync to Corte if this is an Impressão operation
+      await updateOperation(operationId, 'N_Pal', selectedPalette.no_palete)
+
+      // If the palette has a reference, try to auto-fill material
+      if (selectedPalette.ref_cartao) {
+        // Find material by reference (ref_cartao)
+        const matchingMaterial = materials.find(
+          (m) =>
+            m.referencia === selectedPalette.ref_cartao && m.tipo === 'RÍGIDOS',
+        )
+
+        if (matchingMaterial) {
+          console.log(`🎯 Auto-filling material:`, matchingMaterial)
+          // Update the operation's material_id - this will trigger onRefresh and auto-update the material combos
+          // This will also automatically sync to Corte if this is an Impressão operation
+          await updateOperation(operationId, 'material_id', matchingMaterial.id)
+
+          // Manually update material selections immediately for better UX
+          setMaterialSelections((prev) => ({
+            ...prev,
+            [operationId]: {
+              material: matchingMaterial.material || '',
+              caracteristica: matchingMaterial.carateristica || '',
+              cor: matchingMaterial.cor || '',
+            },
+          }))
+        } else {
+          console.log(
+            `❌ No matching material found for reference: ${selectedPalette.ref_cartao}`,
+          )
+        }
+      } else {
+        console.log(
+          `ℹ️ Palette has no ref_cartao: ${selectedPalette.no_palete}`,
+        )
+      }
+    }
+  }
+
   const deleteOperation = async (operationId: string) => {
     if (isUpdating) return
 
+    // Add confirmation dialog
+    if (!confirm('Tem certeza que deseja eliminar esta operação?')) {
+      return
+    }
+
     try {
       setIsUpdating(true)
+      console.log(`🗑️ Attempting to delete operation: ${operationId}`)
 
-      // Get operation details before deleting
-      const { data: operation } = await supabase
+      // Check if this is a pending operation (temp ID)
+      if (operationId.startsWith('temp_')) {
+        console.log(`🔄 Deleting pending operation: ${operationId}`)
+        // Remove from pending operations state
+        setPendingOperations((prev) => {
+          const updated = { ...prev }
+          delete updated[operationId]
+          return updated
+        })
+        alert('Operação eliminada com sucesso!')
+        return
+      }
+
+      // For saved operations, try to get operation details before deleting
+      const { data: operation, error: fetchError } = await supabase
         .from('producao_operacoes')
         .select('material_id, num_placas_corte, Tipo_Op')
         .eq('id', operationId)
         .single()
 
-      const { error } = await supabase
+      if (fetchError) {
+        console.error('Error fetching operation before delete:', fetchError)
+
+        // If operation doesn't exist (already deleted or sync issue), just refresh
+        if (fetchError.code === 'PGRST116') {
+          console.log(
+            `ℹ️ Operation not found in database, probably already deleted`,
+          )
+          onRefresh()
+          alert('Operação não encontrada (possivelmente já eliminada)')
+          return
+        }
+
+        alert(`Erro ao buscar operação: ${fetchError.message}`)
+        return
+      }
+
+      console.log(`📋 Operation to delete:`, operation)
+
+      const { data: deleteData, error: deleteError } = await supabase
         .from('producao_operacoes')
         .delete()
         .eq('id', operationId)
+        .select()
 
-      if (!error) {
-        // Add stock back if it was a cutting operation
-        if (
-          operation &&
-          operation.Tipo_Op === 'Corte' &&
-          operation.material_id &&
-          operation.num_placas_corte
-        ) {
-          await updateStockOnOperation(
-            operation.material_id,
-            operation.num_placas_corte,
-            0,
-          )
-        }
+      console.log(`🗑️ Delete result:`, { deleteData, deleteError })
 
-        onRefresh()
+      if (deleteError) {
+        console.error('Error deleting operation:', deleteError)
+        alert(`Erro ao eliminar operação: ${deleteError.message}`)
+        return
       }
+
+      console.log(`✅ Operation deleted successfully`)
+
+      // Add stock back if it was a cutting operation
+      if (
+        operation &&
+        operation.Tipo_Op === 'Corte' &&
+        operation.material_id &&
+        operation.num_placas_corte
+      ) {
+        console.log(`📦 Restoring stock for cutting operation`)
+        await updateStockOnOperation(
+          operation.material_id,
+          operation.num_placas_corte,
+          0,
+        )
+      }
+
+      // Refresh the data
+      onRefresh()
+      alert('Operação eliminada com sucesso!')
     } catch (error) {
       console.error('Error deleting operation:', error)
+      alert(`Erro inesperado ao eliminar operação: ${error}`)
     } finally {
       setIsUpdating(false)
     }
@@ -1584,8 +1980,9 @@ function OperationsTable({
             <Input
               value={item.designer_items.path_trabalho}
               readOnly
-              className="flex-1 rounded-none font-mono text-sm select-all"
-              title="Clique para selecionar todo o texto"
+              className="flex-1 cursor-text rounded-none font-mono text-sm select-all"
+              title="Campo apenas de leitura - clique para selecionar todo o texto"
+              style={{ cursor: 'text' }}
             />
             <Button
               size="icon"
@@ -1594,13 +1991,15 @@ function OperationsTable({
                 navigator.clipboard
                   .writeText(item.designer_items?.path_trabalho || '')
                   .then(() => {
-                    // Optional: show toast notification
+                    alert('Path copiado para a área de transferência!')
                   })
                   .catch((err) => {
                     console.error('Failed to copy: ', err)
+                    alert('Erro ao copiar path')
                   })
               }}
-              title="Copiar path"
+              title="Copiar path para área de transferência"
+              className="shrink-0"
             >
               <Copy className="h-4 w-4" />
             </Button>
@@ -1623,6 +2022,9 @@ function OperationsTable({
                   Máquina
                 </TableHead>
                 <TableHead className="border-border w-[160px] min-w-[160px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
+                  Pallete
+                </TableHead>
+                <TableHead className="border-border w-[160px] min-w-[160px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
                   Material
                 </TableHead>
                 <TableHead className="border-border w-[160px] min-w-[160px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
@@ -1631,13 +2033,18 @@ function OperationsTable({
                 <TableHead className="border-border w-[240px] min-w-[240px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
                   Cor
                 </TableHead>
+                {type === 'corte' && (
+                  <TableHead className="border-border w-[80px] min-w-[80px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
+                    QT_print
+                  </TableHead>
+                )}
                 <TableHead className="border-border w-[80px] min-w-[80px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
                   Quantidade
                 </TableHead>
                 <TableHead className="border-border border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
                   {type === 'impressao' ? 'Notas Imp.' : 'Notas'}
                 </TableHead>
-                <TableHead className="border-border w-[90px] min-w-[90px] border-b-2 bg-[var(--orange)] p-2 text-center text-sm text-black uppercase">
+                <TableHead className="border-border w-[130px] min-w-[130px] border-b-2 bg-[var(--orange)] p-2 text-center text-sm text-black uppercase">
                   Ações
                 </TableHead>
               </TableRow>
@@ -1678,18 +2085,34 @@ function OperationsTable({
                           {isUpdating ? (
                             <div className="flex items-center gap-2">
                               <Loader2 className="h-4 w-4 animate-spin" />
-                              <span>Atualizando...</span>
+                              <span className="truncate uppercase">
+                                Atualizando...
+                              </span>
                             </div>
-                          ) : operation.operador_id && operation.profiles ? (
-                            `${operation.profiles.first_name} ${operation.profiles.last_name}`
+                          ) : operation.operador_id ? (
+                            <span className="truncate uppercase">
+                              {operation.profiles
+                                ? `${operation.profiles.first_name} ${operation.profiles.last_name}`
+                                : operators.find(
+                                      (op) => op.id === operation.operador_id,
+                                    )
+                                  ? `${operators.find((op) => op.id === operation.operador_id)?.first_name} ${operators.find((op) => op.id === operation.operador_id)?.last_name}`
+                                  : 'Operador Selecionado'}
+                            </span>
                           ) : (
-                            'Selecionar operador'
+                            <span className="truncate uppercase">
+                              Selecionar operador
+                            </span>
                           )}
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent disablePortal>
                         {operators.map((operator) => (
-                          <SelectItem key={operator.id} value={operator.id}>
+                          <SelectItem
+                            key={operator.id}
+                            value={operator.id}
+                            className="uppercase"
+                          >
                             {operator.first_name} {operator.last_name}
                           </SelectItem>
                         ))}
@@ -1715,11 +2138,18 @@ function OperationsTable({
                     >
                       <SelectTrigger className="h-10 w-full">
                         <SelectValue placeholder="Selecionar máquina">
-                          {operation[machineField]
-                            ? machines.find(
-                                (m) => m.id === operation[machineField],
-                              )?.nome_maquina || 'Selecionar máquina'
-                            : 'Selecionar máquina'}
+                          <span className="truncate uppercase">
+                            {operation[machineField]
+                              ? machines.find(
+                                  (m) => m.id === operation[machineField],
+                                )?.nome_maquina ||
+                                machines.find(
+                                  (m) =>
+                                    m.nome_maquina === operation[machineField],
+                                )?.nome_maquina ||
+                                'Máquina Selecionada'
+                              : 'Selecionar máquina'}
+                          </span>
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent disablePortal>
@@ -1730,12 +2160,35 @@ function OperationsTable({
                               (type === 'impressao' ? 'Impressao' : 'Corte'),
                           )
                           .map((machine) => (
-                            <SelectItem key={machine.id} value={machine.id}>
+                            <SelectItem
+                              key={machine.id}
+                              value={machine.id}
+                              className="uppercase"
+                            >
                               {machine.nome_maquina}
                             </SelectItem>
                           ))}
                       </SelectContent>
                     </Select>
+                  </TableCell>
+                  {/* PALLETE Column - For both Impressão and Corte */}
+                  <TableCell className="w-[160px] min-w-[160px] p-2 text-sm">
+                    <Combobox
+                      options={paletes.map((palete) => ({
+                        value: palete.id,
+                        label: palete.no_palete,
+                      }))}
+                      value={paletteSelections[operation.id] || ''}
+                      onChange={(value: string) =>
+                        handlePaletteSelection(operation.id, value)
+                      }
+                      placeholder="Selecionar palete"
+                      emptyMessage="Nenhuma palete encontrada"
+                      searchPlaceholder="Procurar palete..."
+                      disabled={paletesLoading}
+                      className="h-10 w-full"
+                      buttonClassName="uppercase truncate"
+                    />
                   </TableCell>
                   {/* Material Combo 1 */}
                   <TableCell className="w-[160px] min-w-[160px] p-2 text-sm">
@@ -1753,7 +2206,12 @@ function OperationsTable({
                       }}
                     >
                       <SelectTrigger className="h-10 w-full">
-                        <SelectValue placeholder="Mat" />
+                        <SelectValue placeholder="Mat">
+                          <span className="truncate uppercase">
+                            {materialSelections[operation.id]?.material ||
+                              'Mat'}
+                          </span>
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent disablePortal>
                         {Array.from(
@@ -1764,7 +2222,11 @@ function OperationsTable({
                               .filter(Boolean),
                           ),
                         ).map((material) => (
-                          <SelectItem key={material} value={material}>
+                          <SelectItem
+                            key={material}
+                            value={material}
+                            className="uppercase"
+                          >
                             {material}
                           </SelectItem>
                         ))}
@@ -1793,7 +2255,12 @@ function OperationsTable({
                       disabled={!materialSelections[operation.id]?.material}
                     >
                       <SelectTrigger className="h-10 w-full">
-                        <SelectValue placeholder="Caract" />
+                        <SelectValue placeholder="Caract">
+                          <span className="truncate uppercase">
+                            {materialSelections[operation.id]?.caracteristica ||
+                              'Caract'}
+                          </span>
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent disablePortal>
                         {(() => {
@@ -1814,6 +2281,7 @@ function OperationsTable({
                           <SelectItem
                             key={caracteristica}
                             value={caracteristica}
+                            className="uppercase"
                           >
                             {caracteristica}
                           </SelectItem>
@@ -1866,7 +2334,11 @@ function OperationsTable({
                       }
                     >
                       <SelectTrigger className="h-10 w-full">
-                        <SelectValue placeholder="Cor" />
+                        <SelectValue placeholder="Cor">
+                          <span className="truncate uppercase">
+                            {materialSelections[operation.id]?.cor || 'Cor'}
+                          </span>
+                        </SelectValue>
                       </SelectTrigger>
                       <SelectContent disablePortal>
                         {(() => {
@@ -1888,13 +2360,35 @@ function OperationsTable({
                           const unique = Array.from(new Set(filtered))
                           return unique
                         })().map((cor) => (
-                          <SelectItem key={cor} value={cor}>
+                          <SelectItem
+                            key={cor}
+                            value={cor}
+                            className="uppercase"
+                          >
                             {cor}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </TableCell>
+                  {type === 'corte' && (
+                    <TableCell className="w-[80px] min-w-[80px] p-2 text-sm">
+                      <Input
+                        type="number"
+                        className="h-10 w-full [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                        value={operation.QT_print || ''}
+                        onChange={(e) =>
+                          updateOperation(
+                            operation.id,
+                            'QT_print',
+                            Number(e.target.value),
+                          )
+                        }
+                        disabled
+                        style={{ backgroundColor: '#f3f4f6' }}
+                      />
+                    </TableCell>
+                  )}
                   <TableCell className="w-[80px] min-w-[80px] p-2 text-sm">
                     <Input
                       type="number"
@@ -1935,10 +2429,27 @@ function OperationsTable({
                       className="h-8 w-full rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
                     />
                   </TableCell>
-                  <TableCell className="w-[90px] min-w-[90px] p-2 text-sm">
+                  <TableCell className="w-[130px] min-w-[130px] p-2 text-sm">
                     {(operation as any).isPending ? (
-                      // For pending operations: Accept and Cancel buttons
-                      <div className="flex justify-center gap-2">
+                      // For pending operations: Duplicate, Accept and Cancel buttons
+                      <div className="flex justify-center gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => duplicateOperation(operation)}
+                                disabled={isUpdating}
+                                className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Duplicar</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+
                         <TooltipProvider>
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -1976,8 +2487,25 @@ function OperationsTable({
                         </Button>
                       </div>
                     ) : (
-                      // For saved operations: Only delete button
-                      <div className="flex justify-center gap-2">
+                      // For saved operations: Duplicate and Delete buttons
+                      <div className="flex justify-center gap-1">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => duplicateOperation(operation)}
+                                disabled={isUpdating}
+                                className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Duplicar</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+
                         <Button
                           size="icon"
                           variant="destructive"
@@ -1991,9 +2519,12 @@ function OperationsTable({
                   </TableCell>
                 </TableRow>
               ))}
-              {operations.length === 0 && (
+              {displayOperations.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="py-8 text-center">
+                  <TableCell
+                    colSpan={type === 'corte' ? 11 : 10}
+                    className="py-8 text-center"
+                  >
                     Nenhuma operação encontrada.
                   </TableCell>
                 </TableRow>

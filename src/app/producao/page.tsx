@@ -72,7 +72,7 @@ import {
   Grid2x2Check,
   Loader2,
   SquareChartGantt,
-  FileSpreadsheet,
+  Download,
 } from 'lucide-react'
 import LogisticaTableWithCreatable from '@/components/LogisticaTableWithCreatable'
 import { LogisticaRecord } from '@/types/logistica'
@@ -1303,7 +1303,7 @@ export default function ProducaoPage() {
                     }}
                     title="Exportar para Excel"
                   >
-                    <FileSpreadsheet className="h-4 w-4" />
+                    <Download className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Exportar Excel</TooltipContent>

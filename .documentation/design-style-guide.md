@@ -1061,6 +1061,27 @@ All icon buttons must use this exact pattern to ensure they are truly square (no
 </Button>
 ```
 
+#### Export to Excel Buttons - Standard Pattern
+```tsx
+{/* Excel export button - always use Download icon with default variant */}
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button 
+        variant="default" 
+        size="icon" 
+        className="!h-10 !w-10 !min-w-10 !max-w-10 !p-0 !rounded-none aspect-square"
+        onClick={exportToExcel}
+        disabled={data.length === 0}
+      >
+        <Download className="h-4 w-4" />
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>Exportar para Excel</TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+```
+
 #### Text Buttons - Sharp Corners Only
 ```tsx
 {/* Icon with text - use default height, no width constraint, SHARP CORNERS */}
@@ -1126,6 +1147,20 @@ All icon buttons must use this exact pattern to ensure they are truly square (no
       </Button>
     </TooltipTrigger>
     <TooltipContent>Atualizar</TooltipContent>
+  </Tooltip>
+</TooltipProvider>
+```
+
+#### Example: Export to Excel Button
+```tsx
+<TooltipProvider>
+  <Tooltip>
+    <TooltipTrigger asChild>
+      <Button variant="default" size="icon" aria-label="Exportar para Excel">
+        <Download className="h-4 w-4" />
+      </Button>
+    </TooltipTrigger>
+    <TooltipContent>Exportar para Excel</TooltipContent>
   </Tooltip>
 </TooltipProvider>
 ```
@@ -1582,6 +1617,7 @@ Use `w-4 h-4` for most icons, `w-5 h-5` for larger elements
 - Refresh: `RotateCw`
 - Clear/Close: `X`
 - Sort: `ArrowUp`, `ArrowDown`
+- **Export to Excel**: `Download` (always variant="default", with "Exportar para Excel" tooltip) - for CSV/Excel export functionality
 - Status: Use colored dots instead of icons
 - File: `FileText`, `FilePlus`
 - Notes: `FileText` (always, handled by SimpleNotasPopover/NotasPopover)
@@ -1646,7 +1682,7 @@ Use these custom properties consistently:
 - [ ] **For inline editing**: Use Edit icon with variant="default", size="icon", "Editar" tooltip, makes table row fields editable with save/cancel buttons
 - [ ] **For drawer opening**: Use Eye icon with variant="default", size="icon", appropriate tooltip, opens detailed view in drawer
 - [ ] All tables use consistent action button patterns based on their functionality (inline edit vs drawer view)
-- [ ] All export-to-Excel actions use the standard Exportar Excel button: icon-only, FileSpreadsheet icon, variant="default" (primary color), size="icon", always wrapped in a Tooltip with label 'Exportar Excel'
+- [ ] All export-to-Excel actions use the standard Exportar Excel button: icon-only, Download icon, variant="default" (primary color), size="icon", always wrapped in a Tooltip with label 'Exportar para Excel'
 - [ ] All notas (notes) buttons follow the style: icon-only, FileText icon, buttonSize="icon", className="mx-auto aspect-square", variant="link" if notes exist, variant="ghost" if empty, always wrapped in a Tooltip showing full notes content on hover
 - [ ] All icon-only buttons are wrapped in a Tooltip with a clear, descriptive label
 - [ ] **Table Component Consistency**: All inputs use `h-10` height, item fields use `Textarea` for wrapping, date pickers specify `buttonClassName="w-full h-10"`
@@ -1694,7 +1730,7 @@ import NotasPopover from '@/components/ui/NotasPopover';
 
 Common Lucide icons:
 ```tsx
-import { Plus, Eye, Trash2, X, RotateCw, ArrowUp, ArrowDown, Loader2, FileText, FileSpreadsheet } from "lucide-react";
+import { Plus, Eye, Trash2, X, RotateCw, ArrowUp, ArrowDown, Loader2, FileText, Download } from "lucide-react";
 ```
 
 ## 🟧 Border Radius Policy

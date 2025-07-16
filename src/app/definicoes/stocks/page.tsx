@@ -23,6 +23,7 @@ import {
   DrawerDescription,
 } from '@/components/ui/drawer'
 import { Textarea } from '@/components/ui/textarea'
+import DatePicker from '@/components/ui/DatePicker'
 import {
   Select,
   SelectContent,
@@ -49,6 +50,7 @@ import {
   Package,
   ArrowUp,
   ArrowDown,
+  Download,
 } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
 import { StockEntryWithRelations } from '@/types/producao'
@@ -91,6 +93,47 @@ interface CurrentStock {
   stock_correct_updated_at?: string | null
 }
 
+interface Palete {
+  id: string
+  no_palete: string
+  fornecedor_id: string | null
+  no_guia_forn: string | null
+  ref_cartao: string | null
+  qt_palete: number | null
+  data: string
+  author_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+interface PaleteWithRelations extends Palete {
+  fornecedores?: {
+    id: string
+    nome_forn: string
+  } | null
+  profiles?: {
+    id: string
+    first_name: string
+    last_name: string
+  } | null
+}
+
+interface Profile {
+  id: string
+  first_name: string
+  last_name: string
+  user_id: string
+}
+
+interface PaletesFilters {
+  search?: string
+  referencia?: string
+  fornecedor?: string
+  author?: string
+  dateFrom?: string
+  dateTo?: string
+}
+
 export default function StocksPage() {
   // Define formatMaterialName at the very top so it is available everywhere
   const formatMaterialName = (material: any) => {
@@ -119,6 +162,45 @@ export default function StocksPage() {
   const [editingStock, setEditingStock] =
     useState<StockEntryWithRelations | null>(null)
   const [activeTab, setActiveTab] = useState('entries')
+
+  // Paletes state
+  const [paletes, setPaletes] = useState<PaleteWithRelations[]>([])
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [paletesLoading, setPaletesLoading] = useState(true)
+  const [editingPaleteId, setEditingPaleteId] = useState<string | null>(null)
+  const [paletesFilter, setPaletesFilter] = useState('')
+  const [paletesReferenciaFilter, setPaletesReferenciaFilter] = useState('')
+
+  // Enhanced filtering for paletes
+  const [paletesDateFrom, setPaletesDateFrom] = useState('')
+  const [paletesDateTo, setPaletesDateTo] = useState('')
+  const [paletesFornecedorFilter, setPaletesFornecedorFilter] =
+    useState('__all__')
+  const [paletesAuthorFilter, setPaletesAuthorFilter] = useState('__all__')
+
+  // Sorting state for paletes table
+  const [sortColumnPaletes, setSortColumnPaletes] =
+    useState<string>('no_palete')
+  const [sortDirectionPaletes, setSortDirectionPaletes] = useState<
+    'asc' | 'desc'
+  >('asc')
+
+  // Inline editing state for paletes
+  const [showNewPaleteRow, setShowNewPaleteRow] = useState(false)
+  const [newPaleteData, setNewPaleteData] = useState({
+    no_palete: '',
+    fornecedor_id: '',
+    no_guia_forn: '',
+    ref_cartao: '',
+    qt_palete: '',
+    data: new Date().toISOString().split('T')[0],
+    author_id: '',
+  })
+  const [editingPaleteData, setEditingPaleteData] = useState<{
+    [key: string]: any
+  }>({})
+  const [submittingPalete, setSubmittingPalete] = useState(false)
+
   const [formData, setFormData] = useState({
     material_id: '',
     material_referencia: '',
@@ -383,6 +465,125 @@ export default function StocksPage() {
     }
   }
 
+  const fetchPaletes = async (filters: PaletesFilters = {}) => {
+    setPaletesLoading(true)
+    try {
+      let query = supabase.from('paletes').select(`
+          *,
+          fornecedores(id, nome_forn),
+          profiles(id, first_name, last_name)
+        `)
+
+      // Apply filters at database level
+      if (filters.search?.trim()) {
+        const searchTerm = filters.search.trim()
+        // Search in palette number, guide number, and reference
+        query = query.or(
+          `no_palete.ilike.%${searchTerm}%,no_guia_forn.ilike.%${searchTerm}%,ref_cartao.ilike.%${searchTerm}%`,
+        )
+      }
+
+      if (filters.referencia?.trim()) {
+        query = query.ilike('ref_cartao', `%${filters.referencia.trim()}%`)
+      }
+
+      if (filters.fornecedor && filters.fornecedor !== '__all__') {
+        // First get the fornecedor ID if filtering by name
+        const { data: fornecedorData } = await supabase
+          .from('fornecedores')
+          .select('id')
+          .ilike('nome_forn', `%${filters.fornecedor}%`)
+
+        if (fornecedorData && fornecedorData.length > 0) {
+          const fornecedorIds = fornecedorData.map((f) => f.id)
+          query = query.in('fornecedor_id', fornecedorIds)
+        } else {
+          // No matching suppliers found, return empty result
+          setPaletes([])
+          setPaletesLoading(false)
+          return
+        }
+      }
+
+      if (filters.author && filters.author !== '__all__') {
+        // First get the profile ID if filtering by name
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('id')
+          .or(
+            `first_name.ilike.%${filters.author}%,last_name.ilike.%${filters.author}%`,
+          )
+
+        if (profileData && profileData.length > 0) {
+          const profileIds = profileData.map((p) => p.id)
+          query = query.in('author_id', profileIds)
+        } else {
+          // No matching authors found, return empty result
+          setPaletes([])
+          setPaletesLoading(false)
+          return
+        }
+      }
+
+      // Apply default 6-month filter if no date filters are provided
+      if (!filters.dateFrom && !filters.dateTo) {
+        const sixMonthsAgo = new Date()
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
+        const defaultDateFrom = sixMonthsAgo.toISOString().split('T')[0]
+        query = query.gte('data', defaultDateFrom)
+      } else {
+        // Apply user-provided date filters
+        if (filters.dateFrom) {
+          query = query.gte('data', filters.dateFrom)
+        }
+
+        if (filters.dateTo) {
+          query = query.lte('data', filters.dateTo)
+        }
+      }
+
+      const { data, error } = await query.order('created_at', {
+        ascending: false,
+      })
+
+      if (!error && data) {
+        setPaletes(data)
+      }
+    } catch (error) {
+      console.error('Error fetching paletes:', error)
+    } finally {
+      setPaletesLoading(false)
+    }
+  }
+
+  // Wrapper function for refresh button
+  const refreshPaletes = () => {
+    const currentFilters = {
+      search: paletesFilter,
+      referencia: paletesReferenciaFilter,
+      fornecedor: paletesFornecedorFilter,
+      author: paletesAuthorFilter,
+      dateFrom: paletesDateFrom,
+      dateTo: paletesDateTo,
+    }
+    fetchPaletes(currentFilters)
+  }
+
+  const fetchProfiles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, user_id')
+        .order('first_name', { ascending: true })
+
+      if (!error && data) {
+        setProfiles(data)
+      }
+    } catch (error) {
+      console.error('Error fetching profiles:', error)
+    }
+  }
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -391,6 +592,8 @@ export default function StocksPage() {
           fetchMaterials(),
           fetchFornecedores(),
           fetchCurrentStocks(),
+          fetchPaletes(),
+          fetchProfiles(),
         ])
       } catch (error) {
         console.error('Error loading initial data:', error)
@@ -399,6 +602,26 @@ export default function StocksPage() {
 
     loadData()
   }, [])
+
+  // Effect to trigger filtering when paletes filters change
+  useEffect(() => {
+    const filters = {
+      search: paletesFilter,
+      referencia: paletesReferenciaFilter,
+      fornecedor: paletesFornecedorFilter,
+      author: paletesAuthorFilter,
+      dateFrom: paletesDateFrom,
+      dateTo: paletesDateTo,
+    }
+    fetchPaletes(filters)
+  }, [
+    paletesFilter,
+    paletesReferenciaFilter,
+    paletesFornecedorFilter,
+    paletesAuthorFilter,
+    paletesDateFrom,
+    paletesDateTo,
+  ])
 
   useEffect(() => {
     const handleFocus = () => {
@@ -450,6 +673,9 @@ export default function StocksPage() {
     return matchesMaterial && matchesReferencia
   })
 
+  // Paletes are now filtered at database level, no need for client-side filtering
+  const filteredPaletes = paletes
+
   // Sorting logic for entries table
   const handleSortEntries = (column: string) => {
     if (sortColumnEntries === column) {
@@ -467,6 +693,16 @@ export default function StocksPage() {
     } else {
       setSortColumnCurrent(column)
       setSortDirectionCurrent('asc')
+    }
+  }
+
+  // Sorting logic for paletes table
+  const handleSortPaletes = (column: string) => {
+    if (sortColumnPaletes === column) {
+      setSortDirectionPaletes((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortColumnPaletes(column)
+      setSortDirectionPaletes('asc')
     }
   }
 
@@ -564,6 +800,40 @@ export default function StocksPage() {
       return sortDirectionCurrent === 'asc' ? aValue - bValue : bValue - aValue
     }
     return sortDirectionCurrent === 'asc'
+      ? String(aValue).localeCompare(String(bValue))
+      : String(bValue).localeCompare(String(aValue))
+  })
+
+  // Sort helper for paletes table
+  const sortedPaletes = [...filteredPaletes].sort((a, b) => {
+    const getValue = (palete: any, col: string) => {
+      switch (col) {
+        case 'no_palete':
+          return palete.no_palete || ''
+        case 'fornecedor':
+          return palete.fornecedores?.nome_forn || ''
+        case 'no_guia_forn':
+          return palete.no_guia_forn || ''
+        case 'ref_cartao':
+          return palete.ref_cartao || ''
+        case 'qt_palete':
+          return palete.qt_palete ?? 0
+        case 'data':
+          return new Date(palete.data).getTime()
+        case 'author':
+          return palete.profiles
+            ? `${palete.profiles.first_name} ${palete.profiles.last_name}`
+            : ''
+        default:
+          return ''
+      }
+    }
+    const aValue = getValue(a, sortColumnPaletes)
+    const bValue = getValue(b, sortColumnPaletes)
+    if (typeof aValue === 'number' && typeof bValue === 'number') {
+      return sortDirectionPaletes === 'asc' ? aValue - bValue : bValue - aValue
+    }
+    return sortDirectionPaletes === 'asc'
       ? String(aValue).localeCompare(String(bValue))
       : String(bValue).localeCompare(String(aValue))
   })
@@ -1041,6 +1311,453 @@ export default function StocksPage() {
     }
   }
 
+  // Export entries to Excel
+  const exportEntriesToExcel = () => {
+    try {
+      // Prepare data for export
+      const exportData = sortedStocks.map((stock) => ({
+        Data: stock.data
+          ? new Date(stock.data).toLocaleDateString('pt-PT')
+          : '',
+        Referência: stock.materiais?.referencia || '',
+        Material: formatMaterialName(stock.materiais),
+        Fornecedor: stock.fornecedores?.nome_forn || '',
+        Quantidade: stock.quantidade || 0,
+        VL_m2: (stock as any).vl_m2 || '',
+        'Preço Unitário': stock.preco_unitario || 0,
+        'Valor Total': stock.valor_total || 0,
+        'Nº Palete': stock.n_palet || '',
+        'Nº Guia Fornecedor': stock.no_guia_forn || '',
+        Notas: stock.notas || '',
+        'Criado em': stock.created_at
+          ? new Date(stock.created_at).toLocaleDateString('pt-PT')
+          : '',
+      }))
+
+      // Create CSV content
+      const headers = Object.keys(exportData[0] || {})
+      const csvContent = [
+        headers.join(';'),
+        ...exportData.map((row) =>
+          headers
+            .map((header) => {
+              const value = row[header as keyof typeof row]
+              // Wrap in quotes if contains comma, semicolon, or newline
+              const stringValue = String(value)
+              return stringValue.includes(';') ||
+                stringValue.includes(',') ||
+                stringValue.includes('\n')
+                ? `"${stringValue.replace(/"/g, '""')}"`
+                : stringValue
+            })
+            .join(';'),
+        ),
+      ].join('\n')
+
+      // Create and download file
+      const blob = new Blob(['\ufeff' + csvContent], {
+        type: 'text/csv;charset=utf-8;',
+      })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+
+      // Generate filename with current date
+      const now = new Date()
+      const dateStr = now.toISOString().split('T')[0]
+      link.setAttribute('download', `entradas_stock_${dateStr}.csv`)
+
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      alert(`Exportadas ${exportData.length} entradas de stock para Excel`)
+    } catch (error) {
+      console.error('Error exporting entries:', error)
+      alert('Erro ao exportar entradas de stock')
+    }
+  }
+
+  // Export current stocks to Excel
+  const exportCurrentStocksToExcel = () => {
+    try {
+      // Prepare data for export
+      const exportData = sortedCurrentStocks.map((stock) => ({
+        Referência: getReferenciaByMaterialId(stock.id),
+        Material: formatCurrentStockMaterialName(stock),
+        'Total Recebido': Math.round(stock.total_recebido),
+        'Total Consumido': Math.round(stock.total_consumido),
+        'Stock Atual': Math.round(stock.stock_atual),
+        'Stock Mínimo': stock.stock_minimo ?? '',
+        'Stock Crítico': stock.stock_critico ?? '',
+        'Correção Manual': stock.stock_correct ?? '',
+        'Stock Final':
+          stock.stock_correct !== null && stock.stock_correct !== undefined
+            ? stock.stock_correct
+            : stock.stock_atual,
+        Status: getStockStatusText(
+          stock.stock_correct !== null && stock.stock_correct !== undefined
+            ? stock.stock_correct
+            : stock.stock_atual,
+          stock.stock_critico,
+          stock.stock_minimo,
+        ),
+        'Última Correção': stock.stock_correct_updated_at
+          ? new Date(stock.stock_correct_updated_at).toLocaleDateString('pt-PT')
+          : '',
+      }))
+
+      // Create CSV content
+      const headers = Object.keys(exportData[0] || {})
+      const csvContent = [
+        headers.join(';'),
+        ...exportData.map((row) =>
+          headers
+            .map((header) => {
+              const value = row[header as keyof typeof row]
+              // Wrap in quotes if contains comma, semicolon, or newline
+              const stringValue = String(value)
+              return stringValue.includes(';') ||
+                stringValue.includes(',') ||
+                stringValue.includes('\n')
+                ? `"${stringValue.replace(/"/g, '""')}"`
+                : stringValue
+            })
+            .join(';'),
+        ),
+      ].join('\n')
+
+      // Create and download file
+      const blob = new Blob(['\ufeff' + csvContent], {
+        type: 'text/csv;charset=utf-8;',
+      })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+
+      // Generate filename with current date
+      const now = new Date()
+      const dateStr = now.toISOString().split('T')[0]
+      link.setAttribute('download', `stock_atual_${dateStr}.csv`)
+
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      alert(
+        `Exportados ${exportData.length} materiais de stock atual para Excel`,
+      )
+    } catch (error) {
+      console.error('Error exporting current stocks:', error)
+      alert('Erro ao exportar stock atual')
+    }
+  }
+
+  // Export palettes to Excel
+  const exportPaletesToExcel = () => {
+    try {
+      // Prepare data for export
+      const exportData = sortedPaletes.map((palete) => ({
+        'Nº Palete': palete.no_palete || '',
+        Fornecedor: palete.fornecedores?.nome_forn || '',
+        'Nº Guia': palete.no_guia_forn || '',
+        'Ref. Cartão': palete.ref_cartao || '',
+        'Qt. Palete': palete.qt_palete || 0,
+        Data: palete.data
+          ? new Date(palete.data).toLocaleDateString('pt-PT')
+          : '',
+        Autor: palete.profiles
+          ? `${palete.profiles.first_name} ${palete.profiles.last_name}`
+          : '',
+        'Criado em': palete.created_at
+          ? new Date(palete.created_at).toLocaleDateString('pt-PT')
+          : '',
+      }))
+
+      // Create CSV content
+      const headers = Object.keys(exportData[0] || {})
+      const csvContent = [
+        headers.join(';'),
+        ...exportData.map((row) =>
+          headers
+            .map((header) => {
+              const value = row[header as keyof typeof row]
+              // Wrap in quotes if contains comma, semicolon, or newline
+              const stringValue = String(value)
+              return stringValue.includes(';') ||
+                stringValue.includes(',') ||
+                stringValue.includes('\n')
+                ? `"${stringValue.replace(/"/g, '""')}"`
+                : stringValue
+            })
+            .join(';'),
+        ),
+      ].join('\n')
+
+      // Create and download file
+      const blob = new Blob(['\ufeff' + csvContent], {
+        type: 'text/csv;charset=utf-8;',
+      })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+
+      // Generate filename with current date
+      const now = new Date()
+      const dateStr = now.toISOString().split('T')[0]
+      link.setAttribute('download', `paletes_${dateStr}.csv`)
+
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      alert(`Exportadas ${exportData.length} paletes para Excel`)
+    } catch (error) {
+      console.error('Error exporting palettes:', error)
+      alert('Erro ao exportar paletes')
+    }
+  }
+
+  // Helper functions for paletes management
+  const getReferenciaOptions = () => {
+    // Filter materials by material = 'Cartão' (case insensitive)
+    const cartaoMaterials = materials.filter(
+      (material) =>
+        material.material && material.material.toLowerCase() === 'cartão',
+    )
+
+    const uniqueReferences = Array.from(
+      new Set(
+        cartaoMaterials.map((material) => material.referencia).filter(Boolean),
+      ),
+    ) as string[]
+    return uniqueReferences.map((ref) => ({ value: ref, label: ref }))
+  }
+
+  // Check if palette number is duplicate
+  const isPaleteNumberDuplicate = (
+    paleteNumber: string,
+    excludeId?: string,
+  ) => {
+    if (!paleteNumber.trim()) return false
+    return paletes.some(
+      (p) =>
+        (!excludeId || p.id !== excludeId) &&
+        p.no_palete.toLowerCase() === paleteNumber.toLowerCase(),
+    )
+  }
+
+  const getProfileOptions = () => {
+    return profiles.map((profile) => ({
+      value: profile.id,
+      label: `${profile.first_name} ${profile.last_name}`,
+    }))
+  }
+
+  const getNextPaleteNumber = () => {
+    if (paletes.length === 0) return 'P1'
+
+    const numbers = paletes
+      .map((p) => p.no_palete)
+      .filter((num) => num.startsWith('P'))
+      .map((num) => parseInt(num.substring(1)))
+      .filter((num) => !isNaN(num))
+
+    if (numbers.length === 0) return 'P1'
+
+    const maxNumber = Math.max(...numbers)
+    return `P${maxNumber + 1}`
+  }
+
+  const handleSaveNewPalete = async () => {
+    if (!newPaleteData.fornecedor_id || !newPaleteData.author_id) {
+      alert('Por favor, preencha todos os campos obrigatórios.')
+      return
+    }
+
+    // Validate palette number uniqueness
+    const paleteNumber = newPaleteData.no_palete || getNextPaleteNumber()
+    const isDuplicate = paletes.some(
+      (p) => p.no_palete.toLowerCase() === paleteNumber.toLowerCase(),
+    )
+    if (isDuplicate) {
+      alert(
+        `Número de palete "${paleteNumber}" já existe. Por favor, escolha outro número.`,
+      )
+      return
+    }
+
+    // Validate quantity
+    if (newPaleteData.qt_palete && parseInt(newPaleteData.qt_palete) <= 0) {
+      alert('Quantidade da palete deve ser maior que zero.')
+      return
+    }
+
+    setSubmittingPalete(true)
+    try {
+      const paleteData = {
+        no_palete: newPaleteData.no_palete || getNextPaleteNumber(),
+        fornecedor_id: newPaleteData.fornecedor_id,
+        no_guia_forn: newPaleteData.no_guia_forn || null,
+        ref_cartao: newPaleteData.ref_cartao || null,
+        qt_palete: newPaleteData.qt_palete
+          ? parseInt(newPaleteData.qt_palete)
+          : null,
+        data: newPaleteData.data,
+        author_id: newPaleteData.author_id,
+      }
+
+      const { data, error } = await supabase.from('paletes').insert(paleteData)
+        .select(`
+          *,
+          fornecedores(id, nome_forn),
+          profiles(id, first_name, last_name)
+        `)
+
+      if (error) {
+        console.error('Error creating palete:', error)
+        alert(`Erro ao criar palete: ${error.message}`)
+        return
+      }
+
+      if (data && data[0]) {
+        setPaletes((prev) => [data[0], ...prev])
+        handleCancelNewPalete()
+      }
+    } catch (error) {
+      console.error('Error saving palete:', error)
+      alert(`Erro inesperado: ${error}`)
+    } finally {
+      setSubmittingPalete(false)
+    }
+  }
+
+  const handleCancelNewPalete = () => {
+    setShowNewPaleteRow(false)
+    setNewPaleteData({
+      no_palete: '',
+      fornecedor_id: '',
+      no_guia_forn: '',
+      ref_cartao: '',
+      qt_palete: '',
+      data: new Date().toISOString().split('T')[0],
+      author_id: '',
+    })
+  }
+
+  const handleEditPalete = (palete: PaleteWithRelations) => {
+    setEditingPaleteId(palete.id)
+    setEditingPaleteData({
+      [palete.id]: {
+        no_palete: palete.no_palete,
+        fornecedor_id: palete.fornecedor_id || '',
+        no_guia_forn: palete.no_guia_forn || '',
+        ref_cartao: palete.ref_cartao || '',
+        qt_palete: palete.qt_palete?.toString() || '',
+        data: palete.data,
+        author_id: palete.author_id || '',
+      },
+    })
+  }
+
+  const handleSaveEditPalete = async (paleteId: string) => {
+    const editData = editingPaleteData[paleteId]
+    if (!editData) return
+
+    // Validate palette number uniqueness (excluding current palette)
+    const paleteNumber = editData.no_palete
+    const isDuplicate = paletes.some(
+      (p) =>
+        p.id !== paleteId &&
+        p.no_palete.toLowerCase() === paleteNumber.toLowerCase(),
+    )
+    if (isDuplicate) {
+      alert(
+        `Número de palete "${paleteNumber}" já existe. Por favor, escolha outro número.`,
+      )
+      return
+    }
+
+    // Validate required fields
+    if (!editData.fornecedor_id || !editData.author_id) {
+      alert('Por favor, preencha todos os campos obrigatórios.')
+      return
+    }
+
+    // Validate quantity
+    if (editData.qt_palete && parseInt(editData.qt_palete) <= 0) {
+      alert('Quantidade da palete deve ser maior que zero.')
+      return
+    }
+
+    setSubmittingPalete(true)
+    try {
+      const updateData = {
+        no_palete: editData.no_palete,
+        fornecedor_id: editData.fornecedor_id || null,
+        no_guia_forn: editData.no_guia_forn || null,
+        ref_cartao: editData.ref_cartao || null,
+        qt_palete: editData.qt_palete ? parseInt(editData.qt_palete) : null,
+        data: editData.data,
+        author_id: editData.author_id || null,
+        updated_at: new Date().toISOString(),
+      }
+
+      const { data, error } = await supabase
+        .from('paletes')
+        .update(updateData)
+        .eq('id', paleteId).select(`
+          *,
+          fornecedores(id, nome_forn),
+          profiles(id, first_name, last_name)
+        `)
+
+      if (error) {
+        console.error('Error updating palete:', error)
+        alert(`Erro ao atualizar palete: ${error.message}`)
+        return
+      }
+
+      if (data && data[0]) {
+        setPaletes((prev) => prev.map((p) => (p.id === paleteId ? data[0] : p)))
+        handleCancelEditPalete()
+      }
+    } catch (error) {
+      console.error('Error updating palete:', error)
+      alert(`Erro inesperado: ${error}`)
+    } finally {
+      setSubmittingPalete(false)
+    }
+  }
+
+  const handleCancelEditPalete = () => {
+    setEditingPaleteId(null)
+    setEditingPaleteData({})
+  }
+
+  const handleDeletePalete = async (paleteId: string) => {
+    if (!confirm('Tem a certeza que quer eliminar esta palete?')) return
+
+    try {
+      const { error } = await supabase
+        .from('paletes')
+        .delete()
+        .eq('id', paleteId)
+
+      if (!error) {
+        setPaletes((prev) => prev.filter((p) => p.id !== paleteId))
+      } else {
+        alert(`Erro ao eliminar palete: ${error.message}`)
+      }
+    } catch (error) {
+      console.error('Error deleting palete:', error)
+      alert(`Erro inesperado: ${error}`)
+    }
+  }
+
   return (
     <PermissionGuard>
       <div className="w-full space-y-6">
@@ -1051,36 +1768,121 @@ export default function StocksPage() {
         {/* Universal filter bar */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Input
-              placeholder="FILTRAR POR MATERIAL..."
-              value={
-                activeTab === 'entries' ? materialFilter : currentStockFilter
-              }
-              onChange={(e) => {
-                if (activeTab === 'entries') {
-                  setMaterialFilter(e.target.value)
-                } else {
-                  setCurrentStockFilter(e.target.value)
+            {activeTab === 'palettes' ? (
+              <Combobox
+                value={paletesFilter}
+                onChange={setPaletesFilter}
+                options={Array.from(
+                  new Set(paletes.map((p) => p.no_palete).filter(Boolean)),
+                ).map((palete) => ({
+                  value: palete,
+                  label: palete.toUpperCase(),
+                }))}
+                placeholder="FILTRAR PALETES..."
+                searchPlaceholder="Pesquisar paletes..."
+                emptyMessage="Nenhuma palete encontrada."
+                className="h-10 w-[200px]"
+                maxWidth="200px"
+              />
+            ) : (
+              <Input
+                placeholder="FILTRAR POR MATERIAL..."
+                value={
+                  activeTab === 'entries' ? materialFilter : currentStockFilter
                 }
-              }}
-              className="h-10 max-w-sm rounded-none"
-            />
+                onChange={(e) => {
+                  if (activeTab === 'entries') {
+                    setMaterialFilter(e.target.value)
+                  } else {
+                    setCurrentStockFilter(e.target.value)
+                  }
+                }}
+                className="h-10 w-[200px] rounded-none"
+              />
+            )}
             <Input
               placeholder="FILTRAR POR REFERÊNCIA..."
               value={
                 activeTab === 'entries'
                   ? referenciaFilter
-                  : currentStockReferenciaFilter
+                  : activeTab === 'current'
+                    ? currentStockReferenciaFilter
+                    : paletesReferenciaFilter
               }
               onChange={(e) => {
                 if (activeTab === 'entries') {
                   setReferenciaFilter(e.target.value)
-                } else {
+                } else if (activeTab === 'current') {
                   setCurrentStockReferenciaFilter(e.target.value)
+                } else {
+                  setPaletesReferenciaFilter(e.target.value)
                 }
               }}
-              className="h-10 max-w-sm rounded-none"
+              className="h-10 w-[150px] rounded-none"
             />
+
+            {/* Enhanced filters for palettes tab */}
+            {activeTab === 'palettes' && (
+              <>
+                <Input
+                  type="date"
+                  placeholder="DATA INÍCIO"
+                  value={paletesDateFrom}
+                  onChange={(e) => setPaletesDateFrom(e.target.value)}
+                  className="h-10 w-[130px] rounded-none"
+                />
+                <Input
+                  type="date"
+                  placeholder="DATA FIM"
+                  value={paletesDateTo}
+                  onChange={(e) => setPaletesDateTo(e.target.value)}
+                  className="h-10 w-[130px] rounded-none"
+                />
+                <Select
+                  value={paletesFornecedorFilter}
+                  onValueChange={setPaletesFornecedorFilter}
+                >
+                  <SelectTrigger className="h-10 w-[160px] rounded-none">
+                    <UppercaseSelectValue placeholder="FORNECEDORES" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <UppercaseSelectItem value="__all__">
+                      FORNECEDORES
+                    </UppercaseSelectItem>
+                    {fornecedores.map((fornecedor) => (
+                      <UppercaseSelectItem
+                        key={fornecedor.id}
+                        value={fornecedor.nome_forn}
+                      >
+                        {fornecedor.nome_forn.toUpperCase()}
+                      </UppercaseSelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={paletesAuthorFilter}
+                  onValueChange={setPaletesAuthorFilter}
+                >
+                  <SelectTrigger className="h-10 w-[140px] rounded-none">
+                    <UppercaseSelectValue placeholder="AUTORES" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <UppercaseSelectItem value="__all__">
+                      AUTORES
+                    </UppercaseSelectItem>
+                    {profiles.map((profile) => (
+                      <UppercaseSelectItem
+                        key={profile.id}
+                        value={`${profile.first_name} ${profile.last_name}`}
+                      >
+                        {`${profile.first_name} ${profile.last_name}`.toUpperCase()}
+                      </UppercaseSelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
+
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -1092,9 +1894,16 @@ export default function StocksPage() {
                       if (activeTab === 'entries') {
                         setMaterialFilter('')
                         setReferenciaFilter('')
-                      } else {
+                      } else if (activeTab === 'current') {
                         setCurrentStockFilter('')
                         setCurrentStockReferenciaFilter('')
+                      } else {
+                        setPaletesFilter('')
+                        setPaletesReferenciaFilter('')
+                        setPaletesDateFrom('')
+                        setPaletesDateTo('')
+                        setPaletesFornecedorFilter('__all__')
+                        setPaletesAuthorFilter('__all__')
                       }
                     }}
                   >
@@ -1117,7 +1926,9 @@ export default function StocksPage() {
                     onClick={
                       activeTab === 'entries'
                         ? fetchStocks
-                        : refreshCurrentStocks
+                        : activeTab === 'current'
+                          ? refreshCurrentStocks
+                          : refreshPaletes
                     }
                   >
                     <RotateCw className="h-4 w-4" />
@@ -1127,22 +1938,112 @@ export default function StocksPage() {
               </Tooltip>
             </TooltipProvider>
             {activeTab === 'entries' && (
-              <Button
-                onClick={openNewForm}
-                className="gap-2"
-                data-trigger="new-stock"
-              >
-                <Plus className="h-4 w-4" />
-                Nova Entrada
-              </Button>
+              <>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                        onClick={exportEntriesToExcel}
+                        disabled={sortedStocks.length === 0}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Exportar para Excel</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                        onClick={openNewForm}
+                        data-trigger="new-stock"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Nova Entrada</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </>
+            )}
+            {activeTab === 'current' && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                      onClick={exportCurrentStocksToExcel}
+                      disabled={sortedCurrentStocks.length === 0}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Exportar para Excel</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+            {activeTab === 'palettes' && (
+              <>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                        onClick={exportPaletesToExcel}
+                        disabled={sortedPaletes.length === 0}
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Exportar para Excel</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                        onClick={() => {
+                          setShowNewPaleteRow(true)
+                          setNewPaleteData({
+                            no_palete: '',
+                            fornecedor_id: '',
+                            no_guia_forn: '',
+                            ref_cartao: '',
+                            qt_palete: '',
+                            data: new Date().toISOString().split('T')[0],
+                            author_id: '',
+                          })
+                        }}
+                        disabled={showNewPaleteRow || editingPaleteId !== null}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Nova Palete</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </>
             )}
           </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="entries">Entradas de Stock</TabsTrigger>
             <TabsTrigger value="current">Stock Atual</TabsTrigger>
+            <TabsTrigger value="palettes">Gestão de Palettes</TabsTrigger>
           </TabsList>
 
           <TabsContent value="entries" className="space-y-4">
@@ -1319,7 +2220,7 @@ export default function StocksPage() {
                           </TableCell>
                           <TableCell className="flex justify-center gap-2">
                             <Button
-                              variant="outline"
+                              variant="default"
                               size="icon"
                               className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
                               onClick={() => handleEdit(stock)}
@@ -1603,6 +2504,617 @@ export default function StocksPage() {
                                 />
                               )
                             })()}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="palettes" className="space-y-4">
+            {/* Palettes table */}
+            <div className="bg-background border-border w-full rounded-none border-2">
+              <div className="w-full rounded-none">
+                <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[100px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSortPaletes('no_palete')}
+                      >
+                        Nº Palete
+                        {sortColumnPaletes === 'no_palete' &&
+                          (sortDirectionPaletes === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[150px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSortPaletes('fornecedor')}
+                      >
+                        Fornecedor
+                        {sortColumnPaletes === 'fornecedor' &&
+                          (sortDirectionPaletes === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[120px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSortPaletes('no_guia_forn')}
+                      >
+                        Nº Guia
+                        {sortColumnPaletes === 'no_guia_forn' &&
+                          (sortDirectionPaletes === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[120px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSortPaletes('ref_cartao')}
+                      >
+                        Ref. Cartão
+                        {sortColumnPaletes === 'ref_cartao' &&
+                          (sortDirectionPaletes === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[100px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSortPaletes('qt_palete')}
+                      >
+                        Qt. Palete
+                        {sortColumnPaletes === 'qt_palete' &&
+                          (sortDirectionPaletes === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[120px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSortPaletes('data')}
+                      >
+                        Data
+                        {sortColumnPaletes === 'data' &&
+                          (sortDirectionPaletes === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[120px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSortPaletes('author')}
+                      >
+                        Autor
+                        {sortColumnPaletes === 'author' &&
+                          (sortDirectionPaletes === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
+                        Ações
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {/* New Palete Row */}
+                    {showNewPaleteRow && (
+                      <TableRow className="bg-blue-50 dark:bg-blue-950">
+                        <TableCell>
+                          <Input
+                            value={newPaleteData.no_palete}
+                            onChange={(e) =>
+                              setNewPaleteData((prev) => ({
+                                ...prev,
+                                no_palete: e.target.value.toUpperCase(),
+                              }))
+                            }
+                            className={`h-10 rounded-none border-0 font-mono outline-0 focus:border-0 focus:ring-0 ${
+                              isPaleteNumberDuplicate(newPaleteData.no_palete)
+                                ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                : ''
+                            }`}
+                            placeholder={getNextPaleteNumber()}
+                          />
+                          {isPaleteNumberDuplicate(newPaleteData.no_palete) && (
+                            <div className="mt-1 text-xs text-red-600">
+                              Número já existe
+                            </div>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Combobox
+                            value={newPaleteData.fornecedor_id}
+                            onChange={(value) =>
+                              setNewPaleteData((prev) => ({
+                                ...prev,
+                                fornecedor_id: value,
+                              }))
+                            }
+                            options={fornecedores.map((f) => ({
+                              value: f.id,
+                              label: f.nome_forn.toUpperCase(),
+                            }))}
+                            placeholder="SELECIONE FORNECEDOR"
+                            searchPlaceholder="Pesquisar..."
+                            emptyMessage="Nenhum fornecedor encontrado."
+                            className="w-full"
+                            maxWidth="100%"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            value={newPaleteData.no_guia_forn}
+                            onChange={(e) =>
+                              setNewPaleteData((prev) => ({
+                                ...prev,
+                                no_guia_forn: e.target.value.toUpperCase(),
+                              }))
+                            }
+                            className="h-10 rounded-none border-0 outline-0 focus:border-0 focus:ring-0"
+                            placeholder="NÚM. GUIA"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Combobox
+                            value={newPaleteData.ref_cartao}
+                            onChange={(value) => {
+                              setNewPaleteData((prev) => ({
+                                ...prev,
+                                ref_cartao: value,
+                              }))
+                              // Auto-fill qt_palete based on selected Cartão material
+                              const selectedMaterial = materials.find(
+                                (m) =>
+                                  m.referencia === value &&
+                                  m.material &&
+                                  m.material.toLowerCase() === 'cartão',
+                              )
+
+                              if (selectedMaterial?.qt_palete) {
+                                setNewPaleteData((prev) => ({
+                                  ...prev,
+                                  qt_palete:
+                                    selectedMaterial.qt_palete!.toString(),
+                                }))
+                              }
+                            }}
+                            options={getReferenciaOptions().map((opt) => ({
+                              ...opt,
+                              label: opt.label.toUpperCase(),
+                            }))}
+                            placeholder="SELECIONE REF."
+                            searchPlaceholder="Pesquisar..."
+                            emptyMessage="Nenhuma referência encontrada."
+                            className="w-full"
+                            maxWidth="100%"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            value={newPaleteData.qt_palete}
+                            onChange={(e) =>
+                              setNewPaleteData((prev) => ({
+                                ...prev,
+                                qt_palete: e.target.value,
+                              }))
+                            }
+                            className="h-10 rounded-none border-0 text-right outline-0 focus:border-0 focus:ring-0"
+                            placeholder="QT."
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <DatePicker
+                            selected={
+                              newPaleteData.data
+                                ? new Date(newPaleteData.data)
+                                : undefined
+                            }
+                            onSelect={(date) =>
+                              setNewPaleteData((prev) => ({
+                                ...prev,
+                                data: date
+                                  ? date.toISOString().split('T')[0]
+                                  : '',
+                              }))
+                            }
+                            buttonClassName="w-full h-10 border-0 outline-0 focus:ring-0 focus:border-0 rounded-none"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Combobox
+                            value={newPaleteData.author_id}
+                            onChange={(value) =>
+                              setNewPaleteData((prev) => ({
+                                ...prev,
+                                author_id: value,
+                              }))
+                            }
+                            options={getProfileOptions()}
+                            placeholder="SELECIONE AUTOR"
+                            searchPlaceholder="Pesquisar..."
+                            emptyMessage="Nenhum perfil encontrado."
+                            className="w-full"
+                            maxWidth="100%"
+                          />
+                        </TableCell>
+                        <TableCell className="flex justify-center gap-2">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="default"
+                                  size="icon"
+                                  className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                  onClick={handleSaveNewPalete}
+                                  disabled={
+                                    !newPaleteData.fornecedor_id ||
+                                    !newPaleteData.author_id ||
+                                    submittingPalete
+                                  }
+                                >
+                                  <span className="text-xs">✓</span>
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Guardar</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                  onClick={handleCancelNewPalete}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Cancelar</TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
+                      </TableRow>
+                    )}
+
+                    {paletesLoading ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={8}
+                          className="h-40 text-center uppercase"
+                        >
+                          <Loader2 className="text-muted-foreground mx-auto h-8 w-8 animate-spin" />
+                        </TableCell>
+                      </TableRow>
+                    ) : sortedPaletes.length === 0 && !showNewPaleteRow ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={8}
+                          className="text-center text-gray-500 uppercase"
+                        >
+                          Nenhuma palete encontrada.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedPaletes.map((palete) => (
+                        <TableRow
+                          key={palete.id}
+                          className="hover:bg-[var(--main)]"
+                        >
+                          <TableCell className="font-mono uppercase">
+                            {editingPaleteId === palete.id ? (
+                              <div>
+                                <Input
+                                  value={
+                                    editingPaleteData[palete.id]?.no_palete ||
+                                    ''
+                                  }
+                                  onChange={(e) =>
+                                    setEditingPaleteData((prev) => ({
+                                      ...prev,
+                                      [palete.id]: {
+                                        ...prev[palete.id],
+                                        no_palete: e.target.value.toUpperCase(),
+                                      },
+                                    }))
+                                  }
+                                  className={`h-10 rounded-none border-0 font-mono outline-0 focus:border-0 focus:ring-0 ${
+                                    isPaleteNumberDuplicate(
+                                      editingPaleteData[palete.id]?.no_palete ||
+                                        '',
+                                      palete.id,
+                                    )
+                                      ? 'bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300'
+                                      : ''
+                                  }`}
+                                />
+                                {isPaleteNumberDuplicate(
+                                  editingPaleteData[palete.id]?.no_palete || '',
+                                  palete.id,
+                                ) && (
+                                  <div className="mt-1 text-xs text-red-600">
+                                    Número já existe
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              palete.no_palete
+                            )}
+                          </TableCell>
+                          <TableCell className="uppercase">
+                            {editingPaleteId === palete.id ? (
+                              <Combobox
+                                value={
+                                  editingPaleteData[palete.id]?.fornecedor_id ||
+                                  ''
+                                }
+                                onChange={(value) =>
+                                  setEditingPaleteData((prev) => ({
+                                    ...prev,
+                                    [palete.id]: {
+                                      ...prev[palete.id],
+                                      fornecedor_id: value,
+                                    },
+                                  }))
+                                }
+                                options={fornecedores.map((f) => ({
+                                  value: f.id,
+                                  label: f.nome_forn.toUpperCase(),
+                                }))}
+                                placeholder="SELECIONE FORNECEDOR"
+                                searchPlaceholder="Pesquisar..."
+                                emptyMessage="Nenhum fornecedor encontrado."
+                                className="w-full"
+                                maxWidth="100%"
+                              />
+                            ) : (
+                              palete.fornecedores?.nome_forn || '-'
+                            )}
+                          </TableCell>
+                          <TableCell className="uppercase">
+                            {editingPaleteId === palete.id ? (
+                              <Input
+                                value={
+                                  editingPaleteData[palete.id]?.no_guia_forn ||
+                                  ''
+                                }
+                                onChange={(e) =>
+                                  setEditingPaleteData((prev) => ({
+                                    ...prev,
+                                    [palete.id]: {
+                                      ...prev[palete.id],
+                                      no_guia_forn:
+                                        e.target.value.toUpperCase(),
+                                    },
+                                  }))
+                                }
+                                className="h-10 rounded-none border-0 outline-0 focus:border-0 focus:ring-0"
+                              />
+                            ) : (
+                              palete.no_guia_forn || '-'
+                            )}
+                          </TableCell>
+                          <TableCell className="uppercase">
+                            {editingPaleteId === palete.id ? (
+                              <Combobox
+                                value={
+                                  editingPaleteData[palete.id]?.ref_cartao || ''
+                                }
+                                onChange={(value) => {
+                                  setEditingPaleteData((prev) => ({
+                                    ...prev,
+                                    [palete.id]: {
+                                      ...prev[palete.id],
+                                      ref_cartao: value,
+                                    },
+                                  }))
+                                  // Auto-fill qt_palete based on selected Cartão material
+                                  const selectedMaterial = materials.find(
+                                    (m) =>
+                                      m.referencia === value &&
+                                      m.material &&
+                                      m.material.toLowerCase() === 'cartão',
+                                  )
+
+                                  if (selectedMaterial?.qt_palete) {
+                                    setEditingPaleteData((prev) => ({
+                                      ...prev,
+                                      [palete.id]: {
+                                        ...prev[palete.id],
+                                        qt_palete:
+                                          selectedMaterial.qt_palete!.toString(),
+                                      },
+                                    }))
+                                  }
+                                }}
+                                options={getReferenciaOptions().map((opt) => ({
+                                  ...opt,
+                                  label: opt.label.toUpperCase(),
+                                }))}
+                                placeholder="SELECIONE REF."
+                                searchPlaceholder="Pesquisar..."
+                                emptyMessage="Nenhuma referência encontrada."
+                                className="w-full"
+                                maxWidth="100%"
+                              />
+                            ) : (
+                              palete.ref_cartao || '-'
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {editingPaleteId === palete.id ? (
+                              <Input
+                                type="number"
+                                value={
+                                  editingPaleteData[palete.id]?.qt_palete || ''
+                                }
+                                onChange={(e) =>
+                                  setEditingPaleteData((prev) => ({
+                                    ...prev,
+                                    [palete.id]: {
+                                      ...prev[palete.id],
+                                      qt_palete: e.target.value,
+                                    },
+                                  }))
+                                }
+                                className="h-10 rounded-none border-0 text-right outline-0 focus:border-0 focus:ring-0"
+                              />
+                            ) : (
+                              palete.qt_palete || '-'
+                            )}
+                          </TableCell>
+                          <TableCell className="uppercase">
+                            {editingPaleteId === palete.id ? (
+                              <DatePicker
+                                selected={
+                                  editingPaleteData[palete.id]?.data
+                                    ? new Date(
+                                        editingPaleteData[palete.id].data,
+                                      )
+                                    : undefined
+                                }
+                                onSelect={(date) =>
+                                  setEditingPaleteData((prev) => ({
+                                    ...prev,
+                                    [palete.id]: {
+                                      ...prev[palete.id],
+                                      data: date
+                                        ? date.toISOString().split('T')[0]
+                                        : '',
+                                    },
+                                  }))
+                                }
+                                buttonClassName="w-full h-10 border-0 outline-0 focus:ring-0 focus:border-0 rounded-none"
+                              />
+                            ) : palete.data ? (
+                              new Date(palete.data).toLocaleDateString('pt-PT')
+                            ) : (
+                              '-'
+                            )}
+                          </TableCell>
+                          <TableCell className="uppercase">
+                            {editingPaleteId === palete.id ? (
+                              <Combobox
+                                value={
+                                  editingPaleteData[palete.id]?.author_id || ''
+                                }
+                                onChange={(value) =>
+                                  setEditingPaleteData((prev) => ({
+                                    ...prev,
+                                    [palete.id]: {
+                                      ...prev[palete.id],
+                                      author_id: value,
+                                    },
+                                  }))
+                                }
+                                options={getProfileOptions()}
+                                placeholder="SELECIONE AUTOR"
+                                searchPlaceholder="Pesquisar..."
+                                emptyMessage="Nenhum perfil encontrado."
+                                className="w-full"
+                                maxWidth="100%"
+                              />
+                            ) : (
+                              palete.profiles?.first_name || '-'
+                            )}
+                          </TableCell>
+                          <TableCell className="flex justify-center gap-2">
+                            {editingPaleteId === palete.id ? (
+                              <>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="default"
+                                        size="icon"
+                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                        onClick={() =>
+                                          handleSaveEditPalete(palete.id)
+                                        }
+                                        disabled={submittingPalete}
+                                      >
+                                        <span className="text-xs">✓</span>
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Guardar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                        onClick={handleCancelEditPalete}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Cancelar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </>
+                            ) : (
+                              <>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="default"
+                                        size="icon"
+                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                        onClick={() => handleEditPalete(palete)}
+                                        disabled={
+                                          editingPaleteId !== null ||
+                                          showNewPaleteRow
+                                        }
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Editar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="destructive"
+                                        size="icon"
+                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                        onClick={() =>
+                                          handleDeletePalete(palete.id)
+                                        }
+                                        disabled={
+                                          editingPaleteId !== null ||
+                                          showNewPaleteRow
+                                        }
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Eliminar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))

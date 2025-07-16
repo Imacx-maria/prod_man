@@ -21,6 +21,7 @@ import {
 import { ArrowUp, ArrowDown, RefreshCcw, Eye, EyeOff, X } from 'lucide-react'
 import DatePicker from '@/components/ui/DatePicker'
 import { createBrowserClient } from '@/utils/supabase'
+import { useDebounce } from '@/hooks/useDebounce'
 
 interface DashboardLogisticaRecord {
   // From folhas_obras
@@ -106,7 +107,11 @@ export const DashboardLogisticaTable: React.FC<
     nomeCampanha: '',
     item: '',
     codigo: '',
+    guia: '',
   })
+
+  // Debounced filter values for performance
+  const debouncedFilters = useDebounce(filters, 300)
 
   // Updated sorting state to match main production table pattern
   const [sortCol, setSortCol] = useState<SortableLogisticaKey>('numero_fo')
@@ -140,9 +145,22 @@ export const DashboardLogisticaTable: React.FC<
     return `${year}-${month}-${day}`
   }, [])
 
-  // Fetch data - show all logistics items regardless of concluido status
+  // Helper function to get cliente IDs for filtering
+  const getClienteIds = useCallback(
+    async (searchTerm: string): Promise<string> => {
+      const { data: matchingClientes } = await supabase
+        .from('clientes')
+        .select('id')
+        .ilike('nome_cl', `%${searchTerm}%`)
+
+      return matchingClientes?.map((c) => c.id).join(',') || ''
+    },
+    [supabase],
+  )
+
+  // Fetch data with database-level filtering
   const fetchData = useCallback(
-    async (dispatched = false) => {
+    async (dispatched = false, filterParams: Partial<typeof filters> = {}) => {
       setLoading(true)
       try {
         // Fetch work orders with their items and logistics entries
@@ -191,6 +209,42 @@ export const DashboardLogisticaTable: React.FC<
           logisticsQuery = logisticsQuery.eq(
             'items_base.logistica_entregas.saiu',
             true,
+          )
+        }
+
+        // Apply database-level filters
+        if (filterParams.cliente?.trim()) {
+          logisticsQuery = logisticsQuery.ilike(
+            'cliente',
+            `%${filterParams.cliente.trim()}%`,
+          )
+        }
+
+        if (filterParams.nomeCampanha?.trim()) {
+          logisticsQuery = logisticsQuery.ilike(
+            'nome_campanha',
+            `%${filterParams.nomeCampanha.trim()}%`,
+          )
+        }
+
+        if (filterParams.item?.trim()) {
+          logisticsQuery = logisticsQuery.ilike(
+            'items_base.descricao',
+            `%${filterParams.item.trim()}%`,
+          )
+        }
+
+        if (filterParams.codigo?.trim()) {
+          logisticsQuery = logisticsQuery.ilike(
+            'items_base.codigo',
+            `%${filterParams.codigo.trim()}%`,
+          )
+        }
+
+        if (filterParams.guia?.trim()) {
+          logisticsQuery = logisticsQuery.ilike(
+            'items_base.logistica_entregas.guia',
+            `%${filterParams.guia.trim()}%`,
           )
         }
         const { data: logisticsData, error: logisticsError } =
@@ -383,7 +437,14 @@ export const DashboardLogisticaTable: React.FC<
         !filters.codigo ||
         record.codigo?.toLowerCase().includes(filters.codigo.toLowerCase())
 
-      return clienteMatch && campanhaMatch && itemMatch && codigoMatch
+      // Guia filter
+      const guiaMatch =
+        !filters.guia ||
+        record.guia?.toLowerCase().includes(filters.guia.toLowerCase())
+
+      return (
+        clienteMatch && campanhaMatch && itemMatch && codigoMatch && guiaMatch
+      )
     })
   }, [records, filters, clienteLookup])
 
@@ -463,6 +524,7 @@ export const DashboardLogisticaTable: React.FC<
       nomeCampanha: '',
       item: '',
       codigo: '',
+      guia: '',
     })
   }, [])
 
@@ -612,6 +674,14 @@ export const DashboardLogisticaTable: React.FC<
           value={filters.codigo}
           onChange={(e) =>
             setFilters((prev) => ({ ...prev, codigo: e.target.value }))
+          }
+        />
+        <Input
+          placeholder="Guia"
+          className="w-[140px] rounded-none"
+          value={filters.guia}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, guia: e.target.value }))
           }
         />
         <TooltipProvider>

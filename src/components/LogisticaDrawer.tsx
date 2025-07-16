@@ -14,7 +14,7 @@ import {
   X,
   ArrowLeft,
   ArrowRight,
-  FileSpreadsheet,
+  Download,
   FileText,
   Grid2x2Check,
   Plus,
@@ -379,7 +379,7 @@ export const LogisticaDrawer: React.FC<LogisticaDrawerProps> = ({
                         })
                       }}
                     >
-                      <Grid2x2Check className="h-5 w-5 text-black" />
+                      <Download className="h-4 w-4" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Exportar Excel</TooltipContent>
