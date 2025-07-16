@@ -344,8 +344,6 @@ function OperacoesPageContent() {
       console.log('Transformed items:', transformedItems.length)
 
       // Filter items that meet both conditions:
-      // 1. Have logistica_entregas with concluido=false
-      // 2. Have designer_items with paginacao=true
       const filteredItems = transformedItems.filter((item) => {
         let hasLogisticaEntregasNotConcluida = false
 
@@ -361,15 +359,19 @@ function OperacoesPageContent() {
         }
 
         const hasPaginacaoTrue = item.designer_items?.paginacao === true
+        const isNotBrinde = item.brindes !== true
 
-        const includeItem = hasLogisticaEntregasNotConcluida && hasPaginacaoTrue
+        const includeItem =
+          hasLogisticaEntregasNotConcluida && hasPaginacaoTrue && isNotBrinde
 
         if (!includeItem) {
           console.log(`Item ${item.id} filtered out:`, {
             hasLogisticaEntregasNotConcluida,
             hasPaginacaoTrue,
+            isNotBrinde,
             logistica_entregas: item.logistica_entregas,
             designer_items: item.designer_items,
+            brindes: item.brindes,
           })
         }
 
