@@ -55,6 +55,7 @@ import {
 import PermissionGuard from '@/components/PermissionGuard'
 import { StockEntryWithRelations } from '@/types/producao'
 import Combobox from '@/components/ui/Combobox'
+import StockAnalyticsCharts from '@/components/StockAnalyticsCharts'
 
 interface Material {
   id: string
@@ -2040,10 +2041,11 @@ export default function StocksPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="entries">Entradas de Stock</TabsTrigger>
             <TabsTrigger value="current">Stock Atual</TabsTrigger>
             <TabsTrigger value="palettes">Gestão de Palettes</TabsTrigger>
+            <TabsTrigger value="analytics">Análise & Gráficos</TabsTrigger>
           </TabsList>
 
           <TabsContent value="entries" className="space-y-4">
@@ -3123,6 +3125,16 @@ export default function StocksPage() {
                 </Table>
               </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-4">
+            <StockAnalyticsCharts
+              currentStocks={currentStocks}
+              onRefresh={() => {
+                fetchCurrentStocks()
+                fetchStocks()
+              }}
+            />
           </TabsContent>
         </Tabs>
 

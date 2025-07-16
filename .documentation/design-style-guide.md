@@ -1700,6 +1700,7 @@ Use these custom properties consistently:
 - [ ] **Numeric Column Alignment**: FO, ORC, Guia headers are center-aligned with `text-center`, other numeric headers are left-aligned (default), all numeric content is right-aligned with `text-right`
 - [ ] **Table Height Policy**: Remove all height constraints (`max-h-[70vh]`, `overflow-y-auto`) from table containers to allow natural page scrolling
 - [ ] **Square Icon Buttons**: ALL icon-only buttons must be square using `className="h-10 w-10"` for consistent visual alignment
+- [ ] **Chart Container Styling**: All chart containers use `Card` with `rounded-none border-2`, title/subtitle blocks use `leading-tight` and proper spacing
 
 ## 🗂️ Drawer Structure Checklist
 - [ ] **Drawer Type**: Use appropriate pattern (Form, Entity Detail, or Full-Screen Modal)
@@ -1738,7 +1739,8 @@ import { Plus, Eye, Trash2, X, RotateCw, ArrowUp, ArrowDown, Loader2, FileText, 
 - **CRITICAL:** All components must use sharp corners: always use `rounded-none`.
 - Do not use `rounded`, `rounded-md`, `rounded-base`, or any other border radius utility.
 - This applies to all containers, tables, **buttons**, cards, modals, inputs, etc.
-- **ALL BUTTONS must include `rounded-none`** in their className to override default button styling. 
+- **ALL BUTTONS must include `rounded-none`** in their className to override default button styling.
+- **CHARTS:** All chart containers must use `Card` component with `rounded-none border-2` for sharp corners and 2px borders. 
 
 ## 📝 Input Field and Component Height Consistency
 
@@ -1896,6 +1898,399 @@ Different numeric column types have different alignment patterns:
 ```
 
 > **Note:** This creates visual hierarchy where ID columns are centrally prominent while maintaining right-alignment for easy numeric comparison in content. 
+
+## 📊 Charts and Data Visualization
+
+### Chart Library and Dependencies
+Use **Recharts** library for all chart implementations:
+```tsx
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+```
+
+Required packages:
+- `recharts` - Main charting library
+- CSS-in-JS transparency calculations for color variations
+
+### Chart Color Palette
+
+#### Primary Color Scheme
+Use this exact color palette for consistency across all charts:
+
+```tsx
+const CHART_COLORS = {
+  // Material type colors
+  cartaoFavo: '#f9d16a',      // Soft pastel yellow - for Cartão & Favo materials
+  rigidosOutros: '#2a687a',   // Muted teal blue - for other rigid materials  
+  flexiveis: '#72a25e',       // Earthy green - for flexible materials
+  warning: '#c3b49e',         // Warm beige - for warnings/neutral states
+  critical: '#3c3434'         // Dark charcoal brown - for critical states
+};
+```
+
+#### Color Usage Guidelines
+- **Cartão & Favo Materials:** Always use `#f9d16a` (soft pastel yellow)
+- **Other Rigid Materials:** Always use `#2a687a` (muted teal blue)
+- **Flexible Materials:** Always use `#72a25e` (earthy green)
+- **Warning/Empty States:** Use `#c3b49e` (warm beige)
+- **Critical/Error States:** Use `#3c3434` (dark charcoal brown)
+
+### Transparency-Based Color System
+
+#### Base Colors with Transparency Variations
+For multiple materials within the same category, use transparency variations:
+
+```tsx
+const generateTransparencyColors = (baseColor: string, materialCount: number) => {
+  const transparencies = [1.0, 0.85, 0.7, 0.55, 0.4]; // First 5 materials
+  const additionalTransparencies = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3]; // For 6+ materials
+  
+  return materials.map((_, index) => {
+    const colorIndex = index % 5; // Cycle through 5 base colors
+    const transparency = index < 5 
+      ? transparencies[index] 
+      : additionalTransparencies[index % additionalTransparencies.length];
+    
+    return convertToRgba(BASE_COLORS[colorIndex], transparency);
+  });
+};
+```
+
+#### Color Assignment Logic
+1. **First 5 materials:** Use base color with 100%, 85%, 70%, 55%, 40% opacity
+2. **Additional materials:** Cycle through base colors with decreasing transparency
+3. **Minimum opacity:** Never go below 30% opacity for readability
+
+### Chart Container Styling Requirements
+
+All chart containers must follow these styling requirements:
+
+#### Sharp Corners and Thick Borders
+```tsx
+{/* ✅ Correct - Sharp corners with 2px border */}
+<Card className="p-4 rounded-none border-2">
+  {/* Chart content */}
+</Card>
+
+{/* ❌ Wrong - Rounded corners with thin border */}
+<Card className="p-4 rounded-lg border">
+  {/* Chart content */}
+</Card>
+```
+
+#### Title and Subtitle Block Structure
+Chart titles with subtitles must form a cohesive visual block:
+
+```tsx
+{/* ✅ Correct - Tight title/subtitle block */}
+<Card className="p-4 rounded-none border-2">
+  <div className="mb-4">
+    <h3 className="text-lg font-semibold leading-tight">Chart Title</h3>
+    <p className="text-sm text-muted-foreground leading-tight">Chart Subtitle</p>
+  </div>
+  <ResponsiveContainer>
+    {/* Chart component */}
+  </ResponsiveContainer>
+</Card>
+
+{/* ❌ Wrong - Separated title and subtitle */}
+<Card className="p-4 rounded-none border-2">
+  <h3 className="text-lg font-semibold mb-2">Chart Title</h3>
+  <p className="text-sm text-muted-foreground mb-4">Chart Subtitle</p>
+  <ResponsiveContainer>
+    {/* Chart component */}
+  </ResponsiveContainer>
+</Card>
+```
+
+**Key Requirements:**
+- **Container:** Always use `Card` component with `rounded-none border-2`
+- **Title Block:** Wrap title and subtitle in a `div` with `mb-4`
+- **Typography:** Use `leading-tight` on both title and subtitle for compact spacing
+- **No gaps:** Title and subtitle should appear as a single visual unit
+
+### Chart Types and Specifications
+
+#### Overview Cards (Monetary Values)
+Display financial summaries using consistent card layout:
+
+```tsx
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+  <Card className="p-4 rounded-none border-2">
+    <h3 className="text-sm font-medium text-muted-foreground">Card Title</h3>
+    <p className="text-2xl font-bold">€{value.toLocaleString()}</p>
+  </Card>
+</div>
+```
+
+**Card Categories:**
+- **Total Cartão & Favo:** Primary material category
+- **Total Rígidos Outros:** Secondary rigid materials (excluding Cartão/Favo)
+- **Total Flexíveis:** All flexible materials
+- **Total Geral:** Sum of all material values
+
+#### Bar Charts
+Use for stock quantity comparisons:
+
+```tsx
+<ResponsiveContainer width="100%" height={550}>
+  <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 120 }}>
+    <CartesianGrid strokeDasharray="3 3" />
+    <XAxis 
+      dataKey="name" 
+      angle={-45} 
+      textAnchor="end" 
+      height={120}
+      interval={0}
+    />
+    <YAxis />
+    <Tooltip 
+      formatter={(value: number) => [value.toLocaleString(), 'Stock']}
+      labelStyle={{ color: '#333' }}
+      contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
+    />
+    <Bar dataKey="stock" fill={chartColor} />
+  </BarChart>
+</ResponsiveContainer>
+```
+
+**Bar Chart Specifications:**
+- **Height:** 550px for adequate label space
+- **Bottom margin:** 120px for rotated labels
+- **Angle:** -45 degrees for X-axis labels
+- **Data formatting:** Use `toLocaleString()` for number formatting
+
+#### Pie Charts
+Use for percentage distribution visualization:
+
+```tsx
+<ResponsiveContainer width="100%" height={700}>
+  <PieChart>
+    <Pie
+      data={chartData}
+      cx="50%"
+      cy="50%"
+      outerRadius={280}
+      fill="#8884d8"
+      dataKey="value"
+      label={({ name, value }) => `${name}: ${value}%`}
+    >
+      {chartData.map((entry, index) => (
+        <Cell key={`cell-${index}`} fill={colors[index]} />
+      ))}
+    </Pie>
+    <Tooltip 
+      formatter={(value: number) => [`${value}%`, 'Percentage']}
+      labelStyle={{ color: '#333' }}
+      contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc' }}
+    />
+  </PieChart>
+</ResponsiveContainer>
+```
+
+**Pie Chart Specifications:**
+- **Height:** 700px for better visibility
+- **Radius:** 280px for large, readable charts
+- **Labels:** Show both name and percentage value
+- **Tooltips:** Format percentages with % symbol
+
+### Chart Data Processing
+
+#### Material Categorization Logic
+```tsx
+const processStockData = (stockEntries: StockEntry[]) => {
+  // Filter for materials with positive stock
+  const validStock = stockEntries.filter(entry => getFinalStock(entry) > 0);
+  
+  // Categorize materials
+  const cartaoFavoMaterials = validStock.filter(entry => 
+    entry.material.toLowerCase().includes('cartão') || 
+    entry.material.toLowerCase().includes('favo')
+  );
+  
+  const rigidosMaterials = validStock.filter(entry => 
+    entry.tipo === 'RÍGIDOS' && 
+    !entry.material.toLowerCase().includes('cartão') && 
+    !entry.material.toLowerCase().includes('favo')
+  );
+  
+  const flexiveisMaterials = validStock.filter(entry => 
+    entry.tipo === 'FLEXÍVEIS'
+  );
+  
+  return { cartaoFavoMaterials, rigidosMaterials, flexiveisMaterials };
+};
+```
+
+#### Stock Value Calculation
+```tsx
+const getFinalStock = (entry: StockEntry): number => {
+  // Use corrected stock if available, otherwise use current stock
+  return entry.stock_correct !== null ? entry.stock_correct : entry.stock_atual;
+};
+
+const calculateTotalValue = (materials: StockEntry[]): number => {
+  return materials.reduce((total, material) => {
+    const stock = getFinalStock(material);
+    const price = material.preco || 0;
+    return total + (stock * price);
+  }, 0);
+};
+```
+
+### Chart Container Structure
+
+#### Tab-Based Chart Layout
+```tsx
+<Tabs defaultValue="overview" className="w-full">
+  <TabsList className="grid w-full grid-cols-3">
+    <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+    <TabsTrigger value="rigidos">Materiais Rígidos</TabsTrigger>
+    <TabsTrigger value="flexiveis">Materiais Flexíveis</TabsTrigger>
+  </TabsList>
+  
+  <TabsContent value="overview" className="space-y-4">
+    {/* Overview cards */}
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* Cards content */}
+    </div>
+  </TabsContent>
+  
+  <TabsContent value="rigidos" className="space-y-4">
+    {/* Rigid materials charts in 2x2 grid */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {/* Chart containers */}
+    </div>
+  </TabsContent>
+</Tabs>
+```
+
+#### Chart Grid Layout
+```tsx
+{/* 2x2 grid for related charts */}
+<div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <Card className="p-4 rounded-none border-2">
+    <div className="mb-4">
+      <h3 className="text-lg font-semibold leading-tight">Chart Title</h3>
+      <p className="text-sm text-muted-foreground leading-tight">Chart Subtitle</p>
+    </div>
+    {/* Chart component */}
+  </Card>
+</div>
+```
+
+### Empty State Handling
+
+#### No Data Messages
+```tsx
+{materials.length === 0 ? (
+  <div className="flex flex-col items-center justify-center h-64 text-center">
+    <Package className="w-12 h-12 text-muted-foreground mb-4" />
+    <h3 className="text-lg font-semibold text-muted-foreground">
+      Nenhum Material Encontrado
+    </h3>
+    <p className="text-muted-foreground">
+      Não existem materiais desta categoria com stock positivo.
+    </p>
+  </div>
+) : (
+  /* Chart content */
+)}
+```
+
+**Empty State Guidelines:**
+- Use relevant icons (Package for stock, FileText for data)
+- Clear, descriptive messages in Portuguese
+- Consistent spacing and typography
+- Muted colors for empty states
+
+### Data Integration Patterns
+
+#### Component Props Interface
+```tsx
+interface StockAnalyticsChartsProps {
+  currentStocks: StockEntry[];
+  onRefresh: () => Promise<void>;
+}
+
+interface StockEntry {
+  id: string;
+  material: string;
+  tipo: 'RÍGIDOS' | 'FLEXÍVEIS';
+  stock_atual: number;
+  stock_correct: number | null;
+  stock_correct_updated_at: string | null;
+  preco: number | null;
+}
+```
+
+#### Refresh Integration
+```tsx
+<div className="flex justify-between items-center mb-4">
+  <h2 className="text-xl font-bold">Chart Section</h2>
+  <Button 
+    variant="outline" 
+    size="icon" 
+    onClick={onRefresh}
+    className="h-10 w-10 rounded-none"
+  >
+    <RotateCw className="w-4 h-4" />
+  </Button>
+</div>
+```
+
+### Chart Accessibility
+
+#### Screen Reader Support
+- Use semantic HTML structure
+- Provide alt text for chart descriptions
+- Include data summaries for complex visualizations
+- Ensure keyboard navigation works for interactive elements
+
+#### Color Accessibility
+- Maintain sufficient contrast ratios
+- Use transparency thoughtfully to preserve readability
+- Provide alternative data representations when needed
+- Test with colorblind-friendly tools
+
+### Chart Performance Guidelines
+
+#### Data Optimization
+- Filter unnecessary data before chart rendering
+- Use `useMemo` for expensive calculations
+- Implement lazy loading for large datasets
+- Cache processed chart data when appropriate
+
+#### Responsive Considerations
+- Use `ResponsiveContainer` for all charts
+- Test chart readability on mobile devices
+- Adjust chart heights for different screen sizes
+- Consider simplified views for small screens
+
+### Integration with Existing Page Structure
+
+#### Page Tab Addition
+```tsx
+<TabsList className="grid w-full grid-cols-4"> {/* Updated from grid-cols-3 */}
+  <TabsTrigger value="entradas">Entradas de Stock</TabsTrigger>
+  <TabsTrigger value="atual">Stock Atual</TabsTrigger>
+  <TabsTrigger value="palettes">Gestão de Palettes</TabsTrigger>
+  <TabsTrigger value="analytics">Análise & Gráficos</TabsTrigger> {/* New tab */}
+</TabsList>
+
+<TabsContent value="analytics">
+  <StockAnalyticsCharts 
+    currentStocks={currentStocks} 
+    onRefresh={refreshStockData}
+  />
+</TabsContent>
+```
+
+**Integration Requirements:**
+- Update grid columns when adding chart tabs
+- Pass current data and refresh callback
+- Maintain existing page functionality
+- Follow established tab naming patterns
 
 ## Tooltips
 

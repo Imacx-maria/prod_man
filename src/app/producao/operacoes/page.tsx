@@ -62,6 +62,7 @@ import {
 import { Tabs, TabsList, TabsContent, TabsTrigger } from '@/components/ui/tabs'
 import SimpleNotasPopover from '@/components/ui/SimpleNotasPopover'
 import { createBrowserClient } from '@/utils/supabase'
+import ProductionAnalyticsCharts from '@/components/ProductionAnalyticsCharts'
 
 // Types
 interface ProductionItem {
@@ -688,185 +689,205 @@ function OperacoesPageContent() {
 
   return (
     <div className="w-full space-y-6">
-      {/* Header and filters */}
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold">Operações de Produção</h1>
+      <h1 className="text-2xl font-bold">Operações de Produção</h1>
 
-        {/* Statistics */}
-        <div className="flex gap-4 text-sm">
-          <span>Total: {stats.total}</span>
-          <span>Concluído: {stats.completed}</span>
-          <span>Pendente: {stats.pending}</span>
-        </div>
+      <Tabs defaultValue="operacoes" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="operacoes">Operações ({stats.total})</TabsTrigger>
+          <TabsTrigger value="analytics">Análises & Gráficos</TabsTrigger>
+        </TabsList>
 
-        {/* Filters */}
-        <div className="flex items-center gap-2">
-          <Input
-            placeholder="Filtrar FO"
-            className="w-40"
-            value={foFilter}
-            onChange={(e) => setFoFilter(e.target.value)}
-          />
-          <Input
-            placeholder="Filtrar Item"
-            className="flex-1"
-            value={itemFilter}
-            onChange={(e) => setItemFilter(e.target.value)}
-          />
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={() => {
-              setFoFilter('')
-              setItemFilter('')
-            }}
-          >
-            <X className="h-4 w-4" />
-          </Button>
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={fetchData}
-            title="Refresh data"
-          >
-            <RefreshCcw className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
+        <TabsContent value="operacoes">
+          {/* Header and filters */}
+          <div className="space-y-4">
+            {/* Statistics */}
+            <div className="flex gap-4 text-sm">
+              <span>Total: {stats.total}</span>
+              <span>Concluído: {stats.completed}</span>
+              <span>Pendente: {stats.pending}</span>
+            </div>
 
-      {/* Main table */}
-      <div className="bg-background border-border w-full rounded-none border-2">
-        <div className="w-full rounded-none">
-          <Table className="w-full table-fixed border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
-            <TableHeader>
-              <TableRow>
-                <TableHead
-                  onClick={() => toggleSort('numero_fo')}
-                  className="border-border sticky top-0 z-10 w-[120px] cursor-pointer border-b-2 bg-[var(--orange)] text-black uppercase select-none"
-                >
-                  FO{' '}
-                  {sortCol === 'numero_fo' &&
-                    (sortDir === 'asc' ? (
-                      <ArrowUp className="ml-1 inline h-3 w-3" />
-                    ) : (
-                      <ArrowDown className="ml-1 inline h-3 w-3" />
-                    ))}
-                </TableHead>
-                <TableHead
-                  onClick={() => toggleSort('nome_campanha')}
-                  className="border-border sticky top-0 z-10 cursor-pointer border-b-2 bg-[var(--orange)] text-black uppercase select-none"
-                >
-                  Campanha{' '}
-                  {sortCol === 'nome_campanha' &&
-                    (sortDir === 'asc' ? (
-                      <ArrowUp className="ml-1 inline h-3 w-3" />
-                    ) : (
-                      <ArrowDown className="ml-1 inline h-3 w-3" />
-                    ))}
-                </TableHead>
-                <TableHead
-                  onClick={() => toggleSort('descricao')}
-                  className="border-border sticky top-0 z-10 cursor-pointer border-b-2 bg-[var(--orange)] text-black uppercase select-none"
-                >
-                  Item{' '}
-                  {sortCol === 'descricao' &&
-                    (sortDir === 'asc' ? (
-                      <ArrowUp className="ml-1 inline h-3 w-3" />
-                    ) : (
-                      <ArrowDown className="ml-1 inline h-3 w-3" />
-                    ))}
-                </TableHead>
-                <TableHead
-                  onClick={() => toggleSort('quantidade')}
-                  className="border-border sticky top-0 z-10 w-[100px] cursor-pointer border-b-2 bg-[var(--orange)] text-right text-black uppercase select-none"
-                >
-                  Quantidade{' '}
-                  {sortCol === 'quantidade' &&
-                    (sortDir === 'asc' ? (
-                      <ArrowUp className="ml-1 inline h-3 w-3" />
-                    ) : (
-                      <ArrowDown className="ml-1 inline h-3 w-3" />
-                    ))}
-                </TableHead>
-                <TableHead
-                  onClick={() => toggleSort('prioridade')}
-                  className="border-border sticky top-0 z-10 w-[36px] min-w-[36px] cursor-pointer border-b-2 bg-[var(--orange)] text-black uppercase select-none"
-                >
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span>
-                          P{' '}
-                          {sortCol === 'prioridade' &&
-                            (sortDir === 'asc' ? (
-                              <ArrowUp className="ml-1 inline h-3 w-3" />
-                            ) : (
-                              <ArrowDown className="ml-1 inline h-3 w-3" />
-                            ))}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>Prioridade</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </TableHead>
-                <TableHead className="border-border sticky top-0 z-10 w-[100px] border-b-2 bg-[var(--orange)] text-black uppercase">
-                  Ações
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sortedItems.map((item) => (
-                <TableRow key={item.id} className="hover:bg-[var(--main)]">
-                  <TableCell className="w-[120px]">
-                    {item.folhas_obras?.numero_fo}
-                  </TableCell>
-                  <TableCell>{item.folhas_obras?.nome_campanha}</TableCell>
-                  <TableCell>{item.descricao}</TableCell>
-                  <TableCell className="w-[100px] text-right">
-                    {item.quantidade}
-                  </TableCell>
-                  <TableCell className="w-[36px] min-w-[36px] text-center">
-                    <button
-                      className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getPColor(item)}`}
-                      title={
-                        item.prioridade
-                          ? 'Prioritário'
-                          : item.created_at &&
-                              (Date.now() -
-                                new Date(item.created_at).getTime()) /
-                                (1000 * 60 * 60 * 24) >
-                                3
-                            ? 'Aguardando há mais de 3 dias'
-                            : 'Normal'
-                      }
-                      onClick={async () => {
-                        const newPrioridade = !item.prioridade
-                        await updateItem(item.id, 'prioridade', newPrioridade)
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell className="w-[100px]">
-                    <Button
-                      size="icon"
-                      variant="default"
-                      onClick={() => setOpenItemId(item.id)}
+            {/* Filters */}
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Filtrar FO"
+                className="w-40"
+                value={foFilter}
+                onChange={(e) => setFoFilter(e.target.value)}
+              />
+              <Input
+                placeholder="Filtrar Item"
+                className="flex-1"
+                value={itemFilter}
+                onChange={(e) => setItemFilter(e.target.value)}
+              />
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={() => {
+                  setFoFilter('')
+                  setItemFilter('')
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={fetchData}
+                title="Refresh data"
+              >
+                <RefreshCcw className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+
+          {/* Main table */}
+          <div className="bg-background border-border w-full rounded-none border-2">
+            <div className="w-full rounded-none">
+              <Table className="w-full table-fixed border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead
+                      onClick={() => toggleSort('numero_fo')}
+                      className="border-border sticky top-0 z-10 w-[120px] cursor-pointer border-b-2 bg-[var(--orange)] text-black uppercase select-none"
                     >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {sortedItems.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={6} className="py-8 text-center">
-                    Nenhum item encontrado.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </div>
+                      FO{' '}
+                      {sortCol === 'numero_fo' &&
+                        (sortDir === 'asc' ? (
+                          <ArrowUp className="ml-1 inline h-3 w-3" />
+                        ) : (
+                          <ArrowDown className="ml-1 inline h-3 w-3" />
+                        ))}
+                    </TableHead>
+                    <TableHead
+                      onClick={() => toggleSort('nome_campanha')}
+                      className="border-border sticky top-0 z-10 cursor-pointer border-b-2 bg-[var(--orange)] text-black uppercase select-none"
+                    >
+                      Campanha{' '}
+                      {sortCol === 'nome_campanha' &&
+                        (sortDir === 'asc' ? (
+                          <ArrowUp className="ml-1 inline h-3 w-3" />
+                        ) : (
+                          <ArrowDown className="ml-1 inline h-3 w-3" />
+                        ))}
+                    </TableHead>
+                    <TableHead
+                      onClick={() => toggleSort('descricao')}
+                      className="border-border sticky top-0 z-10 cursor-pointer border-b-2 bg-[var(--orange)] text-black uppercase select-none"
+                    >
+                      Item{' '}
+                      {sortCol === 'descricao' &&
+                        (sortDir === 'asc' ? (
+                          <ArrowUp className="ml-1 inline h-3 w-3" />
+                        ) : (
+                          <ArrowDown className="ml-1 inline h-3 w-3" />
+                        ))}
+                    </TableHead>
+                    <TableHead
+                      onClick={() => toggleSort('quantidade')}
+                      className="border-border sticky top-0 z-10 w-[100px] cursor-pointer border-b-2 bg-[var(--orange)] text-right text-black uppercase select-none"
+                    >
+                      Quantidade{' '}
+                      {sortCol === 'quantidade' &&
+                        (sortDir === 'asc' ? (
+                          <ArrowUp className="ml-1 inline h-3 w-3" />
+                        ) : (
+                          <ArrowDown className="ml-1 inline h-3 w-3" />
+                        ))}
+                    </TableHead>
+                    <TableHead
+                      onClick={() => toggleSort('prioridade')}
+                      className="border-border sticky top-0 z-10 w-[36px] min-w-[36px] cursor-pointer border-b-2 bg-[var(--orange)] text-black uppercase select-none"
+                    >
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              P{' '}
+                              {sortCol === 'prioridade' &&
+                                (sortDir === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>Prioridade</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    </TableHead>
+                    <TableHead className="border-border sticky top-0 z-10 w-[100px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                      Ações
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sortedItems.map((item) => (
+                    <TableRow key={item.id} className="hover:bg-[var(--main)]">
+                      <TableCell className="w-[120px]">
+                        {item.folhas_obras?.numero_fo}
+                      </TableCell>
+                      <TableCell>{item.folhas_obras?.nome_campanha}</TableCell>
+                      <TableCell>{item.descricao}</TableCell>
+                      <TableCell className="w-[100px] text-right">
+                        {item.quantidade}
+                      </TableCell>
+                      <TableCell className="w-[36px] min-w-[36px] text-center">
+                        <button
+                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getPColor(item)}`}
+                          title={
+                            item.prioridade
+                              ? 'Prioritário'
+                              : item.created_at &&
+                                  (Date.now() -
+                                    new Date(item.created_at).getTime()) /
+                                    (1000 * 60 * 60 * 24) >
+                                    3
+                                ? 'Aguardando há mais de 3 dias'
+                                : 'Normal'
+                          }
+                          onClick={async () => {
+                            const newPrioridade = !item.prioridade
+                            await updateItem(
+                              item.id,
+                              'prioridade',
+                              newPrioridade,
+                            )
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell className="w-[100px]">
+                        <Button
+                          size="icon"
+                          variant="default"
+                          onClick={() => setOpenItemId(item.id)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {sortedItems.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-8 text-center">
+                        Nenhum item encontrado.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="analytics">
+          <ProductionAnalyticsCharts
+            supabase={supabase}
+            onRefresh={fetchData}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Drawer */}
       <Drawer
