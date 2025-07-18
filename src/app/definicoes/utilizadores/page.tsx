@@ -238,7 +238,7 @@ export default function UtilizadoresPage() {
     fetchProfiles()
     fetchRoles()
     fetchAuthUsers()
-  }, [fetchProfiles, fetchRoles, fetchAuthUsers])
+  }, []) // fetch functions temporarily removed to prevent infinite loop
 
   // Get auth user info for a profile
   const getAuthUserForProfile = (userId: string) => {

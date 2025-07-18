@@ -525,7 +525,7 @@ const DesignerAnalyticsCharts = ({
 
   useEffect(() => {
     fetchAnalyticsData()
-  }, [fetchAnalyticsData])
+  }, []) // fetchAnalyticsData - temporarily removed to prevent infinite loop
 
   const handleRefresh = async () => {
     await fetchAnalyticsData()
