@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { createBrowserClient } from '@/utils/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,7 +13,15 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Drawer,
+  DrawerContent,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerDescription,
+  DrawerClose,
+} from '@/components/ui/drawer'
 import {
   Tooltip,
   TooltipContent,
@@ -25,55 +33,40 @@ import {
   Trash2,
   X,
   Loader2,
-  Edit,
+  Pencil,
+  Check,
   RotateCw,
   ArrowUp,
   ArrowDown,
 } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
-import CreatableFornecedorCombobox, {
-  FornecedorOption,
-} from '@/components/CreatableFornecedorCombobox'
-import CreatableMaterialCombobox, {
-  MaterialOption,
-} from '@/components/CreatableMaterialCombobox'
-import { Checkbox } from '@/components/ui/checkbox'
-import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-  DrawerClose,
-  DrawerDescription,
-} from '@/components/ui/drawer'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { useDebounce } from '@/hooks/useDebounce'
+import Combobox from '@/components/ui/Combobox'
+import CreatableCombobox from '@/components/ui/CreatableCombobox'
 
 interface Material {
   id: string
   tipo: string | null
+  referencia: string | null
+  ref_fornecedor: string | null
   material: string | null
   carateristica: string | null
   cor: string | null
-  valor_m2: number | null
-  referencia: string | null
-  ref_cliente: string | null
-  ref_fornecedor: string | null
-  fornecedor: string | null
-  fornecedor_id: string | null
   tipo_canal: string | null
   dimensoes: string | null
   valor_m2_custo: number | null
   valor_placa: number | null
+  valor_m2: number | null
   qt_palete: number | null
+  fornecedor_id: string | null
   ORC: boolean | null
-  stock_minimo: number | null
-  stock_critico: number | null
+  created_at: string
+  updated_at: string
+}
+
+interface FornecedorOption {
+  value: string
+  label: string
 }
 
 export default function MateriaisPage() {
@@ -115,39 +108,117 @@ export default function MateriaisPage() {
   const [availableCores, setAvailableCores] = useState<string[]>([])
   const [availableTipos, setAvailableTipos] = useState<string[]>([])
 
+  // Debounced filter values for performance
+  const debouncedMaterialFilter = useDebounce(materialFilter, 300)
+  const debouncedCaracteristicaFilter = useDebounce(caracteristicaFilter, 300)
+  const debouncedCorFilter = useDebounce(corFilter, 300)
+
   const supabase = createBrowserClient()
 
-  const fetchMateriais = async () => {
-    setLoading(true)
-    try {
-      console.log('Fetching materiais...')
-      const { data, error } = await supabase
-        .from('materiais')
-        .select(
-          'id, tipo, material, carateristica, cor, valor_m2, referencia, ref_cliente, ref_fornecedor, fornecedor, fornecedor_id, tipo_canal, dimensoes, valor_m2_custo, valor_placa, qt_palete, ORC, stock_minimo, stock_critico',
-        )
-        .order('material', { ascending: true })
+  // Convert to database-level filtering
+  const fetchMateriais = useCallback(
+    async (
+      filters: {
+        materialFilter?: string
+        caracteristicaFilter?: string
+        corFilter?: string
+      } = {},
+    ) => {
+      setLoading(true)
+      try {
+        let query = supabase.from('materiais').select('*')
 
-      console.log('Materiais fetch result:', { data, error })
+        // Apply filters at database level
+        if (filters.materialFilter?.trim()) {
+          query = query.ilike('material', `%${filters.materialFilter.trim()}%`)
+        }
 
-      if (error) {
-        console.error('Supabase error fetching materiais:', error)
-        alert(`Error fetching materiais: ${error.message}`)
-      } else if (data) {
-        console.log('Successfully fetched materiais:', data)
-        setMateriais(data)
+        if (filters.caracteristicaFilter?.trim()) {
+          query = query.ilike(
+            'carateristica',
+            `%${filters.caracteristicaFilter.trim()}%`,
+          )
+        }
+
+        if (filters.corFilter?.trim()) {
+          query = query.ilike('cor', `%${filters.corFilter.trim()}%`)
+        }
+
+        // Apply sorting at database level
+        if (sortColumn) {
+          const ascending = sortDirection === 'asc'
+          if (
+            sortColumn === 'valor_m2' ||
+            sortColumn === 'valor_m2_custo' ||
+            sortColumn === 'valor_placa' ||
+            sortColumn === 'qt_palete'
+          ) {
+            query = query.order(sortColumn, { ascending, nullsFirst: false })
+          } else if (sortColumn === 'ORC') {
+            query = query.order(sortColumn, { ascending, nullsFirst: false })
+          } else {
+            query = query.order(sortColumn, { ascending, nullsFirst: false })
+          }
+        } else {
+          query = query.order('material', { ascending: true })
+        }
+
+        const { data, error } = await query
+        console.log('Materiais fetch result:', { data, error })
+
+        if (error) {
+          console.error('Supabase error fetching materiais:', error)
+          alert(`Error fetching materiais: ${error.message}`)
+        } else if (data) {
+          console.log('Successfully fetched materiais:', data)
+          setMateriais(data)
+        }
+      } catch (error) {
+        console.error('JavaScript error fetching materiais:', error)
+        alert(`JavaScript error: ${error}`)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('JavaScript error fetching materiais:', error)
-      alert(`JavaScript error: ${error}`)
-    } finally {
-      setLoading(false)
-    }
-  }
+    },
+    [sortColumn, sortDirection, supabase],
+  )
 
+  // Initial load
   useEffect(() => {
     fetchMateriais()
-  }, [])
+  }, [fetchMateriais])
+
+  // Trigger search when filters change (debounced)
+  useEffect(() => {
+    fetchMateriais({
+      materialFilter: debouncedMaterialFilter,
+      caracteristicaFilter: debouncedCaracteristicaFilter,
+      corFilter: debouncedCorFilter,
+    })
+  }, [
+    debouncedMaterialFilter,
+    debouncedCaracteristicaFilter,
+    debouncedCorFilter,
+    fetchMateriais,
+  ])
+
+  // Trigger search when sorting changes
+  useEffect(() => {
+    if (sortColumn) {
+      fetchMateriais({
+        materialFilter: debouncedMaterialFilter,
+        caracteristicaFilter: debouncedCaracteristicaFilter,
+        corFilter: debouncedCorFilter,
+      })
+    }
+  }, [
+    sortColumn,
+    sortDirection,
+    debouncedMaterialFilter,
+    debouncedCaracteristicaFilter,
+    debouncedCorFilter,
+    fetchMateriais,
+  ])
 
   useEffect(() => {
     const fetchFornecedores = async () => {
@@ -233,67 +304,6 @@ export default function MateriaisPage() {
       <ArrowDown className="ml-1 h-4 w-4" />
     )
   }
-
-  const filteredAndSortedMateriais = materiais
-    .filter((material) => {
-      // Specific filters
-      const materialMatch =
-        !materialFilter ||
-        (material.material &&
-          material.material
-            .toLowerCase()
-            .includes(materialFilter.toLowerCase()))
-
-      const caracteristicaMatch =
-        !caracteristicaFilter ||
-        (material.carateristica &&
-          material.carateristica
-            .toLowerCase()
-            .includes(caracteristicaFilter.toLowerCase()))
-
-      const corMatch =
-        !corFilter ||
-        (material.cor &&
-          material.cor.toLowerCase().includes(corFilter.toLowerCase()))
-
-      return materialMatch && caracteristicaMatch && corMatch
-    })
-    .sort((a, b) => {
-      if (!sortColumn) return 0
-
-      const aValue = a[sortColumn as keyof Material] ?? ''
-      const bValue = b[sortColumn as keyof Material] ?? ''
-
-      // Handle numeric sorting for valor_m2
-      if (sortColumn === 'valor_m2') {
-        const aNum = Number(aValue) || 0
-        const bNum = Number(bValue) || 0
-        return sortDirection === 'asc' ? aNum - bNum : bNum - aNum
-      }
-
-      // Handle boolean sorting for ORC
-      if (sortColumn === 'ORC') {
-        return sortDirection === 'asc'
-          ? aValue === bValue
-            ? 0
-            : aValue
-              ? -1
-              : 1
-          : aValue === bValue
-            ? 0
-            : aValue
-              ? 1
-              : -1
-      }
-
-      // Handle string sorting
-      const aStr = String(aValue).toLowerCase()
-      const bStr = String(bValue).toLowerCase()
-
-      if (aStr < bStr) return sortDirection === 'asc' ? -1 : 1
-      if (aStr > bStr) return sortDirection === 'asc' ? 1 : -1
-      return 0
-    })
 
   const handleEdit = (material: Material) => {
     setEditingMaterial(material)
@@ -686,21 +696,20 @@ export default function MateriaisPage() {
   }, [openDrawer])
 
   // Convert string arrays to MaterialOption arrays
-  const materialOptions: MaterialOption[] = availableMaterials.map(
+  const materialOptions: FornecedorOption[] = availableMaterials.map(
     (material) => ({
       value: material,
       label: material,
     }),
   )
 
-  const caracteristicaOptions: MaterialOption[] = availableCaracteristicas.map(
-    (caracteristica) => ({
+  const caracteristicaOptions: FornecedorOption[] =
+    availableCaracteristicas.map((caracteristica) => ({
       value: caracteristica,
       label: caracteristica,
-    }),
-  )
+    }))
 
-  const corOptions: MaterialOption[] = availableCores.map((cor) => ({
+  const corOptions: FornecedorOption[] = availableCores.map((cor) => ({
     value: cor,
     label: cor,
   }))
@@ -717,7 +726,32 @@ export default function MateriaisPage() {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={fetchMateriais}
+                    onClick={() => {
+                      setMaterialFilter('')
+                      setCaracteristicaFilter('')
+                      setCorFilter('')
+                    }}
+                    className="h-10 w-10 rounded-none"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Limpar Filtros</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() =>
+                      fetchMateriais({
+                        materialFilter: debouncedMaterialFilter,
+                        caracteristicaFilter: debouncedCaracteristicaFilter,
+                        corFilter: debouncedCorFilter,
+                      })
+                    }
                     className="h-10 w-10 rounded-none"
                   >
                     <RotateCw className="h-4 w-4" />
@@ -767,21 +801,6 @@ export default function MateriaisPage() {
               onChange={(e) => setMaterialFilter(e.target.value)}
               className="flex-1 rounded-none"
             />
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setMaterialFilter('')}
-                    className="h-10 w-10 rounded-none"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Limpar filtro</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
           </div>
 
           <div className="flex items-center gap-2">
@@ -794,21 +813,6 @@ export default function MateriaisPage() {
               onChange={(e) => setCaracteristicaFilter(e.target.value)}
               className="flex-1 rounded-none"
             />
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCaracteristicaFilter('')}
-                    className="h-10 w-10 rounded-none"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Limpar filtro</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
           </div>
 
           <div className="flex items-center gap-2">
@@ -819,21 +823,6 @@ export default function MateriaisPage() {
               onChange={(e) => setCorFilter(e.target.value)}
               className="flex-1 rounded-none"
             />
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setCorFilter('')}
-                    className="h-10 w-10 rounded-none"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Limpar filtro</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
           </div>
 
           {/* Clear all filters button in same row */}
@@ -938,12 +927,11 @@ export default function MateriaisPage() {
                       />
                     </TableCell>
                     <TableCell className="w-[250px] uppercase">
-                      <Textarea
+                      <Input
                         name="carateristica"
                         value={editRow.carateristica ?? ''}
                         onChange={handleInputChange}
-                        className="min-h-[40px] w-full resize-none rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
-                        rows={2}
+                        className="h-10 rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
                       />
                     </TableCell>
                     <TableCell className="uppercase">
@@ -1057,7 +1045,7 @@ export default function MateriaisPage() {
                       <Loader2 className="text-muted-foreground mx-auto h-8 w-8 animate-spin" />
                     </TableCell>
                   </TableRow>
-                ) : filteredAndSortedMateriais.length === 0 ? (
+                ) : materiais.length === 0 ? (
                   <TableRow>
                     <TableCell
                       colSpan={8}
@@ -1067,7 +1055,7 @@ export default function MateriaisPage() {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredAndSortedMateriais.map((material) => (
+                  materiais.map((material) => (
                     <TableRow key={material.id}>
                       <TableCell>{material.referencia ?? '-'}</TableCell>
                       <TableCell className="w-[250px]">
@@ -1113,7 +1101,7 @@ export default function MateriaisPage() {
                                 onClick={() => handleEdit(material)}
                                 className="h-10 w-10 rounded-none"
                               >
-                                <Edit className="h-4 w-4" />
+                                <Pencil className="h-4 w-4" />
                               </Button>
                             </TooltipTrigger>
                             <TooltipContent>Editar</TooltipContent>
@@ -1159,7 +1147,7 @@ export default function MateriaisPage() {
                 <X className="h-4 w-4" />
               </Button>
               <DrawerTitle className="flex items-center gap-2 uppercase">
-                <Edit className="h-5 w-5" />
+                <Pencil className="h-5 w-5" />
                 Editar Material
               </DrawerTitle>
               <DrawerDescription>
@@ -1184,7 +1172,7 @@ export default function MateriaisPage() {
                     >
                       Fornecedor
                     </Label>
-                    <CreatableFornecedorCombobox
+                    <CreatableCombobox
                       value={
                         editingMaterial?.fornecedor_id
                           ? String(editingMaterial.fornecedor_id).toUpperCase()
@@ -1213,21 +1201,21 @@ export default function MateriaisPage() {
                     >
                       Tipo
                     </Label>
-                    <Select
+                    <Combobox
                       value={editingMaterial?.tipo?.toUpperCase() ?? ''}
                       onValueChange={handleTipoChange}
                     >
-                      <SelectTrigger className="mt-2 rounded-none">
-                        <SelectValue placeholder="SELECIONE O TIPO" />
-                      </SelectTrigger>
-                      <SelectContent className="rounded-none">
+                      <Combobox.Trigger className="mt-2 rounded-none">
+                        <Combobox.Value placeholder="SELECIONE O TIPO" />
+                      </Combobox.Trigger>
+                      <Combobox.Content className="rounded-none">
                         {availableTipos.map((tipo) => (
-                          <SelectItem key={tipo} value={tipo}>
+                          <Combobox.Item key={tipo} value={tipo}>
                             {tipo}
-                          </SelectItem>
+                          </Combobox.Item>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </Combobox.Content>
+                    </Combobox>
                   </div>
                 </div>
 
@@ -1240,7 +1228,7 @@ export default function MateriaisPage() {
                     >
                       Material
                     </Label>
-                    <CreatableMaterialCombobox
+                    <CreatableCombobox
                       value={editingMaterial?.material?.toUpperCase() ?? ''}
                       onChange={handleMaterialComboChange}
                       options={materialOptions}
@@ -1256,7 +1244,7 @@ export default function MateriaisPage() {
                     >
                       Características
                     </Label>
-                    <CreatableMaterialCombobox
+                    <CreatableCombobox
                       value={
                         editingMaterial?.carateristica?.toUpperCase() ?? ''
                       }
@@ -1274,7 +1262,7 @@ export default function MateriaisPage() {
                     >
                       Cor
                     </Label>
-                    <CreatableMaterialCombobox
+                    <CreatableCombobox
                       value={editingMaterial?.cor?.toUpperCase() ?? ''}
                       onChange={handleCorComboChange}
                       options={corOptions}
@@ -1365,14 +1353,13 @@ export default function MateriaisPage() {
                     >
                       Dimensões
                     </Label>
-                    <Textarea
+                    <Input
                       id="dimensoes"
                       value={editingMaterial?.dimensoes ?? ''}
                       onChange={(e) =>
                         handleDrawerInputChange('dimensoes', e.target.value)
                       }
-                      className="mt-2 min-h-[40px] rounded-none"
-                      rows={2}
+                      className="mt-2 h-10 rounded-none"
                     />
                   </div>
                 </div>

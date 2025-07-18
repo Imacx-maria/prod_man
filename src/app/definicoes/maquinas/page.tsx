@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@/utils/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -29,6 +29,7 @@ import {
 } from '@/components/ui/tooltip'
 import { Plus, Trash2, X, Loader2, Edit, RotateCw } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
+import { useDebounce } from '@/hooks/useDebounce'
 
 interface Maquina {
   id: string
@@ -49,43 +50,59 @@ export default function MaquinasPage() {
     valor_m2: '',
   })
 
+  // Debounced filter values for performance
+  const debouncedNameFilter = useDebounce(nameFilter, 300)
+
   const supabase = createBrowserClient()
 
-  const fetchMaquinas = async () => {
-    setLoading(true)
-    try {
-      console.log('Fetching maquinas...')
-      const { data, error } = await supabase
-        .from('maquinas')
-        .select('*')
-        .order('maquina', { ascending: true })
+  // Convert to database-level filtering
+  const fetchMaquinas = useCallback(
+    async (filters: { nameFilter?: string } = {}) => {
+      setLoading(true)
+      try {
+        console.log('Fetching maquinas...')
+        let query = supabase.from('maquinas').select('*')
 
-      console.log('Maquinas fetch result:', { data, error })
+        // Apply filters at database level
+        if (filters.nameFilter?.trim()) {
+          query = query.ilike('maquina', `%${filters.nameFilter.trim()}%`)
+        }
 
-      if (error) {
-        console.error('Supabase error fetching maquinas:', error)
-        alert(`Error fetching maquinas: ${error.message}`)
-      } else if (data) {
-        console.log('Successfully fetched maquinas:', data)
-        setMaquinas(data)
+        const { data, error } = await query.order('maquina', {
+          ascending: true,
+        })
+
+        console.log('Maquinas fetch result:', { data, error })
+
+        if (error) {
+          console.error('Supabase error fetching maquinas:', error)
+          alert(`Error fetching maquinas: ${error.message}`)
+        } else if (data) {
+          console.log('Successfully fetched maquinas:', data)
+          setMaquinas(data)
+        }
+      } catch (error) {
+        console.error('JavaScript error fetching maquinas:', error)
+        alert(`JavaScript error: ${error}`)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('JavaScript error fetching maquinas:', error)
-      alert(`JavaScript error: ${error}`)
-    } finally {
-      setLoading(false)
-    }
-  }
+    },
+    [supabase],
+  )
 
+  // Initial load
   useEffect(() => {
     fetchMaquinas()
-  }, [])
+  }, [fetchMaquinas])
 
-  const filteredMaquinas = maquinas.filter(
-    (maquina) =>
-      maquina.maquina &&
-      maquina.maquina.toLowerCase().includes(nameFilter.toLowerCase()),
-  )
+  // Trigger search when filter changes
+  useEffect(() => {
+    fetchMaquinas({ nameFilter: debouncedNameFilter })
+  }, [debouncedNameFilter, fetchMaquinas])
+
+  // Remove client-side filtering - now using database-level filtering
+  const filteredMaquinas = maquinas
 
   // Add handler for inline add
   const handleAddNew = () => {
@@ -258,6 +275,24 @@ export default function MaquinasPage() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Limpar filtro</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() =>
+                    fetchMaquinas({ nameFilter: debouncedNameFilter })
+                  }
+                  aria-label="Atualizar"
+                  className="h-10 w-10 rounded-none"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Atualizar</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>

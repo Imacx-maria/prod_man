@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@/utils/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -34,6 +34,7 @@ import {
 import PermissionGuard from '@/components/PermissionGuard'
 import { format } from 'date-fns'
 import { pt } from 'date-fns/locale'
+import { useDebounce } from '@/hooks/useDebounce'
 
 interface Feriado {
   id: string
@@ -56,55 +57,65 @@ export default function FeriadosPage() {
   )
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
+  // Debounced filter values for performance
+  const debouncedDescriptionFilter = useDebounce(descriptionFilter, 300)
+
   const supabase = createBrowserClient()
 
-  const fetchFeriados = async () => {
-    setLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from('feriados')
-        .select('*')
-        .order('holiday_date', { ascending: true })
+  // Convert to database-level filtering
+  const fetchFeriados = useCallback(
+    async (filters: { descriptionFilter?: string } = {}) => {
+      setLoading(true)
+      try {
+        let query = supabase.from('feriados').select('*')
 
-      if (!error && data) {
-        setFeriados(data)
+        // Apply filters at database level
+        if (filters.descriptionFilter?.trim()) {
+          query = query.ilike(
+            'description',
+            `%${filters.descriptionFilter.trim()}%`,
+          )
+        }
+
+        // Apply sorting at database level
+        const ascending = sortDirection === 'asc'
+        if (sortColumn === 'holiday_date') {
+          query = query.order('holiday_date', { ascending })
+        } else {
+          query = query.order('description', { ascending })
+        }
+
+        const { data, error } = await query
+
+        if (!error && data) {
+          setFeriados(data)
+        }
+      } catch (error) {
+        console.error('Error fetching feriados:', error)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('Error fetching feriados:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    fetchFeriados()
-  }, [])
-
-  const filteredFeriados = feriados.filter((feriado) =>
-    feriado.description.toLowerCase().includes(descriptionFilter.toLowerCase()),
+    },
+    [supabase, sortColumn, sortDirection],
   )
 
-  const sortedFeriados = [...filteredFeriados].sort((a, b) => {
-    if (sortColumn === 'holiday_date') {
-      const aValue = new Date(a.holiday_date).getTime()
-      const bValue = new Date(b.holiday_date).getTime()
+  // Initial load
+  useEffect(() => {
+    fetchFeriados()
+  }, [fetchFeriados])
 
-      if (sortDirection === 'asc') {
-        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
-      } else {
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
-      }
-    } else {
-      const aValue = a.description.toLowerCase()
-      const bValue = b.description.toLowerCase()
+  // Trigger search when filter changes
+  useEffect(() => {
+    fetchFeriados({ descriptionFilter: debouncedDescriptionFilter })
+  }, [debouncedDescriptionFilter, fetchFeriados])
 
-      if (sortDirection === 'asc') {
-        return aValue < bValue ? -1 : aValue > bValue ? 1 : 0
-      } else {
-        return aValue > bValue ? -1 : aValue < bValue ? 1 : 0
-      }
-    }
-  })
+  // Trigger search when sorting changes
+  useEffect(() => {
+    fetchFeriados({ descriptionFilter: debouncedDescriptionFilter })
+  }, [sortColumn, sortDirection, debouncedDescriptionFilter, fetchFeriados])
+
+  // Remove client-side filtering and sorting - now using database-level operations
+  const sortedFeriados = feriados
 
   const handleSort = (column: 'holiday_date' | 'description') => {
     if (sortColumn === column) {
@@ -231,6 +242,25 @@ export default function FeriadosPage() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Limpar filtro</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() =>
+                    fetchFeriados({
+                      descriptionFilter: debouncedDescriptionFilter,
+                    })
+                  }
+                  className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Atualizar</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>

@@ -526,21 +526,13 @@ export default function StocksPage() {
         }
       }
 
-      // Apply default 6-month filter if no date filters are provided
-      if (!filters.dateFrom && !filters.dateTo) {
-        const sixMonthsAgo = new Date()
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6)
-        const defaultDateFrom = sixMonthsAgo.toISOString().split('T')[0]
-        query = query.gte('data', defaultDateFrom)
-      } else {
-        // Apply user-provided date filters
-        if (filters.dateFrom) {
-          query = query.gte('data', filters.dateFrom)
-        }
+      // Apply user-provided date filters
+      if (filters.dateFrom) {
+        query = query.gte('data', filters.dateFrom)
+      }
 
-        if (filters.dateTo) {
-          query = query.lte('data', filters.dateTo)
-        }
+      if (filters.dateTo) {
+        query = query.lte('data', filters.dateTo)
       }
 
       const { data, error } = await query.order('created_at', {
@@ -602,7 +594,14 @@ export default function StocksPage() {
     }
 
     loadData()
-  }, [])
+  }, [
+    fetchStocks,
+    fetchMaterials,
+    fetchFornecedores,
+    fetchCurrentStocks,
+    fetchPaletes,
+    fetchProfiles,
+  ])
 
   // Effect to trigger filtering when paletes filters change
   useEffect(() => {
@@ -622,6 +621,7 @@ export default function StocksPage() {
     paletesAuthorFilter,
     paletesDateFrom,
     paletesDateTo,
+    fetchPaletes,
   ])
 
   useEffect(() => {
@@ -632,7 +632,7 @@ export default function StocksPage() {
     return () => {
       window.removeEventListener('focus', handleFocus)
     }
-  }, [])
+  }, [fetchMaterials])
 
   // Helper to get reference for a material id - moved up to avoid hoisting issues
   const getReferenciaByMaterialId = (materialId: string) => {
@@ -3127,7 +3127,7 @@ export default function StocksPage() {
             </div>
           </TabsContent>
 
-          <TabsContent value="analytics" className="space-y-4">
+          <TabsContent value="analytics" className="mb-8 space-y-4">
             <StockAnalyticsCharts
               currentStocks={currentStocks}
               onRefresh={() => {

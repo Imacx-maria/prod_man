@@ -187,6 +187,12 @@ export const LogisticaTableWithCreatable: React.FC<
         field: 'saiu',
         tooltip: 'Saiu',
       },
+      {
+        label: 'AÇÕES',
+        width: 'w-[100px] max-w-[100px]',
+        field: 'acoes',
+        tooltip: 'Ações',
+      },
     ]
 
     // Filter out hidden columns
@@ -365,7 +371,8 @@ export const LogisticaTableWithCreatable: React.FC<
                 col.field === 'source_selection' ||
                 col.field === 'tipo' ||
                 col.field === 'notas' ||
-                col.field === 'saiu'
+                col.field === 'saiu' ||
+                col.field === 'acoes'
                   ? 'text-center'
                   : ''
               }`}
@@ -376,7 +383,8 @@ export const LogisticaTableWithCreatable: React.FC<
                   col.field === 'source_selection' ||
                   col.field === 'tipo' ||
                   col.field === 'notas' ||
-                  col.field === 'saiu'
+                  col.field === 'saiu' ||
+                  col.field === 'acoes'
                     ? 'justify-center'
                     : 'justify-between'
                 }`}
@@ -392,7 +400,7 @@ export const LogisticaTableWithCreatable: React.FC<
                   </Tooltip>
                 </TooltipProvider>
 
-                {sortColumn === col.field && (
+                {sortColumn === col.field && col.field !== 'acoes' && (
                   <span
                     className={
                       col.field === 'source_selection' ||
@@ -512,8 +520,8 @@ export const LogisticaTableWithCreatable: React.FC<
 
                   {/* Item */}
                   <TableCell className="text-sm">
-                    <Textarea
-                      className="min-h-[40px] resize-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                    <Input
+                      className="h-10 border-0 text-sm outline-0 focus:border-0 focus:ring-0"
                       value={
                         editRows[row.id]?.item ||
                         row.descricao ||
@@ -527,7 +535,6 @@ export const LogisticaTableWithCreatable: React.FC<
                         onItemSave &&
                         onItemSave(row, editRows[row.id]?.item || '')
                       }
-                      rows={2}
                     />
                   </TableCell>
 
@@ -679,6 +686,42 @@ export const LogisticaTableWithCreatable: React.FC<
                       </div>
                     </TableCell>
                   )}
+
+                  {/* Actions */}
+                  <TableCell className="flex w-[100px] justify-center gap-2 pr-2">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="secondary"
+                            className="flex aspect-square size-10 items-center justify-center !p-0"
+                            onClick={() => onDuplicateRow(row)}
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Duplicar</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="icon"
+                            variant="destructive"
+                            className="flex aspect-square size-10 items-center justify-center !p-0"
+                            onClick={() =>
+                              handleDelete(row.id || row.items_base?.id || '')
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Eliminar</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </TableCell>
                 </TableRow>
               ))
             )}

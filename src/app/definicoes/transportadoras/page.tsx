@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@/utils/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,8 +27,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Plus, Trash2, X, Loader2, Edit, RotateCw } from 'lucide-react'
+import { Plus, Trash2, X, Loader2, Pencil, Check, RotateCw } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
+import { useDebounce } from '@/hooks/useDebounce'
 
 interface Transportadora {
   id: string
@@ -48,33 +49,49 @@ export default function TransportadorasPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
 
+  // Debounced filter values for performance
+  const debouncedNameFilter = useDebounce(nameFilter, 300)
+
   const supabase = createBrowserClient()
 
-  const fetchTransportadoras = async () => {
-    setLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from('transportadora')
-        .select('*')
-        .order('name', { ascending: true })
+  // Convert to database-level filtering
+  const fetchTransportadoras = useCallback(
+    async (filters: { nameFilter?: string } = {}) => {
+      setLoading(true)
+      try {
+        let query = supabase.from('transportadora').select('*')
 
-      if (!error && data) {
-        setTransportadoras(data)
+        // Apply filters at database level
+        if (filters.nameFilter?.trim()) {
+          query = query.ilike('name', `%${filters.nameFilter.trim()}%`)
+        }
+
+        const { data, error } = await query.order('name', { ascending: true })
+
+        if (!error && data) {
+          setTransportadoras(data)
+        }
+      } catch (error) {
+        console.error('Error fetching transportadoras:', error)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('Error fetching transportadoras:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+    },
+    [supabase],
+  )
 
+  // Initial load
   useEffect(() => {
     fetchTransportadoras()
-  }, [])
+  }, [fetchTransportadoras])
 
-  const filteredTransportadoras = transportadoras.filter((transportadora) =>
-    transportadora.name.toLowerCase().includes(nameFilter.toLowerCase()),
-  )
+  // Trigger search when filter changes
+  useEffect(() => {
+    fetchTransportadoras({ nameFilter: debouncedNameFilter })
+  }, [debouncedNameFilter, fetchTransportadoras])
+
+  // Remove client-side filtering - now using database-level filtering
+  const filteredTransportadoras = transportadoras
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -260,6 +277,23 @@ export default function TransportadorasPage() {
               <TooltipContent>Limpar filtro</TooltipContent>
             </Tooltip>
           </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() =>
+                    fetchTransportadoras({ nameFilter: debouncedNameFilter })
+                  }
+                  aria-label="Atualizar"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Atualizar</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
 
         {/* Table */}
@@ -421,7 +455,7 @@ export default function TransportadorasPage() {
                                       disabled={editingId !== null}
                                       className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
                                     >
-                                      <Edit className="h-4 w-4" />
+                                      <Pencil className="h-4 w-4" />
                                     </Button>
                                   </TooltipTrigger>
                                   <TooltipContent>Editar</TooltipContent>

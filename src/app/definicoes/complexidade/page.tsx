@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@/utils/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -21,10 +21,13 @@ import {
 } from '@/components/ui/tooltip'
 import { Plus, Trash2, X, Loader2, Edit, RotateCw } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
+import { useDebounce } from '@/hooks/useDebounce'
 
 interface Complexidade {
   id: string
   grau: string
+  created_at: string
+  updated_at: string
 }
 
 export default function ComplexidadePage() {
@@ -35,33 +38,49 @@ export default function ComplexidadePage() {
   const [grauFilter, setGrauFilter] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
+  // Debounced filter values for performance
+  const debouncedGrauFilter = useDebounce(grauFilter, 300)
+
   const supabase = createBrowserClient()
 
-  const fetchComplexidades = async () => {
-    setLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from('complexidade')
-        .select('*')
-        .order('grau', { ascending: true })
+  // Convert to database-level filtering
+  const fetchComplexidades = useCallback(
+    async (filters: { grauFilter?: string } = {}) => {
+      setLoading(true)
+      try {
+        let query = supabase.from('complexidade').select('*')
 
-      if (!error && data) {
-        setComplexidades(data)
+        // Apply filters at database level
+        if (filters.grauFilter?.trim()) {
+          query = query.ilike('grau', `%${filters.grauFilter.trim()}%`)
+        }
+
+        const { data, error } = await query.order('grau', { ascending: true })
+
+        if (!error && data) {
+          setComplexidades(data)
+        }
+      } catch (error) {
+        console.error('Error fetching complexidades:', error)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('Error fetching complexidades:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+    },
+    [supabase],
+  )
 
+  // Initial load
   useEffect(() => {
     fetchComplexidades()
-  }, [])
+  }, [fetchComplexidades])
 
-  const filteredComplexidades = complexidades.filter((complexidade) =>
-    complexidade.grau.toLowerCase().includes(grauFilter.toLowerCase()),
-  )
+  // Trigger search when filter changes
+  useEffect(() => {
+    fetchComplexidades({ grauFilter: debouncedGrauFilter })
+  }, [debouncedGrauFilter, fetchComplexidades])
+
+  // Remove client-side filtering - now using database-level filtering
+  const filteredComplexidades = complexidades
 
   const handleAddNew = async () => {
     const newGrau = prompt('Digite o novo grau de complexidade:')
@@ -194,6 +213,23 @@ export default function ComplexidadePage() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Limpar filtro</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() =>
+                    fetchComplexidades({ grauFilter: debouncedGrauFilter })
+                  }
+                  className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Atualizar</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>

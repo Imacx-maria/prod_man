@@ -1,8 +1,8 @@
-"use client"
+'use client'
 
 import React, { useState, useEffect } from 'react'
-import { Check, ChevronsUpDown, Loader2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Check, ChevronsUpDown, Loader2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import {
   Command,
   CommandEmpty,
@@ -10,13 +10,13 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-} from "@/components/ui/command"
+} from '@/components/ui/command'
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/ui/popover"
-import { cn } from "@/utils/tailwind"
+} from '@/components/ui/popover'
+import { cn } from '@/utils/tailwind'
 import { useDebounce } from '@/hooks/useDebounce'
 import { Label } from '@/components/ui/label'
 
@@ -60,28 +60,31 @@ const Combobox: React.FC<ComboboxProps> = ({
 }) => {
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [filteredOptions, setFilteredOptions] = useState<ComboboxOption[]>(options)
-  
+  const [filteredOptions, setFilteredOptions] =
+    useState<ComboboxOption[]>(options)
+
   // Get the selected item's label from the value
-  const selectedLabel = value ? (
-    options.find(option => option.value === value)?.label || ''
-  ) : ''
-  
+  const selectedLabel = value
+    ? options.find((option) => option.value === value)?.label || ''
+    : ''
+
   // Filter options as user types
   useEffect(() => {
     if (!open) return
-    
-    const filtered = search.trim() 
-      ? options.filter(opt => {
+
+    const filtered = search.trim()
+      ? options.filter((opt) => {
           const label = opt.label.toLowerCase()
           const searchTerm = search.toLowerCase().trim()
-          return label.startsWith(searchTerm) || label.includes(` ${searchTerm}`)
+          return (
+            label.startsWith(searchTerm) || label.includes(` ${searchTerm}`)
+          )
         })
       : options
-    
+
     setFilteredOptions(filtered)
   }, [search, open, options])
-  
+
   // Debounce search updates to prevent too many re-renders
   const debouncedSetSearch = useDebounce((val: string) => setSearch(val), 300)
 
@@ -89,19 +92,18 @@ const Combobox: React.FC<ComboboxProps> = ({
   const comboboxId = React.useId()
   const labelId = label ? `${comboboxId}-label` : undefined
   const errorId = error ? `${comboboxId}-error` : undefined
-  
+
   return (
     <div className={className}>
       {label && (
-        <Label 
-          id={labelId} 
-          htmlFor={comboboxId} 
-          className="mb-1 block"
-        >
+        <Label id={labelId} htmlFor={comboboxId} className="mb-1 block">
           {label}
         </Label>
       )}
-      <div className={`relative w-full max-w-[${maxWidth}]`} style={{ maxWidth }}>
+      <div
+        className={`relative w-full max-w-[${maxWidth}]`}
+        style={{ maxWidth }}
+      >
         <Popover open={open && !disabled} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button
@@ -113,14 +115,14 @@ const Combobox: React.FC<ComboboxProps> = ({
               aria-invalid={!!error}
               aria-describedby={errorId}
               className={cn(
-                "w-full justify-between border-2 border-border shadow-none",
-                error ? "border-red-500" : "border-input",
-                "hover:translate-x-boxShadowX hover:translate-y-boxShadowY",
-                buttonClassName
+                'border-border w-full justify-between border-2 shadow-none',
+                error ? 'border-red-500' : 'border-input',
+                'hover:translate-x-boxShadowX hover:translate-y-boxShadowY',
+                buttonClassName,
               )}
               disabled={disabled || loading}
             >
-              <span className="truncate max-w-[85%]">
+              <span className="max-w-[85%] truncate">
                 {value && selectedLabel ? selectedLabel : placeholder}
               </span>
               {loading ? (
@@ -130,16 +132,29 @@ const Combobox: React.FC<ComboboxProps> = ({
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-[--radix-popover-trigger-width] p-0 border-2 border-border bg-background">
+          <PopoverContent
+            className="max-h-[300px] w-full p-0"
+            align="start"
+            side="bottom"
+            sideOffset={4}
+            avoidCollisions={true}
+            collisionPadding={8}
+          >
             <Command className="rounded-base">
               <CommandInput
-                placeholder={searchPlaceholder || 
-                  (placeholder ? `Pesquisar ${placeholder.toLowerCase()}...` : 'Pesquisar...')}
+                placeholder={
+                  searchPlaceholder ||
+                  (placeholder
+                    ? `Pesquisar ${placeholder.toLowerCase()}...`
+                    : 'Pesquisar...')
+                }
                 className="h-9"
                 onValueChange={debouncedSetSearch}
               />
               <CommandList>
-                <CommandEmpty>{loading ? loadingMessage : emptyMessage}</CommandEmpty>
+                <CommandEmpty>
+                  {loading ? loadingMessage : emptyMessage}
+                </CommandEmpty>
                 <CommandGroup>
                   {filteredOptions.map((option) => (
                     <CommandItem
@@ -154,8 +169,8 @@ const Combobox: React.FC<ComboboxProps> = ({
                       <span className="truncate">{option.label}</span>
                       <Check
                         className={cn(
-                          "ml-auto h-4 w-4",
-                          value === option.value ? "opacity-100" : "opacity-0"
+                          'ml-auto h-4 w-4',
+                          value === option.value ? 'opacity-100' : 'opacity-0',
                         )}
                       />
                     </CommandItem>
@@ -165,10 +180,13 @@ const Combobox: React.FC<ComboboxProps> = ({
                       key="add-new-material"
                       value="add-new-material"
                       onSelect={() => {
-                        window.open('http://localhost:3000/definicoes/materiais', '_blank')
+                        window.open(
+                          'http://localhost:3000/definicoes/materiais',
+                          '_blank',
+                        )
                         setOpen(false)
                       }}
-                      className="text-sm text-blue-600 cursor-pointer"
+                      className="cursor-pointer text-sm text-blue-600"
                     >
                       + Adicionar novo material
                     </CommandItem>
@@ -180,11 +198,7 @@ const Combobox: React.FC<ComboboxProps> = ({
         </Popover>
       </div>
       {error && (
-        <div 
-          id={errorId} 
-          className="mt-1 text-sm text-red-600"
-          role="alert"
-        >
+        <div id={errorId} className="mt-1 text-sm text-red-600" role="alert">
           {error}
         </div>
       )}
@@ -192,4 +206,4 @@ const Combobox: React.FC<ComboboxProps> = ({
   )
 }
 
-export default Combobox 
+export default Combobox

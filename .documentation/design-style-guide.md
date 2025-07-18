@@ -2292,6 +2292,40 @@ interface StockEntry {
 - Maintain existing page functionality
 - Follow established tab naming patterns
 
+### Designer Analytics Implementation
+
+The Designer Analytics component follows the exact same pattern as Production Analytics, maintaining consistency across the application while focusing on design workflow metrics.
+
+**Key Designer Metrics:**
+
+1. **Monthly Items Count:** Tracked from `items_base` table
+2. **Average Completion Time:** Data-In to Paginação from `designer_items` table  
+3. **Complexity Analysis:** Work distribution by complexity type
+4. **Team Performance:** Designer FO assignments and completion rates
+
+**Tab Structure:**
+```tsx
+<Tabs defaultValue="overview" className="w-full">
+  <TabsList className="grid w-full grid-cols-3 rounded-none border-2">
+    <TabsTrigger value="overview" className="rounded-none">Visão Geral</TabsTrigger>
+    <TabsTrigger value="complexity" className="rounded-none">Análise por Complexidade</TabsTrigger>
+    <TabsTrigger value="team" className="rounded-none">Performance da Equipa</TabsTrigger>
+  </TabsList>
+</Tabs>
+```
+
+**Database Queries:**
+- `items_base` with `folhas_obras` join for monthly counts
+- `designer_items` with completion time calculations
+- `profiles` join for designer team analysis
+- Current year filtering consistent with production analytics
+
+**Chart Types Used:**
+- Bar charts for monthly item counts
+- Line charts for average completion times
+- Stacked bar charts for complexity distribution
+- Horizontal bar charts for team performance
+
 ## Tooltips
 
 - All tooltips must use small caps: capitalize only the first letter, rest lowercase (e.g. "Adicionar", "Atualizar").

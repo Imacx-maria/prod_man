@@ -78,6 +78,8 @@ import useDrawerFocus from '@/hooks/useDrawerFocus'
 import debounce from 'lodash/debounce'
 import { ComplexidadeCombobox } from '@/components/ui/ComplexidadeCombobox'
 import { useComplexidades } from '@/hooks/useComplexidades'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import DesignerAnalyticsCharts from '@/components/DesignerAnalyticsCharts'
 
 interface Job {
   id: string
@@ -181,6 +183,88 @@ const fetchJobs = async (
   const supabase = createBrowserClient()
 
   try {
+    // Check if item filtering is active
+    const itemFiltersActive = !!(
+      filters.itemFilter?.trim() || filters.codigoFilter?.trim()
+    )
+
+    console.log('fetchJobs called with filters:', filters)
+    console.log('Item filters active:', itemFiltersActive)
+
+    // For item/codigo filtering, we need to find jobs that have matching items
+    if (itemFiltersActive) {
+      console.log('🔍 Item search active - searching globally in items_base')
+
+      try {
+        // Search globally in items_base for any matching items
+        let itemQuery = supabase.from('items_base').select('folha_obra_id')
+
+        // Create OR conditions for combined search
+        const searchTerms = []
+        if (filters.itemFilter?.trim()) {
+          searchTerms.push(filters.itemFilter.trim())
+        }
+        if (filters.codigoFilter?.trim()) {
+          searchTerms.push(filters.codigoFilter.trim())
+        }
+
+        if (searchTerms.length > 0) {
+          // Search both descricao and codigo for all terms
+          for (const term of searchTerms) {
+            const { data: itemData } = await supabase
+              .from('items_base')
+              .select('folha_obra_id')
+              .or(`descricao.ilike.%${term}%,codigo.ilike.%${term}%`)
+
+            if (itemData && itemData.length > 0) {
+              const jobIds = Array.from(
+                new Set(itemData.map((item: any) => item.folha_obra_id)),
+              )
+              console.log(
+                `Found ${jobIds.length} jobs for search term "${term}":`,
+                jobIds,
+              )
+
+              // Get jobs directly - skip all other filters when item search is active
+              const { data: jobsData, error: jobsError } = await supabase
+                .from('folhas_obras')
+                .select(
+                  'id, data_in, numero_fo, profile_id, nome_campanha, data_saida, prioridade, notas, created_at',
+                )
+                .in('id', jobIds)
+                .order('created_at', { ascending: false })
+
+              if (jobsError) {
+                console.error('Error fetching jobs by item search:', jobsError)
+                setJobs([])
+                return
+              }
+
+              if (jobsData) {
+                console.log(
+                  `✅ Item search found ${jobsData.length} jobs - skipping all other filters`,
+                )
+                setJobs(jobsData)
+                return
+              }
+            }
+          }
+        }
+
+        // No matching items found
+        console.log('❌ No items found for search terms')
+        setJobs([])
+        return
+      } catch (itemQueryError) {
+        console.error('Error in item filtering:', itemQueryError)
+        setJobs([])
+        return
+      }
+    }
+
+    // Standard filtering (only when no item filters are active)
+    console.log('📋 Standard job filtering (no item search)')
+
     // Build dynamic query
     let query = supabase
       .from('folhas_obras')
@@ -202,50 +286,6 @@ const fetchJobs = async (
       query = query.ilike('nome_campanha', `%${filters.campaignFilter.trim()}%`)
     }
 
-    // For item/codigo filtering, we need to find jobs that have matching items
-    if (filters.itemFilter?.trim() || filters.codigoFilter?.trim()) {
-      try {
-        let itemQuery = supabase.from('items_base').select('folha_obra_id')
-
-        if (filters.itemFilter?.trim()) {
-          itemQuery = itemQuery.ilike(
-            'descricao',
-            `%${filters.itemFilter.trim()}%`,
-          )
-        }
-
-        if (filters.codigoFilter?.trim()) {
-          itemQuery = itemQuery.ilike(
-            'codigo',
-            `%${filters.codigoFilter.trim()}%`,
-          )
-        }
-
-        const { data: matchingItems, error: itemError } = await itemQuery
-
-        if (itemError) {
-          console.error('Error fetching items:', itemError)
-          setJobs([])
-          return
-        }
-
-        if (matchingItems && matchingItems.length > 0) {
-          const jobIds = Array.from(
-            new Set(matchingItems.map((item) => item.folha_obra_id)),
-          )
-          query = query.in('id', jobIds)
-        } else {
-          // No matching items found, return empty result
-          setJobs([])
-          return
-        }
-      } catch (itemQueryError) {
-        console.error('Error in item filtering:', itemQueryError)
-        setJobs([])
-        return
-      }
-    }
-
     const { data, error } = await query.order('created_at', {
       ascending: false,
     })
@@ -264,7 +304,7 @@ const fetchJobs = async (
     if (filters.showFechados !== undefined) {
       try {
         // Get all designer items for these jobs in one query
-        const jobIds = data.map((job) => job.id)
+        const jobIds = data.map((job: any) => job.id)
         const { data: allDesignerItems, error: designerError } = await supabase
           .from('designer_items')
           .select(
@@ -285,7 +325,7 @@ const fetchJobs = async (
 
         // Group items by job
         const itemsByJob = (allDesignerItems || []).reduce(
-          (acc, item) => {
+          (acc: any, item: any) => {
             const jobId = (item.items_base as any)?.folha_obra_id
             if (!acc[jobId]) acc[jobId] = []
             acc[jobId].push(item)
@@ -295,10 +335,10 @@ const fetchJobs = async (
         )
 
         // Filter jobs based on completion status
-        const filteredJobs = data.filter((job) => {
+        const filteredJobs = data.filter((job: any) => {
           const jobItems = itemsByJob[job.id] || []
           const itemCount = jobItems.length
-          const allPaginated = jobItems.every((item) => item.paginacao)
+          const allPaginated = jobItems.every((item: any) => item.paginacao)
 
           if (!filters.showFechados) {
             // Em Aberto: jobs with zero items OR at least one item not paginado
@@ -495,7 +535,7 @@ export default function DesignerFlow() {
         // Try to find the item in the current state
         const currentItem = Object.values(drawerItems)
           .flat()
-          .find((item) => item.id === itemId)
+          .find((item: any) => item.id === itemId) as Item | undefined
 
         if (!currentItem || !currentItem.folha_obra_id) {
           return
@@ -536,52 +576,55 @@ export default function DesignerFlow() {
   )
 
   // Debounced update function for complexidade
-  const debouncedUpdateComplexidade = useCallback(
-    debounce(async (itemId: string, complexidadeId: string | null) => {
-      console.log('debouncedUpdateComplexidade called with:', {
-        itemId,
-        complexidadeId,
-      })
-      const supabase = createBrowserClient()
-
-      try {
-        // Start a transaction by using single-query RPC
-        const { data, error } = await supabase.rpc('update_item_complexity', {
-          p_item_id: itemId,
-          p_complexity_id: complexidadeId,
+  const debouncedUpdateComplexidade = useMemo(
+    () =>
+      debounce(async (itemId: string, complexidadeId: string | null) => {
+        console.log('debouncedUpdateComplexidade called with:', {
+          itemId,
+          complexidadeId,
         })
+        const supabase = createBrowserClient()
 
-        if (error) {
-          console.error('Error updating complexity:', error)
-          // Revert optimistic update on error
-          setDrawerItems((prev) => {
-            const newDrawerItems = { ...prev }
-            for (const folhaId in newDrawerItems) {
-              const items = newDrawerItems[folhaId]
-              const itemIndex = items.findIndex((item) => item.id === itemId)
-              if (itemIndex !== -1) {
-                newDrawerItems[folhaId] = [
-                  ...items.slice(0, itemIndex),
-                  {
-                    ...items[itemIndex],
-                    complexidade_id: items[itemIndex].complexidade_id,
-                  },
-                  ...items.slice(itemIndex + 1),
-                ]
-                break
-              }
-            }
-            return newDrawerItems
+        try {
+          // Start a transaction by using single-query RPC
+          const { data, error } = await supabase.rpc('update_item_complexity', {
+            p_item_id: itemId,
+            p_complexity_id: complexidadeId,
           })
-          return
-        }
 
-        console.log('Successfully updated complexidade:', data)
-      } catch (error) {
-        console.error('Error in debouncedUpdateComplexidade:', error)
-      }
-    }, 500),
-    [], // Empty dependency array since we don't want to recreate the debounced function
+          if (error) {
+            console.error('Error updating complexity:', error)
+            // Revert optimistic update on error
+            setDrawerItems((prev: any) => {
+              const newDrawerItems = { ...prev }
+              for (const folhaId in newDrawerItems) {
+                const items = newDrawerItems[folhaId]
+                const itemIndex = items.findIndex(
+                  (item: any) => item.id === itemId,
+                )
+                if (itemIndex !== -1) {
+                  newDrawerItems[folhaId] = [
+                    ...items.slice(0, itemIndex),
+                    {
+                      ...items[itemIndex],
+                      complexidade_id: items[itemIndex].complexidade_id,
+                    },
+                    ...items.slice(itemIndex + 1),
+                  ]
+                  break
+                }
+              }
+              return newDrawerItems
+            })
+            return
+          }
+
+          console.log('Successfully updated complexidade:', data)
+        } catch (error) {
+          console.error('Error in debouncedUpdateComplexidade:', error)
+        }
+      }, 500),
+    [],
   )
 
   useEffect(() => {
@@ -953,7 +996,7 @@ export default function DesignerFlow() {
     <>
       <div className="w-full space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold">Trabalhos em aberto</h1>
+          <h1 className="text-2xl font-bold">Designer Flow</h1>
         </div>
 
         {/* Filters Section */}
@@ -1134,253 +1177,285 @@ export default function DesignerFlow() {
           </div>
         </div>
 
-        {/* Data Table */}
-        <div className="bg-background border-border w-full rounded-none border-2">
-          <div className="w-full rounded-none">
-            <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
-              <TableHeader>
-                <TableRow>
-                  <TableHead
-                    className="border-border sticky top-0 z-10 w-[90px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
-                    onClick={() => handleSort('data_in')}
-                  >
-                    Data In
-                    {sortColumn === 'data_in' &&
-                      (sortDirection === 'asc' ? (
-                        <ArrowUp className="ml-1 inline h-3 w-3" />
-                      ) : (
-                        <ArrowDown className="ml-1 inline h-3 w-3" />
-                      ))}
-                  </TableHead>
-                  <TableHead
-                    className="border-border sticky top-0 z-10 w-[90px] cursor-pointer border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
-                    onClick={() => handleSort('numero_fo')}
-                  >
-                    FO
-                    {sortColumn === 'numero_fo' &&
-                      (sortDirection === 'asc' ? (
-                        <ArrowUp className="ml-1 inline h-3 w-3" />
-                      ) : (
-                        <ArrowDown className="ml-1 inline h-3 w-3" />
-                      ))}
-                  </TableHead>
-                  <TableHead
-                    className="border-border sticky top-0 z-10 w-[140px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
-                    onClick={() => handleSort('profile_id')}
-                  >
-                    Designer
-                    {sortColumn === 'profile_id' &&
-                      (sortDirection === 'asc' ? (
-                        <ArrowUp className="ml-1 inline h-3 w-3" />
-                      ) : (
-                        <ArrowDown className="ml-1 inline h-3 w-3" />
-                      ))}
-                  </TableHead>
-                  <TableHead
-                    className="border-border sticky top-0 z-10 min-w-[200px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
-                    onClick={() => handleSort('nome_campanha')}
-                  >
-                    Nome Campanha
-                    {sortColumn === 'nome_campanha' &&
-                      (sortDirection === 'asc' ? (
-                        <ArrowUp className="ml-1 inline h-3 w-3" />
-                      ) : (
-                        <ArrowDown className="ml-1 inline h-3 w-3" />
-                      ))}
-                  </TableHead>
-                  <TableHead className="border-border sticky top-0 z-10 w-[180px] border-b-2 bg-[var(--orange)] font-bold uppercase">
-                    Status
-                  </TableHead>
-                  <TableHead
-                    className="border-border sticky top-0 z-10 w-[36px] cursor-pointer border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
-                    onClick={() => handleSort('prioridade')}
-                  >
-                    P
-                    {sortColumn === 'prioridade' &&
-                      (sortDirection === 'asc' ? (
-                        <ArrowUp className="ml-1 inline h-3 w-3" />
-                      ) : (
-                        <ArrowDown className="ml-1 inline h-3 w-3" />
-                      ))}
-                  </TableHead>
-                  <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
-                    Ações
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {sortedJobs.length === 0 ? (
-                  <TableRow>
-                    <TableCell
-                      colSpan={7}
-                      className="text-center text-gray-500"
-                    >
-                      Nenhum trabalho encontrado.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  sortedJobs.map((job, index) => (
-                    <TableRow key={job.id || `job-${index}`}>
-                      <TableCell>
-                        {job.data_in
-                          ? new Date(job.data_in).toLocaleDateString()
-                          : '-'}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {job.numero_fo}
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          value={job.profile_id || ''}
-                          onValueChange={(val) =>
-                            handleDesignerChange(job.id, val)
-                          }
-                        >
-                          <SelectTrigger className="h-10 w-[120px] rounded-none">
-                            <SelectValue>
-                              {designers.find((d) => d.value === job.profile_id)
-                                ?.label || ''}
-                            </SelectValue>
-                          </SelectTrigger>
-                          <SelectContent>
-                            {designers
-                              .filter((d) => d.value !== 'all')
-                              .map((designer) => (
-                                <SelectItem
-                                  key={designer.value}
-                                  value={designer.value}
-                                >
-                                  {designer.label}
-                                </SelectItem>
-                              ))}
-                          </SelectContent>
-                        </Select>
-                      </TableCell>
-                      <TableCell>{job.nome_campanha}</TableCell>
-                      <TableCell>
-                        {/* Status progress bar */}
-                        {(() => {
-                          // Get all items for this job from the new data structure
-                          const jobItems = allItems.filter(
-                            (item) =>
-                              item.folha_obra_id === job.id &&
-                              item.id && // Ensure valid items only
-                              item.designer_item_id, // Ensure it has a designer item association
-                          )
+        <Tabs defaultValue="trabalhos" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 rounded-none border-2">
+            <TabsTrigger value="trabalhos" className="rounded-none">
+              Trabalhos
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="rounded-none">
+              Análises & Gráficos
+            </TabsTrigger>
+          </TabsList>
 
-                          // Calculate progress
-                          const total = jobItems.length
-                          const done = jobItems.filter(
-                            (item) => item.paginacao,
-                          ).length
-                          const percent =
-                            total > 0 ? Math.round((done / total) * 100) : 0
-
-                          return (
-                            <div className="flex items-center gap-2">
-                              <Progress value={percent} className="w-full" />
-                              <span className="w-10 text-right font-mono text-xs">
-                                {percent}%
-                              </span>
-                            </div>
-                          )
-                        })()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <button
-                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getPColor(job)}`}
-                          title={
-                            job.prioridade
-                              ? 'Prioritário'
-                              : job.data_in &&
-                                  (Date.now() -
-                                    new Date(job.data_in).getTime()) /
-                                    (1000 * 60 * 60 * 24) >
-                                    3
-                                ? 'Aguardando há mais de 3 dias'
-                                : 'Normal'
-                          }
-                          onClick={async () => {
-                            const newPrioridade = !job.prioridade
-                            updateJob(job.id, { prioridade: newPrioridade })
-                          }}
-                        />
-                      </TableCell>
-                      <TableCell className="flex justify-center gap-2">
-                        <Button
-                          variant="default"
-                          size="icon"
-                          aria-label="Ver"
-                          className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
-                          ref={(el) => {
-                            triggerBtnRefs.current[job.id] = el
-                          }}
-                          onClick={() => setOpenDrawerId(job.id)}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="icon"
-                          aria-label="Excluir"
-                          className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
-                          onClick={async () => {
-                            if (
-                              !window.confirm(
-                                'Tem certeza que deseja apagar este trabalho e todos os seus itens?',
-                              )
-                            )
-                              return
-                            const supabase = createBrowserClient()
-                            // Get all items_base for this job
-                            const { data: baseItems } = await supabase
-                              .from('items_base')
-                              .select('id')
-                              .eq('folha_obra_id', job.id)
-                            if (baseItems && baseItems.length > 0) {
-                              // Delete any designer_items linked to these items_base
-                              await supabase
-                                .from('designer_items')
-                                .delete()
-                                .in(
-                                  'item_id',
-                                  baseItems.map((item) => item.id),
-                                )
-                              // Delete any logistica_entregas linked to these items
-                              await supabase
-                                .from('logistica_entregas')
-                                .delete()
-                                .in(
-                                  'item_id',
-                                  baseItems.map((item) => item.id),
-                                )
-                              // Delete all items_base for this job
-                              await supabase
-                                .from('items_base')
-                                .delete()
-                                .eq('folha_obra_id', job.id)
-                            }
-                            // Delete the job
-                            await supabase
-                              .from('folhas_obras')
-                              .delete()
-                              .eq('id', job.id)
-                            // Remove from local state
-                            setJobs((prev) =>
-                              prev.filter((j) => j.id !== job.id),
-                            )
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+          <TabsContent value="trabalhos" className="space-y-6">
+            {/* Data Table */}
+            <div className="bg-background border-border w-full rounded-none border-2">
+              <div className="w-full rounded-none">
+                <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[90px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSort('data_in')}
+                      >
+                        Data In
+                        {sortColumn === 'data_in' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[90px] cursor-pointer border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
+                        onClick={() => handleSort('numero_fo')}
+                      >
+                        FO
+                        {sortColumn === 'numero_fo' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[140px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSort('profile_id')}
+                      >
+                        Designer
+                        {sortColumn === 'profile_id' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 min-w-[200px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSort('nome_campanha')}
+                      >
+                        Nome Campanha
+                        {sortColumn === 'nome_campanha' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[180px] border-b-2 bg-[var(--orange)] font-bold uppercase">
+                        Status
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[36px] cursor-pointer border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
+                        onClick={() => handleSort('prioridade')}
+                      >
+                        P
+                        {sortColumn === 'prioridade' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
+                        Ações
+                      </TableHead>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </div>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedJobs.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={7}
+                          className="text-center text-gray-500"
+                        >
+                          Nenhum trabalho encontrado.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedJobs.map((job, index) => (
+                        <TableRow key={job.id || `job-${index}`}>
+                          <TableCell>
+                            {job.data_in
+                              ? new Date(job.data_in).toLocaleDateString()
+                              : '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {job.numero_fo}
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={job.profile_id || ''}
+                              onValueChange={(val) =>
+                                handleDesignerChange(job.id, val)
+                              }
+                            >
+                              <SelectTrigger className="h-10 w-[120px] rounded-none">
+                                <SelectValue>
+                                  {designers.find(
+                                    (d) => d.value === job.profile_id,
+                                  )?.label || ''}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {designers
+                                  .filter((d) => d.value !== 'all')
+                                  .map((designer) => (
+                                    <SelectItem
+                                      key={designer.value}
+                                      value={designer.value}
+                                    >
+                                      {designer.label}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>{job.nome_campanha}</TableCell>
+                          <TableCell>
+                            {/* Status progress bar */}
+                            {(() => {
+                              // Get all items for this job from the new data structure
+                              const jobItems = allItems.filter(
+                                (item) =>
+                                  item.folha_obra_id === job.id &&
+                                  item.id && // Ensure valid items only
+                                  item.designer_item_id, // Ensure it has a designer item association
+                              )
+
+                              // Calculate progress
+                              const total = jobItems.length
+                              const done = jobItems.filter(
+                                (item) => item.paginacao,
+                              ).length
+                              const percent =
+                                total > 0 ? Math.round((done / total) * 100) : 0
+
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <Progress
+                                    value={percent}
+                                    className="w-full"
+                                  />
+                                  <span className="w-10 text-right font-mono text-xs">
+                                    {percent}%
+                                  </span>
+                                </div>
+                              )
+                            })()}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <button
+                              className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getPColor(job)}`}
+                              title={
+                                job.prioridade
+                                  ? 'Prioritário'
+                                  : job.data_in &&
+                                      (Date.now() -
+                                        new Date(job.data_in).getTime()) /
+                                        (1000 * 60 * 60 * 24) >
+                                        3
+                                    ? 'Aguardando há mais de 3 dias'
+                                    : 'Normal'
+                              }
+                              onClick={async () => {
+                                const newPrioridade = !job.prioridade
+                                updateJob(job.id, { prioridade: newPrioridade })
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="flex justify-center gap-2">
+                            <Button
+                              variant="default"
+                              size="icon"
+                              aria-label="Ver"
+                              className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                              ref={(el) => {
+                                triggerBtnRefs.current[job.id] = el
+                              }}
+                              onClick={() => setOpenDrawerId(job.id)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              aria-label="Excluir"
+                              className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                              onClick={async () => {
+                                if (
+                                  !window.confirm(
+                                    'Tem certeza que deseja apagar este trabalho e todos os seus itens?',
+                                  )
+                                )
+                                  return
+                                const supabase = createBrowserClient()
+                                // Get all items_base for this job
+                                const { data: baseItems } = await supabase
+                                  .from('items_base')
+                                  .select('id')
+                                  .eq('folha_obra_id', job.id)
+                                if (baseItems && baseItems.length > 0) {
+                                  // Delete any designer_items linked to these items_base
+                                  await supabase
+                                    .from('designer_items')
+                                    .delete()
+                                    .in(
+                                      'item_id',
+                                      baseItems.map((item) => item.id),
+                                    )
+                                  // Delete any logistica_entregas linked to these items
+                                  await supabase
+                                    .from('logistica_entregas')
+                                    .delete()
+                                    .in(
+                                      'item_id',
+                                      baseItems.map((item) => item.id),
+                                    )
+                                  // Delete all items_base for this job
+                                  await supabase
+                                    .from('items_base')
+                                    .delete()
+                                    .eq('folha_obra_id', job.id)
+                                }
+                                // Delete the job
+                                await supabase
+                                  .from('folhas_obras')
+                                  .delete()
+                                  .eq('id', job.id)
+                                // Remove from local state
+                                setJobs((prev) =>
+                                  prev.filter((j) => j.id !== job.id),
+                                )
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="analytics" className="mb-8 space-y-6">
+            <DesignerAnalyticsCharts
+              onRefresh={async () => {
+                await fetchJobs(setJobs, {
+                  selectedDesigner,
+                  poFilter: debouncedPoFilter,
+                  campaignFilter: debouncedCampaignFilter,
+                  itemFilter: debouncedItemFilter,
+                  codigoFilter: debouncedCodigoFilter,
+                  showFechados,
+                })
+              }}
+            />
+          </TabsContent>
+        </Tabs>
 
         {/* Drawers rendered separately outside the table */}
         {sortedJobs.map((job, index) => (
@@ -1416,9 +1491,9 @@ export default function DesignerFlow() {
               setOpenDrawerId(open ? job.id : null)
             }}
             autoFocus={false}
-            modal={false}
+            modal={true}
           >
-            <DrawerContent className="!top-0 !mt-0 h-screen min-h-screen overflow-hidden">
+            <DrawerContent className="!top-12 !mt-0 h-[calc(100vh-3rem)] min-h-[calc(100vh-3rem)] overflow-hidden border-0 outline-none">
               <div className="flex h-full w-full flex-col px-4 md:px-8">
                 <DrawerHeader className="flex-none">
                   <div className="mb-2 flex items-center justify-end gap-2">
@@ -1488,8 +1563,13 @@ export default function DesignerFlow() {
                       Adicionar Item
                     </Button>
                     <DrawerClose asChild>
-                      <Button variant="outline" size="sm" aria-label="Fechar">
-                        <X className="h-5 w-5" />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-10 w-10 rounded-none"
+                        aria-label="Fechar"
+                      >
+                        <X className="h-4 w-4" />
                       </Button>
                     </DrawerClose>
                   </div>
@@ -1767,8 +1847,8 @@ export default function DesignerFlow() {
                                         newValue,
                                       )
                                     }}
-                                    className="min-h-[40px] resize-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
-                                    rows={2}
+                                    className="h-10 resize-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                                    rows={1}
                                   />
                                 </TableCell>
                                 <TableCell className="font-base align-middle text-sm">
@@ -1795,6 +1875,38 @@ export default function DesignerFlow() {
                                           item.id,
                                           value || null,
                                         )
+
+                                        // If OFFSET is selected, automatically set paginacao to true and path_trabalho to "P:"
+                                        if (value === 'OFFSET') {
+                                          const supabase = createBrowserClient()
+                                          await supabase
+                                            .from('designer_items')
+                                            .update({
+                                              paginacao: true,
+                                              path_trabalho: 'P:',
+                                              data_saida:
+                                                new Date().toISOString(),
+                                            })
+                                            .eq('id', item.designer_item_id)
+
+                                          // Update local state
+                                          setDrawerItems((prev) => {
+                                            const updated = [
+                                              ...(prev[job.id] || []),
+                                            ]
+                                            updated[idx] = {
+                                              ...updated[idx],
+                                              paginacao: true,
+                                              path_trabalho: 'P:',
+                                              data_saida:
+                                                new Date().toISOString(),
+                                            }
+                                            return {
+                                              ...prev,
+                                              [job.id]: updated,
+                                            }
+                                          })
+                                        }
                                       } catch (error) {
                                         // Error handling is done in updateComplexidade
                                       }
@@ -2019,12 +2131,38 @@ export default function DesignerFlow() {
                                             const newPath = e.target.value
                                             const supabase =
                                               createBrowserClient()
+
+                                            // If path is being set (not cleared), also set data_saida
+                                            const updates: any = {
+                                              path_trabalho: newPath,
+                                            }
+                                            if (newPath.trim()) {
+                                              updates.data_saida =
+                                                new Date().toISOString()
+                                            }
+
                                             await supabase
                                               .from('designer_items')
-                                              .update({
-                                                path_trabalho: newPath,
-                                              })
+                                              .update(updates)
                                               .eq('item_id', item.id)
+
+                                            // Update local state if data_saida was set
+                                            if (newPath.trim()) {
+                                              setDrawerItems((prev) => {
+                                                const updated = [
+                                                  ...(prev[job.id] || []),
+                                                ]
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  data_saida:
+                                                    updates.data_saida,
+                                                }
+                                                return {
+                                                  ...prev,
+                                                  [job.id]: updated,
+                                                }
+                                              })
+                                            }
                                           }}
                                         />
                                       </div>

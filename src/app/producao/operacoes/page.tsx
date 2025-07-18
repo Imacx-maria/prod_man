@@ -121,6 +121,9 @@ interface ProductionOperation {
   profiles?: {
     first_name?: string
     last_name?: string
+    roles?: {
+      name?: string
+    }
   }
   materiais?: {
     material?: string
@@ -132,6 +135,9 @@ interface Profile {
   id: string
   first_name: string
   last_name: string
+  roles?: {
+    name: string
+  }
 }
 
 interface Machine {
@@ -691,6 +697,47 @@ function OperacoesPageContent() {
     <div className="w-full space-y-6">
       <h1 className="text-2xl font-bold">Operações de Produção</h1>
 
+      {/* Statistics */}
+      <div className="flex gap-4 text-sm">
+        <span>Total: {stats.total}</span>
+        <span>Concluído: {stats.completed}</span>
+        <span>Pendente: {stats.pending}</span>
+      </div>
+
+      {/* Filters */}
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder="Filtrar FO"
+          className="w-40"
+          value={foFilter}
+          onChange={(e) => setFoFilter(e.target.value)}
+        />
+        <Input
+          placeholder="Filtrar Item"
+          className="flex-1"
+          value={itemFilter}
+          onChange={(e) => setItemFilter(e.target.value)}
+        />
+        <Button
+          size="icon"
+          variant="outline"
+          onClick={() => {
+            setFoFilter('')
+            setItemFilter('')
+          }}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+        <Button
+          size="icon"
+          variant="outline"
+          onClick={fetchData}
+          title="Refresh data"
+        >
+          <RefreshCcw className="h-4 w-4" />
+        </Button>
+      </div>
+
       <Tabs defaultValue="operacoes" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="operacoes">Operações ({stats.total})</TabsTrigger>
@@ -698,50 +745,6 @@ function OperacoesPageContent() {
         </TabsList>
 
         <TabsContent value="operacoes">
-          {/* Header and filters */}
-          <div className="space-y-4">
-            {/* Statistics */}
-            <div className="flex gap-4 text-sm">
-              <span>Total: {stats.total}</span>
-              <span>Concluído: {stats.completed}</span>
-              <span>Pendente: {stats.pending}</span>
-            </div>
-
-            {/* Filters */}
-            <div className="flex items-center gap-2">
-              <Input
-                placeholder="Filtrar FO"
-                className="w-40"
-                value={foFilter}
-                onChange={(e) => setFoFilter(e.target.value)}
-              />
-              <Input
-                placeholder="Filtrar Item"
-                className="flex-1"
-                value={itemFilter}
-                onChange={(e) => setItemFilter(e.target.value)}
-              />
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={() => {
-                  setFoFilter('')
-                  setItemFilter('')
-                }}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-              <Button
-                size="icon"
-                variant="outline"
-                onClick={fetchData}
-                title="Refresh data"
-              >
-                <RefreshCcw className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-
           {/* Main table */}
           <div className="bg-background border-border w-full rounded-none border-2">
             <div className="w-full rounded-none">
@@ -881,7 +884,7 @@ function OperacoesPageContent() {
           </div>
         </TabsContent>
 
-        <TabsContent value="analytics">
+        <TabsContent value="analytics" className="mb-8">
           <ProductionAnalyticsCharts
             supabase={supabase}
             onRefresh={fetchData}
@@ -954,7 +957,13 @@ function ItemDrawerContent({
            id, data_operacao, operador_id, folha_obra_id, item_id, no_interno,
            Tipo_Op, maquina, material_id, stock_consumido_id, num_placas_print, num_placas_corte, QT_print,
            observacoes, notas, notas_imp, status, concluido, data_conclusao, created_at, updated_at, N_Pal,
-           profiles!operador_id (first_name, last_name),
+           profiles!operador_id (
+             first_name, 
+             last_name,
+             roles!profiles_role_id_fkey (
+               name
+             )
+           ),
            materiais (material, cor)
          `,
         )
@@ -979,8 +988,20 @@ function ItemDrawerContent({
       const [operatorsRes, machinesRes, materialsRes] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, first_name, last_name')
-          .eq('role_id', '968afe0b-0b14-46b2-9269-4fc9f120bbfa'),
+          .select(
+            `
+            id, 
+            first_name, 
+            last_name,
+            roles!profiles_role_id_fkey (
+              name
+            )
+          `,
+          )
+          .in('role_id', [
+            '968afe0b-0b14-46b2-9269-4fc9f120bbfa',
+            '2e18fb9d-52ef-4216-90ea-699372cd5a87',
+          ]),
         supabase.from('maquinas_operacao').select('id, nome_maquina, tipo'),
         supabase
           .from('materiais')
@@ -1246,7 +1267,7 @@ function OperationsTable({
     setMaterialSelections(newSelections)
     setNotesValues(newNotesValues)
     setPaletteSelections(newPaletteSelections)
-  }, [displayOperations, materials.length, paletes.length, isUpdating, type])
+  }, [displayOperations, materials, paletes, isUpdating, type])
 
   // Calculate and report total quantity including pending operations
   useEffect(() => {
@@ -2038,7 +2059,7 @@ function OperationsTable({
                 <TableHead className="border-border w-[150px] min-w-[150px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
                   Data
                 </TableHead>
-                <TableHead className="border-border w-[240px] min-w-[240px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
+                <TableHead className="border-border w-[120px] min-w-[120px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
                   Operador
                 </TableHead>
                 <TableHead className="border-border w-[160px] min-w-[160px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
@@ -2085,22 +2106,45 @@ function OperationsTable({
                           ? new Date(operation.data_operacao)
                           : undefined
                       }
-                      onSelect={(date) =>
-                        updateOperation(
-                          operation.id,
-                          'data_operacao',
-                          date ? date.toISOString().split('T')[0] : null,
-                        )
-                      }
+                      onSelect={(date) => {
+                        const newValue = date
+                          ? date.toISOString().split('T')[0]
+                          : null
+                        // For pending operations, update locally only
+                        if ((operation as any).isPending) {
+                          updatePendingOperation(
+                            operation.id,
+                            'data_operacao',
+                            newValue,
+                          )
+                        } else {
+                          // For saved operations, update database immediately
+                          updateOperation(
+                            operation.id,
+                            'data_operacao',
+                            newValue,
+                          )
+                        }
+                      }}
                       buttonClassName="w-full h-10"
                     />
                   </TableCell>
-                  <TableCell className="w-[240px] min-w-[240px] p-2 text-sm">
+                  <TableCell className="w-[120px] min-w-[120px] p-2 text-sm">
                     <Select
                       value={operation.operador_id || ''}
-                      onValueChange={(value) =>
-                        updateOperation(operation.id, 'operador_id', value)
-                      }
+                      onValueChange={(value) => {
+                        // For pending operations, update locally only
+                        if ((operation as any).isPending) {
+                          updatePendingOperation(
+                            operation.id,
+                            'operador_id',
+                            value,
+                          )
+                        } else {
+                          // For saved operations, update database immediately
+                          updateOperation(operation.id, 'operador_id', value)
+                        }
+                      }}
                       disabled={isUpdating}
                     >
                       <SelectTrigger className="h-10 w-full">
@@ -2115,16 +2159,19 @@ function OperationsTable({
                           ) : operation.operador_id ? (
                             <span className="truncate uppercase">
                               {operation.profiles
-                                ? `${operation.profiles.first_name} ${operation.profiles.last_name}`
-                                : operators.find(
+                                ? operation.profiles.first_name
+                                : (() => {
+                                    const selectedOperator = operators.find(
                                       (op) => op.id === operation.operador_id,
                                     )
-                                  ? `${operators.find((op) => op.id === operation.operador_id)?.first_name} ${operators.find((op) => op.id === operation.operador_id)?.last_name}`
-                                  : 'Operador Selecionado'}
+                                    return selectedOperator
+                                      ? selectedOperator.first_name
+                                      : 'Operador'
+                                  })()}
                             </span>
                           ) : (
                             <span className="truncate uppercase">
-                              Selecionar operador
+                              Selecionar
                             </span>
                           )}
                         </SelectValue>
@@ -2137,6 +2184,11 @@ function OperationsTable({
                             className="uppercase"
                           >
                             {operator.first_name} {operator.last_name}
+                            {operator.roles?.name && (
+                              <span className="ml-2 text-xs text-gray-500">
+                                ({operator.roles.name})
+                              </span>
+                            )}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -2149,13 +2201,35 @@ function OperationsTable({
                         const selectedMachine = machines.find(
                           (m) => m.id === value,
                         )
-                        await updateOperation(operation.id, machineField, value)
-                        if (selectedMachine) {
+
+                        // For pending operations, update locally only
+                        if ((operation as any).isPending) {
+                          updatePendingOperation(
+                            operation.id,
+                            machineField,
+                            value,
+                          )
+                          if (selectedMachine) {
+                            updatePendingOperation(
+                              operation.id,
+                              'Tipo_Op',
+                              selectedMachine.tipo,
+                            )
+                          }
+                        } else {
+                          // For saved operations, update database immediately
                           await updateOperation(
                             operation.id,
-                            'Tipo_Op',
-                            selectedMachine.tipo,
+                            machineField,
+                            value,
                           )
+                          if (selectedMachine) {
+                            await updateOperation(
+                              operation.id,
+                              'Tipo_Op',
+                              selectedMachine.tipo,
+                            )
+                          }
                         }
                       }}
                     >
@@ -2202,9 +2276,52 @@ function OperationsTable({
                         label: palete.no_palete,
                       }))}
                       value={paletteSelections[operation.id] || ''}
-                      onChange={(value: string) =>
-                        handlePaletteSelection(operation.id, value)
-                      }
+                      onChange={(value: string) => {
+                        // For pending operations, update locally only
+                        if ((operation as any).isPending) {
+                          const selectedPalette = paletes.find(
+                            (p) => p.id === value,
+                          )
+                          if (selectedPalette) {
+                            updatePendingOperation(
+                              operation.id,
+                              'N_Pal',
+                              selectedPalette.no_palete,
+                            )
+                            setPaletteSelections((prev) => ({
+                              ...prev,
+                              [operation.id]: value,
+                            }))
+                            // Handle material auto-fill for pending operations
+                            if (selectedPalette.ref_cartao) {
+                              const matchingMaterial = materials.find(
+                                (m) =>
+                                  m.referencia === selectedPalette.ref_cartao &&
+                                  m.tipo === 'RÍGIDOS',
+                              )
+                              if (matchingMaterial) {
+                                updatePendingOperation(
+                                  operation.id,
+                                  'material_id',
+                                  matchingMaterial.id,
+                                )
+                                setMaterialSelections((prev) => ({
+                                  ...prev,
+                                  [operation.id]: {
+                                    material: matchingMaterial.material || '',
+                                    caracteristica:
+                                      matchingMaterial.carateristica || '',
+                                    cor: matchingMaterial.cor || '',
+                                  },
+                                }))
+                              }
+                            }
+                          }
+                        } else {
+                          // For saved operations, use existing function
+                          handlePaletteSelection(operation.id, value)
+                        }
+                      }}
                       placeholder="Selecionar palete"
                       emptyMessage="Nenhuma palete encontrada"
                       searchPlaceholder="Procurar palete..."
@@ -2226,6 +2343,8 @@ function OperationsTable({
                             cor: undefined,
                           },
                         }))
+                        // For pending operations, no database update needed yet
+                        // Material ID will be set when all three dropdowns are selected
                       }}
                     >
                       <SelectTrigger className="h-10 w-full">
@@ -2274,6 +2393,8 @@ function OperationsTable({
                             cor: undefined,
                           },
                         }))
+                        // For pending operations, no database update needed yet
+                        // Material ID will be set when all three dropdowns are selected
                       }}
                       disabled={!materialSelections[operation.id]?.material}
                     >
@@ -2344,12 +2465,21 @@ function OperationsTable({
                           updatedSelection.caracteristica &&
                           value
                         ) {
-                          // Update material_id and handle stock deduction for cutting operations
-                          updateOperation(
-                            operation.id,
-                            'material_id',
-                            foundMaterial.id,
-                          )
+                          // For pending operations, update locally only
+                          if ((operation as any).isPending) {
+                            updatePendingOperation(
+                              operation.id,
+                              'material_id',
+                              foundMaterial.id,
+                            )
+                          } else {
+                            // For saved operations, update database immediately with stock deduction
+                            updateOperation(
+                              operation.id,
+                              'material_id',
+                              foundMaterial.id,
+                            )
+                          }
                         }
                       }}
                       disabled={
@@ -2400,13 +2530,20 @@ function OperationsTable({
                         type="number"
                         className="h-10 w-full [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                         value={operation.QT_print || ''}
-                        onChange={(e) =>
-                          updateOperation(
-                            operation.id,
-                            'QT_print',
-                            Number(e.target.value),
-                          )
-                        }
+                        onChange={(e) => {
+                          const newValue = Number(e.target.value)
+                          // For pending operations, update locally only
+                          if ((operation as any).isPending) {
+                            updatePendingOperation(
+                              operation.id,
+                              'QT_print',
+                              newValue,
+                            )
+                          } else {
+                            // For saved operations, update database immediately
+                            updateOperation(operation.id, 'QT_print', newValue)
+                          }
+                        }}
                         disabled
                         style={{ backgroundColor: '#f3f4f6' }}
                       />
@@ -2417,13 +2554,20 @@ function OperationsTable({
                       type="number"
                       className="h-10 w-full [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       value={operation[quantityField] || ''}
-                      onChange={(e) =>
-                        updateOperation(
-                          operation.id,
-                          quantityField,
-                          Number(e.target.value),
-                        )
-                      }
+                      onChange={(e) => {
+                        const newValue = Number(e.target.value)
+                        // For pending operations, update locally only
+                        if ((operation as any).isPending) {
+                          updatePendingOperation(
+                            operation.id,
+                            quantityField,
+                            newValue,
+                          )
+                        } else {
+                          // For saved operations, update database immediately
+                          updateOperation(operation.id, quantityField, newValue)
+                        }
+                      }}
                     />
                   </TableCell>
                   <TableCell className="p-2 text-sm">

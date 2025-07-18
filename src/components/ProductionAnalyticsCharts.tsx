@@ -30,6 +30,7 @@ interface OperationData {
   profiles?: {
     first_name?: string
     last_name?: string
+    role_id?: string
   }
 }
 
@@ -113,7 +114,11 @@ export default function ProductionAnalyticsCharts({
           num_placas_print,
           num_placas_corte,
           Tipo_Op,
-          profiles!operador_id (first_name, last_name)
+          profiles!operador_id (
+            first_name, 
+            last_name,
+            role_id
+          )
         `,
         )
         .gte('data_operacao', startDate)
@@ -184,9 +189,15 @@ export default function ProductionAnalyticsCharts({
     const operatorNames: { [key: string]: string } = {}
 
     // First pass: collect operator names and initialize data structure
+    // Only include operators with Impressão role (2e18fb9d-52ef-4216-90ea-699372cd5a87)
     operations
       .filter(
-        (op) => op.Tipo_Op === 'Impressao' && op.operador_id && op.profiles,
+        (op) =>
+          op.Tipo_Op === 'Impressao' &&
+          op.operador_id &&
+          op.profiles &&
+          (op.profiles as any).role_id ===
+            '2e18fb9d-52ef-4216-90ea-699372cd5a87',
       )
       .forEach((operation) => {
         const operatorName = `${operation.profiles!.first_name} ${operation.profiles!.last_name}`
@@ -236,8 +247,16 @@ export default function ProductionAnalyticsCharts({
     const operatorNames: { [key: string]: string } = {}
 
     // First pass: collect operator names and initialize data structure
+    // Only include operators with Corte role (968afe0b-0b14-46b2-9269-4fc9f120bbfa)
     operations
-      .filter((op) => op.Tipo_Op === 'Corte' && op.operador_id && op.profiles)
+      .filter(
+        (op) =>
+          op.Tipo_Op === 'Corte' &&
+          op.operador_id &&
+          op.profiles &&
+          (op.profiles as any).role_id ===
+            '968afe0b-0b14-46b2-9269-4fc9f120bbfa',
+      )
       .forEach((operation) => {
         const operatorName = `${operation.profiles!.first_name} ${operation.profiles!.last_name}`
         operatorNames[operation.operador_id!] = operatorName
@@ -494,10 +513,10 @@ export default function ProductionAnalyticsCharts({
               </p>
             </div>
             {operatorPrintData.operators.length > 0 ? (
-              <ResponsiveContainer width="100%" height={800}>
+              <ResponsiveContainer width="100%" height={400}>
                 <BarChart
                   data={operatorPrintData.data}
-                  margin={{ top: 40, right: 40, left: 40, bottom: 120 }}
+                  margin={{ top: 20, right: 30, left: 30, bottom: 80 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />
@@ -547,10 +566,10 @@ export default function ProductionAnalyticsCharts({
               </p>
             </div>
             {operatorCorteData.operators.length > 0 ? (
-              <ResponsiveContainer width="100%" height={800}>
+              <ResponsiveContainer width="100%" height={400}>
                 <BarChart
                   data={operatorCorteData.data}
-                  margin={{ top: 40, right: 40, left: 40, bottom: 120 }}
+                  margin={{ top: 20, right: 30, left: 30, bottom: 80 }}
                 >
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="month" />

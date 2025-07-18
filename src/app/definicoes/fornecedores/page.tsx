@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@/utils/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -28,8 +28,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip'
-import { Plus, Eye, Trash2, X, Loader2, Edit, RotateCw } from 'lucide-react'
+import { Plus, Trash2, X, Loader2, Pencil, Check, RotateCw } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
+import { useDebounce } from '@/hooks/useDebounce'
 
 interface Fornecedor {
   id: string
@@ -62,40 +63,55 @@ export default function FornecedoresPage() {
     contacto_principal: '',
   })
 
+  // Debounced filter values for performance
+  const debouncedNameFilter = useDebounce(nameFilter, 300)
+
   const supabase = createBrowserClient()
 
-  const fetchFornecedores = async () => {
-    setLoading(true)
-    try {
-      const { data, error } = await supabase
-        .from('fornecedores')
-        .select('*')
-        .order('nome_forn', { ascending: true })
+  // Convert to database-level filtering
+  const fetchFornecedores = useCallback(
+    async (filters: { nameFilter?: string } = {}) => {
+      setLoading(true)
+      try {
+        let query = supabase.from('fornecedores').select('*')
 
-      if (!error && data) {
-        setFornecedores(data)
+        // Apply filters at database level
+        if (filters.nameFilter?.trim()) {
+          const searchTerm = filters.nameFilter.trim()
+          // Search in nome_forn, numero_phc, and email fields
+          query = query.or(
+            `nome_forn.ilike.%${searchTerm}%,numero_phc.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%`,
+          )
+        }
+
+        const { data, error } = await query.order('nome_forn', {
+          ascending: true,
+        })
+
+        if (!error && data) {
+          setFornecedores(data)
+        }
+      } catch (error) {
+        console.error('Error fetching fornecedores:', error)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('Error fetching fornecedores:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+    },
+    [supabase],
+  )
 
+  // Initial load
   useEffect(() => {
     fetchFornecedores()
-  }, [])
+  }, [fetchFornecedores])
 
-  const filteredFornecedores = fornecedores.filter(
-    (fornecedor) =>
-      fornecedor.nome_forn.toLowerCase().includes(nameFilter.toLowerCase()) ||
-      (fornecedor.numero_phc &&
-        fornecedor.numero_phc
-          .toLowerCase()
-          .includes(nameFilter.toLowerCase())) ||
-      (fornecedor.email &&
-        fornecedor.email.toLowerCase().includes(nameFilter.toLowerCase())),
-  )
+  // Trigger search when filter changes
+  useEffect(() => {
+    fetchFornecedores({ nameFilter: debouncedNameFilter })
+  }, [debouncedNameFilter, fetchFornecedores])
+
+  // Remove client-side filtering - now using database-level filtering
+  const filteredFornecedores = fornecedores
 
   const handleDelete = async (id: string) => {
     if (!confirm('Tem certeza que deseja excluir este fornecedor?')) return
@@ -300,6 +316,23 @@ export default function FornecedoresPage() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Limpar filtro</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() =>
+                    fetchFornecedores({ nameFilter: debouncedNameFilter })
+                  }
+                  aria-label="Atualizar"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Atualizar</TooltipContent>
             </Tooltip>
           </TooltipProvider>
         </div>
@@ -609,7 +642,7 @@ export default function FornecedoresPage() {
                                         aria-label="Editar"
                                         disabled={editingId !== null}
                                       >
-                                        <Edit className="h-4 w-4" />
+                                        <Pencil className="h-4 w-4" />
                                       </Button>
                                     </TooltipTrigger>
                                     <TooltipContent>Editar</TooltipContent>

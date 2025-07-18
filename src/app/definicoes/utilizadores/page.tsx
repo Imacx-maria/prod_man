@@ -34,6 +34,10 @@ import {
   Shield,
   Mail,
   Settings,
+  Eye,
+  EyeOff,
+  ChevronUp,
+  ChevronDown,
 } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
 import { Badge } from '@/components/ui/badge'
@@ -103,11 +107,39 @@ export default function UtilizadoresPage() {
   const [newAuthFirstName, setNewAuthFirstName] = useState('')
   const [newAuthLastName, setNewAuthLastName] = useState('')
 
+  // Password visibility state
+  const [showPassword, setShowPassword] = useState(false)
+  const [showEditPassword, setShowEditPassword] = useState(false)
+
   const [nameFilter, setNameFilter] = useState('')
   const [roleFilter, setRoleFilter] = useState('all')
   const [emailFilter, setEmailFilter] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [activeTab, setActiveTab] = useState('auth-users')
+
+  // Sorting states for profiles table
+  const [profilesSortField, setProfilesSortField] = useState<
+    'name' | 'email' | 'role' | null
+  >(null)
+  const [profilesSortDirection, setProfilesSortDirection] = useState<
+    'asc' | 'desc'
+  >('asc')
+
+  // Sorting states for authenticated users table
+  const [authUsersSortField, setAuthUsersSortField] = useState<
+    'name' | 'email' | null
+  >(null)
+  const [authUsersSortDirection, setAuthUsersSortDirection] = useState<
+    'asc' | 'desc'
+  >('asc')
+
+  // Sorting states for roles table
+  const [rolesSortField, setRolesSortField] = useState<
+    'name' | 'description' | null
+  >(null)
+  const [rolesSortDirection, setRolesSortDirection] = useState<'asc' | 'desc'>(
+    'asc',
+  )
 
   // Permissions drawer state
   const [permissionsDrawerOpen, setPermissionsDrawerOpen] = useState(false)
@@ -206,7 +238,7 @@ export default function UtilizadoresPage() {
     fetchProfiles()
     fetchRoles()
     fetchAuthUsers()
-  }, [])
+  }, [fetchProfiles, fetchRoles, fetchAuthUsers])
 
   // Get auth user info for a profile
   const getAuthUserForProfile = (userId: string) => {
@@ -220,32 +252,147 @@ export default function UtilizadoresPage() {
     )
   }
 
-  const filteredProfiles = profiles.filter((profile) => {
-    const fullName = (
-      profile.first_name +
-      ' ' +
-      profile.last_name
-    ).toLowerCase()
-    const authUser = getAuthUserForProfile(profile.user_id)
-    const emailMatch = authUser
-      ? authUser.email.toLowerCase().includes(emailFilter.toLowerCase())
-      : true
-    const nameMatch = fullName.includes(nameFilter.toLowerCase())
-    const roleMatch =
-      !roleFilter || roleFilter === 'all' || profile.role_id === roleFilter
-    return nameMatch && roleMatch && emailMatch
-  })
+  const handleProfilesSort = (field: 'name' | 'email' | 'role') => {
+    if (profilesSortField === field) {
+      setProfilesSortDirection(profilesSortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setProfilesSortField(field)
+      setProfilesSortDirection('asc')
+    }
+  }
 
-  const filteredRoles = roles.filter((role) =>
-    role.name.toLowerCase().includes(nameFilter.toLowerCase()),
-  )
+  const handleAuthUsersSort = (field: 'name' | 'email') => {
+    if (authUsersSortField === field) {
+      setAuthUsersSortDirection(
+        authUsersSortDirection === 'asc' ? 'desc' : 'asc',
+      )
+    } else {
+      setAuthUsersSortField(field)
+      setAuthUsersSortDirection('asc')
+    }
+  }
 
-  const filteredAuthUsers = authUsers.filter((user) => {
-    const emailMatch = user.email
-      .toLowerCase()
-      .includes(emailFilter.toLowerCase())
-    return emailMatch
-  })
+  const handleRolesSort = (field: 'name' | 'description') => {
+    if (rolesSortField === field) {
+      setRolesSortDirection(rolesSortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setRolesSortField(field)
+      setRolesSortDirection('asc')
+    }
+  }
+
+  const filteredProfiles = profiles
+    .filter((profile) => {
+      const fullName = (
+        profile.first_name +
+        ' ' +
+        profile.last_name
+      ).toLowerCase()
+      const authUser = getAuthUserForProfile(profile.user_id)
+      const emailMatch = authUser
+        ? authUser.email.toLowerCase().includes(emailFilter.toLowerCase())
+        : true
+      const nameMatch = fullName.includes(nameFilter.toLowerCase())
+      const roleMatch =
+        !roleFilter || roleFilter === 'all' || profile.role_id === roleFilter
+      return nameMatch && roleMatch && emailMatch
+    })
+    .sort((a: Profile, b: Profile) => {
+      if (!profilesSortField) return 0
+
+      let aValue = ''
+      let bValue = ''
+
+      switch (profilesSortField) {
+        case 'name':
+          aValue = (a.first_name + ' ' + a.last_name).toLowerCase()
+          bValue = (b.first_name + ' ' + b.last_name).toLowerCase()
+          break
+        case 'email':
+          const aUser = getAuthUserForProfile(a.user_id)
+          const bUser = getAuthUserForProfile(b.user_id)
+          aValue = aUser?.email?.toLowerCase() || ''
+          bValue = bUser?.email?.toLowerCase() || ''
+          break
+        case 'role':
+          aValue = a.roles?.name?.toLowerCase() || ''
+          bValue = b.roles?.name?.toLowerCase() || ''
+          break
+      }
+
+      if (profilesSortDirection === 'asc') {
+        return aValue.localeCompare(bValue)
+      } else {
+        return bValue.localeCompare(aValue)
+      }
+    })
+
+  const filteredAuthUsers = authUsers
+    .filter((user) => {
+      const emailMatch = user.email
+        .toLowerCase()
+        .includes(emailFilter.toLowerCase())
+      return emailMatch
+    })
+    .sort((a: AuthUser, b: AuthUser) => {
+      if (!authUsersSortField) return 0
+
+      let aValue = ''
+      let bValue = ''
+
+      switch (authUsersSortField) {
+        case 'name':
+          aValue = (
+            (a.user_metadata?.first_name || '') +
+            ' ' +
+            (a.user_metadata?.last_name || '')
+          ).toLowerCase()
+          bValue = (
+            (b.user_metadata?.first_name || '') +
+            ' ' +
+            (b.user_metadata?.last_name || '')
+          ).toLowerCase()
+          break
+        case 'email':
+          aValue = a.email?.toLowerCase() || ''
+          bValue = b.email?.toLowerCase() || ''
+          break
+      }
+
+      if (authUsersSortDirection === 'asc') {
+        return aValue.localeCompare(bValue)
+      } else {
+        return bValue.localeCompare(aValue)
+      }
+    })
+
+  const filteredRoles = roles
+    .filter((role) =>
+      role.name.toLowerCase().includes(nameFilter.toLowerCase()),
+    )
+    .sort((a: Role, b: Role) => {
+      if (!rolesSortField) return 0
+
+      let aValue = ''
+      let bValue = ''
+
+      switch (rolesSortField) {
+        case 'name':
+          aValue = a.name?.toLowerCase() || ''
+          bValue = b.name?.toLowerCase() || ''
+          break
+        case 'description':
+          aValue = a.description?.toLowerCase() || ''
+          bValue = b.description?.toLowerCase() || ''
+          break
+      }
+
+      if (rolesSortDirection === 'asc') {
+        return aValue.localeCompare(bValue)
+      } else {
+        return bValue.localeCompare(aValue)
+      }
+    })
 
   const handleDeleteProfile = async (id: string) => {
     try {
@@ -485,14 +632,39 @@ export default function UtilizadoresPage() {
                 <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="sticky top-0 z-10 min-w-[150px] bg-[var(--orange)] font-bold uppercase">
-                        Nome
+                      <TableHead
+                        className="sticky top-0 z-10 min-w-[150px] cursor-pointer bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleAuthUsersSort('name')}
+                      >
+                        <div className="flex items-center justify-between">
+                          Nome
+                          {authUsersSortField === 'name' &&
+                            (authUsersSortDirection === 'asc' ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            ))}
+                        </div>
                       </TableHead>
                       <TableHead className="sticky top-0 z-10 min-w-[150px] bg-[var(--orange)] font-bold uppercase">
                         Apelido
                       </TableHead>
-                      <TableHead className="sticky top-0 z-10 min-w-[200px] bg-[var(--orange)] font-bold uppercase">
-                        Email
+                      <TableHead
+                        className="sticky top-0 z-10 min-w-[200px] cursor-pointer bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleAuthUsersSort('email')}
+                      >
+                        <div className="flex items-center justify-between">
+                          Email
+                          {authUsersSortField === 'email' &&
+                            (authUsersSortDirection === 'asc' ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            ))}
+                        </div>
+                      </TableHead>
+                      <TableHead className="sticky top-0 z-10 min-w-[150px] bg-[var(--orange)] font-bold normal-case">
+                        Nova Senha
                       </TableHead>
                       <TableHead className="sticky top-0 z-10 w-[140px] bg-[var(--orange)] text-center font-bold uppercase">
                         Ações
@@ -532,15 +704,30 @@ export default function UtilizadoresPage() {
                           />
                         </TableCell>
                         <TableCell>
-                          <Input
-                            type="password"
-                            value={editAuthPassword}
-                            onChange={(e) =>
-                              setEditAuthPassword(e.target.value)
-                            }
-                            className="h-10 rounded-none border-0 outline-0 focus:border-0 focus:ring-0"
-                            placeholder="Senha"
-                          />
+                          <div className="relative">
+                            <Input
+                              type={showPassword ? 'text' : 'password'}
+                              value={editAuthPassword}
+                              onChange={(e: any) =>
+                                setEditAuthPassword(e.target.value)
+                              }
+                              className="h-10 rounded-none border-0 pr-10 normal-case outline-0 focus:border-0 focus:ring-0"
+                              placeholder="Senha"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute top-0 right-0 h-10 w-10 rounded-none hover:bg-transparent"
+                              onClick={() => setShowPassword(!showPassword)}
+                            >
+                              {showPassword ? (
+                                <EyeOff className="h-4 w-4" />
+                              ) : (
+                                <Eye className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
                         </TableCell>
                         <TableCell className="flex justify-center gap-2">
                           <TooltipProvider>
@@ -647,6 +834,7 @@ export default function UtilizadoresPage() {
                                       setEditAuthFirstName('')
                                       setEditAuthLastName('')
                                       setEditAuthPassword('')
+                                      setShowPassword(false)
                                     }
                                   }}
                                   disabled={
@@ -676,6 +864,7 @@ export default function UtilizadoresPage() {
                                     setEditAuthFirstName('')
                                     setEditAuthLastName('')
                                     setEditAuthPassword('')
+                                    setShowPassword(false)
                                   }}
                                 >
                                   <X className="h-4 w-4" />
@@ -690,7 +879,7 @@ export default function UtilizadoresPage() {
 
                     {loading ? (
                       <TableRow>
-                        <TableCell colSpan={4} className="h-40 text-center">
+                        <TableCell colSpan={5} className="h-40 text-center">
                           <Loader2 className="text-muted-foreground mx-auto h-8 w-8 animate-spin" />
                         </TableCell>
                       </TableRow>
@@ -698,7 +887,7 @@ export default function UtilizadoresPage() {
                       !creatingNewAuthUser ? (
                       <TableRow>
                         <TableCell
-                          colSpan={4}
+                          colSpan={5}
                           className="text-center text-gray-500"
                         >
                           Nenhum utilizador autenticado encontrado.
@@ -741,6 +930,38 @@ export default function UtilizadoresPage() {
                               {user.email || 'Email não encontrado'}
                             </div>
                           </TableCell>
+                          <TableCell>
+                            {editingAuthUserId === user.id ? (
+                              <div className="relative">
+                                <Input
+                                  type={showEditPassword ? 'text' : 'password'}
+                                  value={editAuthPassword}
+                                  onChange={(e: any) =>
+                                    setEditAuthPassword(e.target.value)
+                                  }
+                                  className="h-10 rounded-none border-0 pr-10 normal-case outline-0 focus:border-0 focus:ring-0"
+                                  placeholder="Nova senha (opcional)"
+                                />
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="absolute top-0 right-0 h-10 w-10 rounded-none hover:bg-transparent"
+                                  onClick={() =>
+                                    setShowEditPassword(!showEditPassword)
+                                  }
+                                >
+                                  {showEditPassword ? (
+                                    <EyeOff className="h-4 w-4" />
+                                  ) : (
+                                    <Eye className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">••••••••</span>
+                            )}
+                          </TableCell>
                           <TableCell className="flex justify-center gap-2">
                             <TooltipProvider>
                               <Tooltip>
@@ -760,6 +981,20 @@ export default function UtilizadoresPage() {
 
                                             setSubmitting(true)
                                             try {
+                                              const updateData: any = {
+                                                userId: user.id,
+                                                firstName:
+                                                  editAuthFirstName.trim(),
+                                                lastName:
+                                                  editAuthLastName.trim(),
+                                              }
+
+                                              // Only include password if it's provided
+                                              if (editAuthPassword.trim()) {
+                                                updateData.password =
+                                                  editAuthPassword.trim()
+                                              }
+
                                               const response = await fetch(
                                                 '/api/admin/users',
                                                 {
@@ -768,13 +1003,9 @@ export default function UtilizadoresPage() {
                                                     'Content-Type':
                                                       'application/json',
                                                   },
-                                                  body: JSON.stringify({
-                                                    userId: user.id,
-                                                    firstName:
-                                                      editAuthFirstName.trim(),
-                                                    lastName:
-                                                      editAuthLastName.trim(),
-                                                  }),
+                                                  body: JSON.stringify(
+                                                    updateData,
+                                                  ),
                                                 },
                                               )
 
@@ -791,6 +1022,7 @@ export default function UtilizadoresPage() {
                                                 setEditingAuthUserId(null)
                                                 setEditAuthFirstName('')
                                                 setEditAuthLastName('')
+                                                setEditAuthPassword('')
                                               } else {
                                                 const { error } =
                                                   await response.json()
@@ -822,6 +1054,7 @@ export default function UtilizadoresPage() {
                                               user.user_metadata?.last_name ||
                                                 '',
                                             )
+                                            setEditAuthPassword('')
                                           }
                                     }
                                     disabled={
@@ -857,6 +1090,7 @@ export default function UtilizadoresPage() {
                                             setEditingAuthUserId(null)
                                             setEditAuthFirstName('')
                                             setEditAuthLastName('')
+                                            setEditAuthPassword('')
                                           }
                                         : async () => {
                                             if (
@@ -1009,17 +1243,50 @@ export default function UtilizadoresPage() {
                 <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="sticky top-0 z-10 min-w-[150px] bg-[var(--orange)] font-bold uppercase">
-                        Nome
+                      <TableHead
+                        className="sticky top-0 z-10 min-w-[150px] cursor-pointer bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleProfilesSort('name')}
+                      >
+                        <div className="flex items-center justify-between">
+                          Nome
+                          {profilesSortField === 'name' &&
+                            (profilesSortDirection === 'asc' ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            ))}
+                        </div>
                       </TableHead>
                       <TableHead className="sticky top-0 z-10 min-w-[150px] bg-[var(--orange)] font-bold uppercase">
                         Apelido
                       </TableHead>
-                      <TableHead className="sticky top-0 z-10 min-w-[200px] bg-[var(--orange)] font-bold uppercase">
-                        Email
+                      <TableHead
+                        className="sticky top-0 z-10 min-w-[200px] cursor-pointer bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleProfilesSort('email')}
+                      >
+                        <div className="flex items-center justify-between">
+                          Email
+                          {profilesSortField === 'email' &&
+                            (profilesSortDirection === 'asc' ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            ))}
+                        </div>
                       </TableHead>
-                      <TableHead className="sticky top-0 z-10 min-w-[150px] bg-[var(--orange)] font-bold uppercase">
-                        Papel
+                      <TableHead
+                        className="sticky top-0 z-10 min-w-[150px] cursor-pointer bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleProfilesSort('role')}
+                      >
+                        <div className="flex items-center justify-between">
+                          Papel
+                          {profilesSortField === 'role' &&
+                            (profilesSortDirection === 'asc' ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            ))}
+                        </div>
                       </TableHead>
                       <TableHead className="sticky top-0 z-10 w-[140px] bg-[var(--orange)] text-center font-bold uppercase">
                         Ações
@@ -1401,11 +1668,33 @@ export default function UtilizadoresPage() {
                 <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="sticky top-0 z-10 min-w-[200px] bg-[var(--orange)] font-bold uppercase">
-                        Nome do Papel
+                      <TableHead
+                        className="sticky top-0 z-10 min-w-[200px] cursor-pointer bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleRolesSort('name')}
+                      >
+                        <div className="flex items-center justify-between">
+                          Nome do Papel
+                          {rolesSortField === 'name' &&
+                            (rolesSortDirection === 'asc' ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            ))}
+                        </div>
                       </TableHead>
-                      <TableHead className="sticky top-0 z-10 min-w-[300px] bg-[var(--orange)] font-bold uppercase">
-                        Descrição
+                      <TableHead
+                        className="sticky top-0 z-10 min-w-[300px] cursor-pointer bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleRolesSort('description')}
+                      >
+                        <div className="flex items-center justify-between">
+                          Descrição
+                          {rolesSortField === 'description' &&
+                            (rolesSortDirection === 'asc' ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            ))}
+                        </div>
                       </TableHead>
                       <TableHead className="sticky top-0 z-10 w-[180px] bg-[var(--orange)] text-center font-bold uppercase">
                         Ações

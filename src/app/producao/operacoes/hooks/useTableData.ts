@@ -20,21 +20,33 @@ export const useTableData = () => {
 
   const supabase = createBrowserClient()
 
-  // Fetch operators with specific role ID
+  // Fetch operators with specific role names
   const fetchOperators = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, first_name, last_name')
-        .eq('role_id', '968afe0b-0b14-46b2-9269-4fc9f120bbfa')
+        .select(
+          `
+          id, 
+          first_name, 
+          last_name,
+          roles!profiles_role_id_fkey (
+            name
+          )
+        `,
+        )
+        .in('role_id', [
+          '968afe0b-0b14-46b2-9269-4fc9f120bbfa',
+          '2e18fb9d-52ef-4216-90ea-699372cd5a87',
+        ])
         .order('first_name', { ascending: true })
 
       if (error) throw error
 
       if (data) {
-        const operatorOptions = data.map(profile => ({
+        const operatorOptions = data.map((profile) => ({
           value: profile.id,
-          label: profile.first_name
+          label: profile.first_name,
         }))
         setOperators(operatorOptions)
       }
@@ -56,9 +68,9 @@ export const useTableData = () => {
       if (error) throw error
 
       if (data) {
-        const machineOptions = data.map(machine => ({
+        const machineOptions = data.map((machine) => ({
           value: machine.id,
-          label: machine.nome_maquina
+          label: machine.nome_maquina,
         }))
         setMachines(machineOptions)
       }
@@ -72,7 +84,7 @@ export const useTableData = () => {
   const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
-    
+
     try {
       await Promise.all([fetchOperators(), fetchMachines()])
     } catch (err) {
@@ -92,6 +104,6 @@ export const useTableData = () => {
     machines,
     loading,
     error,
-    refetch: loadData
+    refetch: loadData,
   }
-} 
+}
