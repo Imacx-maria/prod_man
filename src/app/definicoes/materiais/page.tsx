@@ -612,10 +612,13 @@ export default function MateriaisPage() {
     const filtered = data?.filter(
       (item) =>
         item.tipo &&
+        typeof item.tipo === 'string' &&
         item.tipo.trim().toUpperCase() === tipo &&
         item.material &&
+        typeof item.material === 'string' &&
         item.material.trim().toUpperCase() === material &&
         item.carateristica &&
+        typeof item.carateristica === 'string' &&
         item.carateristica.trim().toUpperCase() === carateristica,
     )
     setAvailableCores(
