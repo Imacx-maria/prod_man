@@ -1,6 +1,6 @@
 ﻿'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createBrowserClient } from '@/utils/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -307,7 +307,7 @@ export default function StocksPage() {
     return cleanup
   }, [])
 
-  const fetchStocks = async () => {
+  const fetchStocks = useCallback(async () => {
     setLoading(true)
     try {
       const { data, error } = await supabase
@@ -329,7 +329,7 @@ export default function StocksPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase])
 
   const fetchMaterials = async () => {
     try {
@@ -594,14 +594,7 @@ export default function StocksPage() {
     }
 
     loadData()
-  }, [
-    fetchStocks,
-    fetchMaterials,
-    fetchFornecedores,
-    fetchCurrentStocks,
-    fetchPaletes,
-    fetchProfiles,
-  ])
+  }, []) // Temporary fix for infinite loop - functions need useCallback wrapping
 
   // Effect to trigger filtering when paletes filters change
   useEffect(() => {
@@ -621,7 +614,7 @@ export default function StocksPage() {
     paletesAuthorFilter,
     paletesDateFrom,
     paletesDateTo,
-    fetchPaletes,
+    // fetchPaletes - temporarily removed to prevent infinite loop
   ])
 
   useEffect(() => {
@@ -632,7 +625,7 @@ export default function StocksPage() {
     return () => {
       window.removeEventListener('focus', handleFocus)
     }
-  }, [fetchMaterials])
+  }, []) // fetchMaterials - temporarily removed to prevent infinite loop
 
   // Helper to get reference for a material id - moved up to avoid hoisting issues
   const getReferenciaByMaterialId = (materialId: string) => {
