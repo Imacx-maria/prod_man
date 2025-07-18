@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Checkbox } from '@/components/ui/checkbox'
+
 import {
   Dialog,
   DialogContent,
@@ -133,7 +134,7 @@ function parseDateFromYYYYMMDD(dateString: string): Date {
 /**
  * Format date to Portuguese short format (DD/MM/YY)
  */
-function formatDatePortuguese(dateString: string | null): string {
+function formatDatePortuguese(dateString: string | null | undefined): string {
   if (!dateString) return ''
   try {
     const date = new Date(dateString)
@@ -3350,10 +3351,16 @@ export default function ProducaoPage() {
                   </div>
                 }
               >
-                {/* TODO: JobDrawerContent component needs to be defined or replaced */}
-                <div className="p-4">
-                  <p>Job details content - component needs implementation</p>
-                </div>
+                <JobDrawerContent
+                  jobId={openId}
+                  jobs={jobs}
+                  items={allItems}
+                  onClose={() => setOpenId(null)}
+                  supabase={supabase}
+                  setJobs={setJobs}
+                  setAllItems={setAllItems}
+                  fetchJobsSaiuStatus={fetchJobsSaiuStatus}
+                />
               </Suspense>
             )}
           </DrawerContent>
@@ -3441,4 +3448,1436 @@ interface JobDrawerProps {
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>
   setAllItems: React.Dispatch<React.SetStateAction<Item[]>>
   fetchJobsSaiuStatus: (jobIds: string[]) => Promise<void>
+}
+
+function JobDrawerContent({
+  jobId,
+  jobs,
+  items,
+  onClose,
+  supabase,
+  setJobs,
+  setAllItems,
+  fetchJobsSaiuStatus,
+}: JobDrawerProps) {
+  // Sorting state for drawer table - MUST be called before any early returns
+  type SortKey =
+    | 'bulk'
+    | 'descricao'
+    | 'codigo'
+    | 'quantidade'
+    | 'concluido'
+    | 'acoes'
+  const [sortCol, setSortCol] = useState<SortKey | ''>('') // Start with no sorting
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  // Logistica Tab State/Logic - MUST be called before any early returns
+  const [logisticaRows, setLogisticaRows] = useState<any[]>([])
+  const [logisticaLoading, setLogisticaLoading] = useState(false)
+  const [sourceRowId, setSourceRowId] = useState<string | null>(null)
+  const {
+    clientes: logisticaClientes,
+    transportadoras: logisticaTransportadoras,
+    armazens: logisticaArmazens,
+    fetchReferenceData,
+    updateLogisticaField,
+    updateFolhaObraField,
+    updateItemBaseField,
+    deleteLogisticaRow,
+  } = useLogisticaData()
+
+  // Find job and items AFTER all hooks are declared
+  const job = jobs.find((j) => j.id === jobId)
+  const jobItems = useMemo(() => {
+    return job ? items.filter((i) => i.folha_obra_id === jobId) : []
+  }, [job, items, jobId])
+
+  console.log('🏭 Production items for job', jobId, ':', jobItems)
+  console.log('🏭 All items available:', items.length)
+  const toggleSort = (col: SortKey) => {
+    if (sortCol === col) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
+    else {
+      setSortCol(col)
+      setSortDir('asc')
+    }
+  }
+  const sortedItems = useMemo(() => {
+    // Only sort if a sort column is explicitly set, otherwise return items in original order
+    if (!sortCol) return jobItems
+
+    const arr = [...jobItems]
+    arr.sort((a, b) => {
+      let A: any, B: any
+      switch (sortCol) {
+        case 'bulk':
+          A = a.id
+          B = b.id
+          break
+        case 'descricao':
+          A = a.descricao
+          B = b.descricao
+          break
+        case 'codigo':
+          A = a.codigo || ''
+          B = b.codigo || ''
+          break
+        case 'quantidade':
+          A = a.quantidade ?? 0
+          B = b.quantidade ?? 0
+          break
+        case 'concluido':
+          A = a.concluido ?? false
+          B = b.concluido ?? false
+          break
+        case 'acoes':
+          A = a.id
+          B = b.id
+          break
+        default:
+          A = a.id
+          B = b.id
+      }
+      if (typeof A === 'string')
+        return sortDir === 'asc' ? A.localeCompare(B) : B.localeCompare(A)
+      if (typeof A === 'number') return sortDir === 'asc' ? A - B : B - A
+      if (typeof A === 'boolean') return sortDir === 'asc' ? +A - +B : +B - +A
+      return 0
+    })
+    return arr
+  }, [jobItems, sortCol, sortDir])
+
+  // Fetch logistics records for job items
+  const fetchLogisticaRows = async () => {
+    setLogisticaLoading(true)
+    console.log('🔍 Fetching logistics for job items:', jobItems)
+
+    if (jobItems.length === 0) {
+      console.log('📦 No job items, clearing logistics table')
+      setLogisticaRows([])
+      setLogisticaLoading(false)
+      return
+    }
+
+    const itemIds = jobItems.map((item) => item.id)
+    // 2. Fetch all logistics records for those items
+    let logisticsData: any[] = []
+    if (itemIds.length > 0) {
+      const { data: logistics, error: logisticsError } = await supabase
+        .from('logistica_entregas')
+        .select(
+          `
+          *,
+          items_base!inner (
+            id,
+            descricao,
+            codigo,
+            quantidade,
+            brindes,
+            folha_obra_id,
+            folhas_obras!inner (
+              id,
+              numero_orc,
+              numero_fo,
+              cliente,
+              id_cliente,
+              saiu
+            )
+          )
+        `,
+        )
+        .in('item_id', itemIds)
+      if (!logisticsError && logistics) {
+        console.log('Fetched logistics data:', logistics)
+        logisticsData = logistics
+      } else if (logisticsError) {
+        console.error('Error fetching logistics:', logisticsError)
+      }
+    }
+    // 3. Create rows: show all logistics records + items without logistics records
+    const mergedRows: any[] = []
+
+    // Add all existing logistics records
+    logisticsData.forEach((logistics) => {
+      mergedRows.push(logistics)
+    })
+
+    // Create logistics entries for job items that don't have them yet
+    const itemsWithoutLogistics = jobItems.filter(
+      (item) => !logisticsData.some((l) => l.item_id === item.id),
+    )
+
+    if (itemsWithoutLogistics.length > 0) {
+      // Create logistics entries for all items without them
+      const newLogisticsEntries = itemsWithoutLogistics.map((item) => ({
+        item_id: item.id,
+        descricao: item.descricao || '', // Store item description directly
+        data: new Date().toISOString().split('T')[0],
+        is_entrega: true,
+      }))
+
+      const { data: newLogisticsData, error: logisticsInsertError } =
+        await supabase.from('logistica_entregas').insert(newLogisticsEntries)
+          .select(`
+          *,
+          items_base!inner (
+            id,
+            descricao,
+            codigo,
+            quantidade,
+            brindes,
+            folha_obra_id,
+            folhas_obras!inner (
+              id,
+              numero_orc,
+              numero_fo,
+              cliente,
+              id_cliente,
+              saiu
+            )
+          )
+        `)
+
+      if (logisticsInsertError) {
+        console.error('Error creating logistics entries:', logisticsInsertError)
+      } else if (newLogisticsData) {
+        console.log('Created logistics entries:', newLogisticsData)
+        // Add the newly created logistics entries to our data
+        logisticsData.push(...newLogisticsData)
+        mergedRows.push(...newLogisticsData)
+      }
+    }
+
+    setLogisticaRows(mergedRows)
+
+    // Auto-select the first row with complete delivery data as source
+    if (!sourceRowId && mergedRows.length > 0) {
+      const firstCompleteRow = mergedRows.find(
+        (row) => row.local_recolha && row.local_entrega && row.transportadora,
+      )
+      if (firstCompleteRow?.id) {
+        setSourceRowId(firstCompleteRow.id)
+      }
+    }
+
+    setLogisticaLoading(false)
+  }
+
+  useEffect(() => {
+    fetchReferenceData()
+    fetchLogisticaRows()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jobItems.length]) // Run when job items change
+
+  // Guard clause AFTER all hooks are called
+  if (!job) {
+    return (
+      <div className="flex items-center justify-center p-6">
+        <p>Job not found</p>
+      </div>
+    )
+  }
+
+  // --- Job Info Header ---
+  return (
+    <div className="relative space-y-6 p-6">
+      {/* Close button - top right */}
+      <Button
+        size="icon"
+        variant="outline"
+        onClick={onClose}
+        className="absolute top-6 right-6 z-10"
+      >
+        <X className="h-4 w-4" />
+      </Button>
+
+      {/* Job Info Header */}
+      <div className="mb-6 p-4 uppercase">
+        <div className="mb-2 flex items-center gap-8">
+          <div>
+            <div className="text-xs font-bold">ORC</div>
+            <div className="font-mono">{job.numero_orc ?? '-'}</div>
+          </div>
+          <div>
+            <div className="text-xs font-bold">FO</div>
+            <div className="font-mono">{job.numero_fo}</div>
+          </div>
+          <div className="flex-1">
+            <div className="text-xs font-bold">Nome Campanha</div>
+            <div className="truncate font-mono">{job.nome_campanha}</div>
+          </div>
+        </div>
+      </div>
+      {/* Tabs below job info */}
+      <Tabs
+        defaultValue="producao"
+        className="w-full pl-4"
+        onValueChange={async (value) => {
+          if (value === 'logistica') {
+            // Refresh logistics data when switching to logistics tab
+            await fetchLogisticaRows()
+          }
+        }}
+      >
+        <TabsList>
+          <TabsTrigger value="producao">Produção</TabsTrigger>
+          <TabsTrigger value="logistica">Logística</TabsTrigger>
+        </TabsList>
+        <TabsContent value="producao">
+          {/* --- Existing Produção Drawer Content --- */}
+          <div className="mt-6">
+            {/* header & toolbar */}
+            <div className="mb-6 flex items-start justify-between">
+              <div className="p-0">
+                <h2 className="text-lg font-semibold">
+                  {job.concluido ? 'Trabalho' : 'Novo Trabalho'} (FO:{' '}
+                  {job.numero_fo})
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                  Detalhes Produção Folha de Obra
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={async () => {
+                    // 1. Create a new item in items_base
+                    const { data: baseData, error: baseError } = await supabase
+                      .from('items_base')
+                      .insert({
+                        folha_obra_id: job.id,
+                        descricao: '',
+                        codigo: '',
+                      })
+                      .select('*')
+                      .single()
+                    if (baseError || !baseData) {
+                      // Optionally show an error message
+                      return
+                    }
+                    // 2. Create a new designer_items row linked to the new item
+                    const { error: designerError } = await supabase
+                      .from('designer_items')
+                      .insert({
+                        item_id: baseData.id,
+                        em_curso: true,
+                        duvidas: false,
+                        maquete_enviada: false,
+                        paginacao: false,
+                      })
+                    if (designerError) {
+                      // Optionally show an error message
+                      return
+                    }
+                    // 3. Automatically create a logistics entry for this new item
+                    await supabase.from('logistica_entregas').insert({
+                      item_id: baseData.id,
+                      descricao: baseData.descricao || '', // Store item description directly
+                      data: new Date().toISOString().split('T')[0],
+                      is_entrega: true,
+                    })
+
+                    // 4. Add the new item to global state
+                    const newItem: Item = {
+                      id: baseData.id,
+                      folha_obra_id: baseData.folha_obra_id,
+                      descricao: baseData.descricao ?? '',
+                      codigo: baseData.codigo ?? '',
+                      quantidade: baseData.quantidade ?? null,
+                      paginacao: false,
+                      brindes: baseData.brindes ?? false,
+                      concluido: false,
+                    }
+
+                    // Update global state
+                    setAllItems((prev) => [...prev, newItem])
+
+                    // Refresh logistics data
+                    await fetchLogisticaRows()
+                  }}
+                >
+                  Adicionar Item
+                </Button>
+              </div>
+            </div>
+
+            {/* Production Items table */}
+            <div className="bg-background border-border w-full rounded-none border-2">
+              <div className="w-full rounded-none">
+                <Table className="w-full border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+                  <TableHeader>
+                    <TableRow className="border-border border-0 border-b-2 bg-transparent">
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-10 cursor-pointer rounded-none border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
+                        onClick={() => toggleSort('bulk')}
+                      >
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                B{' '}
+                                {sortCol === 'bulk' &&
+                                  (sortDir === 'asc' ? (
+                                    <ArrowUp className="ml-1 inline h-3 w-3" />
+                                  ) : (
+                                    <ArrowDown className="ml-1 inline h-3 w-3" />
+                                  ))}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>Brindes</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 cursor-pointer rounded-none border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => toggleSort('descricao')}
+                      >
+                        Item{' '}
+                        {sortCol === 'descricao' &&
+                          (sortDir === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-72 cursor-pointer rounded-none border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => toggleSort('codigo')}
+                      >
+                        Código{' '}
+                        {sortCol === 'codigo' &&
+                          (sortDir === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-24 cursor-pointer rounded-none border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => toggleSort('quantidade')}
+                      >
+                        Quantidade{' '}
+                        {sortCol === 'quantidade' &&
+                          (sortDir === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[100px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
+                        onClick={() => toggleSort('concluido')}
+                      >
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                Concluído{' '}
+                                {sortCol === 'concluido' &&
+                                  (sortDir === 'asc' ? (
+                                    <ArrowUp className="ml-1 inline h-3 w-3" />
+                                  ) : (
+                                    <ArrowDown className="ml-1 inline h-3 w-3" />
+                                  ))}
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>Estado de Conclusão</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
+
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[120px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
+                        onClick={() => toggleSort('acoes')}
+                      >
+                        Ações{' '}
+                        {sortCol === 'acoes' &&
+                          (sortDir === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {sortedItems.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-8 text-center">
+                          Nenhum item encontrado
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      sortedItems.map((it, index) => (
+                        <TableRow
+                          key={it.id || `item-${index}`}
+                          className="hover:bg-[var(--main)]"
+                        >
+                          <TableCell className="text-center">
+                            <Checkbox
+                              checked={!!it.brindes}
+                              onCheckedChange={async (checked) => {
+                                const value =
+                                  checked === 'indeterminate' ? false : checked
+                                // Update global state
+                                setAllItems((prevItems) =>
+                                  prevItems.map((item) =>
+                                    item.id === it.id
+                                      ? { ...item, brindes: value }
+                                      : item,
+                                  ),
+                                )
+                                // Persist to Supabase
+                                await supabase
+                                  .from('items_base')
+                                  .update({ brindes: value })
+                                  .eq('id', it.id)
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              value={it.descricao}
+                              onChange={async (e) => {
+                                const newValue = e.target.value
+                                const { error } = await supabase
+                                  .from('items_base')
+                                  .update({ descricao: newValue })
+                                  .eq('id', it.id)
+                                if (!error) {
+                                  setAllItems((prev) =>
+                                    prev.map((item) =>
+                                      item.id === it.id
+                                        ? { ...item, descricao: newValue }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                              }}
+                              className="h-10 border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              value={it.codigo || ''}
+                              onChange={async (e) => {
+                                const newValue = e.target.value || null
+                                const { error } = await supabase
+                                  .from('items_base')
+                                  .update({ codigo: newValue })
+                                  .eq('id', it.id)
+                                if (!error) {
+                                  setAllItems((prev) =>
+                                    prev.map((item) =>
+                                      item.id === it.id
+                                        ? { ...item, codigo: newValue }
+                                        : item,
+                                    ),
+                                  )
+                                }
+                              }}
+                              className="h-10 border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                            />
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <Input
+                              type="text"
+                              value={it.quantidade ?? ''}
+                              onChange={(e) => {
+                                const value = e.target.value
+                                const numValue =
+                                  value === '' ? null : Number(value)
+                                // Update global state
+                                setAllItems((prevItems) =>
+                                  prevItems.map((item) =>
+                                    item.id === it.id
+                                      ? { ...item, quantidade: numValue }
+                                      : item,
+                                  ),
+                                )
+                              }}
+                              onBlur={async (e) => {
+                                await supabase
+                                  .from('items_base')
+                                  .update({
+                                    quantidade:
+                                      e.target.value === ''
+                                        ? null
+                                        : Number(e.target.value),
+                                  })
+                                  .eq('id', it.id)
+                              }}
+                              className="h-10 w-20 rounded-none border-0 text-right text-sm outline-0 focus:border-0 focus:ring-0"
+                            />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Checkbox
+                              checked={!!it.concluido}
+                              onCheckedChange={async (checked) => {
+                                const value =
+                                  checked === 'indeterminate' ? false : checked
+                                const today = new Date()
+                                  .toISOString()
+                                  .split('T')[0]
+
+                                // Update global state
+                                setAllItems((prevItems) =>
+                                  prevItems.map((item) =>
+                                    item.id === it.id
+                                      ? { ...item, concluido: value }
+                                      : item,
+                                  ),
+                                )
+
+                                // Update or create logistics entry
+                                const { data: existingLogistics } =
+                                  await supabase
+                                    .from('logistica_entregas')
+                                    .select('id')
+                                    .eq('item_id', it.id)
+                                    .single()
+
+                                if (existingLogistics) {
+                                  // Update existing logistics entry
+                                  if (value) {
+                                    // When checking, set both data_concluido and data_saida to today
+                                    await supabase
+                                      .from('logistica_entregas')
+                                      .update({
+                                        concluido: value,
+                                        data_concluido: today,
+                                        data_saida: today,
+                                      })
+                                      .eq('item_id', it.id)
+                                  } else {
+                                    // When unchecking, clear both dates
+                                    await supabase
+                                      .from('logistica_entregas')
+                                      .update({
+                                        concluido: value,
+                                        data_concluido: null,
+                                        data_saida: null,
+                                      })
+                                      .eq('item_id', it.id)
+                                  }
+                                } else {
+                                  // Create new logistics entry if it doesn't exist
+                                  await supabase
+                                    .from('logistica_entregas')
+                                    .insert({
+                                      item_id: it.id,
+                                      descricao: it.descricao || '',
+                                      concluido: value,
+                                      data_concluido: value ? today : null,
+                                      data_saida: value ? today : null,
+                                      data: today,
+                                      is_entrega: true,
+                                    })
+                                }
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="flex w-[100px] justify-center gap-2 pr-2">
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="secondary"
+                                    className="flex aspect-square size-10 items-center justify-center !p-0"
+                                    onClick={async () => {
+                                      // Duplicate item: insert into items_base, then designer_items, then refresh
+                                      const {
+                                        data: newBase,
+                                        error: baseError,
+                                      } = await supabase
+                                        .from('items_base')
+                                        .insert({
+                                          folha_obra_id: it.folha_obra_id,
+                                          descricao: it.descricao,
+                                          codigo: it.codigo,
+                                          quantidade: it.quantidade,
+                                          brindes: it.brindes,
+                                        })
+                                        .select('*')
+                                        .single()
+                                      if (baseError || !newBase) return
+                                      await supabase
+                                        .from('designer_items')
+                                        .insert({
+                                          item_id: newBase.id,
+                                          em_curso: true,
+                                          duvidas: false,
+                                          maquete_enviada: false,
+                                          paginacao: it.paginacao || false,
+                                        })
+
+                                      // Create logistics entry for the duplicated item
+                                      await supabase
+                                        .from('logistica_entregas')
+                                        .insert({
+                                          item_id: newBase.id,
+                                          descricao: newBase.descricao || '', // Store item description directly
+                                          data: new Date()
+                                            .toISOString()
+                                            .split('T')[0],
+                                          is_entrega: true,
+                                        })
+
+                                      // Add duplicated item to global state
+                                      const duplicatedItem: Item = {
+                                        id: newBase.id,
+                                        folha_obra_id: newBase.folha_obra_id,
+                                        descricao: newBase.descricao ?? '',
+                                        codigo: newBase.codigo ?? '',
+                                        quantidade: newBase.quantidade ?? null,
+                                        paginacao: it.paginacao || false,
+                                        brindes: newBase.brindes ?? false,
+                                        concluido: false, // duplicated items start as not completed
+                                      }
+
+                                      // Update global state
+                                      setAllItems((prev) => [
+                                        ...prev,
+                                        duplicatedItem,
+                                      ])
+
+                                      // Refresh logistics data
+                                      await fetchLogisticaRows()
+                                    }}
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Duplicar</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    size="icon"
+                                    variant="destructive"
+                                    className="flex aspect-square size-10 items-center justify-center !p-0"
+                                    onClick={async () => {
+                                      // Delete item: remove from logistics, designer_items, then items_base
+                                      await supabase
+                                        .from('logistica_entregas')
+                                        .delete()
+                                        .eq('item_id', it.id)
+                                      await supabase
+                                        .from('designer_items')
+                                        .delete()
+                                        .eq('item_id', it.id)
+                                      await supabase
+                                        .from('items_base')
+                                        .delete()
+                                        .eq('id', it.id)
+
+                                      // Remove from global state
+                                      setAllItems((prev) =>
+                                        prev.filter(
+                                          (item) => item.id !== it.id,
+                                        ),
+                                      )
+
+                                      // Refresh logistics data
+                                      await fetchLogisticaRows()
+                                    }}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Eliminar</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </div>
+        </TabsContent>
+        <TabsContent value="logistica">
+          <div className="mt-6">
+            <div className="mb-6 flex items-start justify-between">
+              <div className="p-0">
+                <h2 className="text-xl font-bold">
+                  Listagem Recolhas Entregas
+                </h2>
+                <p className="text-muted-foreground text-sm">
+                  Listagem de recolhas e entregas para esta folha de obra.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  disabled={logisticaLoading}
+                  onClick={async () => {
+                    try {
+                      setLogisticaLoading(true)
+
+                      // 1. Create a new item in items_base
+                      const { data: baseData, error: baseError } =
+                        await supabase
+                          .from('items_base')
+                          .insert({
+                            folha_obra_id: job.id,
+                            descricao: 'Novo Item',
+                            codigo: '',
+                            quantidade: 1,
+                          })
+                          .select('*')
+                          .single()
+
+                      if (baseError) {
+                        console.error('Error creating base item:', baseError)
+                        alert(`Erro ao criar item: ${baseError.message}`)
+                        setLogisticaLoading(false)
+                        return
+                      }
+
+                      // 2. Create a new designer_items row linked to the new item
+                      const { error: designerError } = await supabase
+                        .from('designer_items')
+                        .insert({
+                          item_id: baseData.id,
+                          em_curso: true,
+                          duvidas: false,
+                          maquete_enviada: false,
+                          paginacao: false,
+                        })
+
+                      if (designerError) {
+                        console.error(
+                          'Error creating designer item:',
+                          designerError,
+                        )
+                        alert(
+                          `Erro ao criar item de design: ${designerError.message}`,
+                        )
+                        setLogisticaLoading(false)
+                        return
+                      }
+
+                      // 3. Create logistics entry for the new item
+                      const { error: logisticsError } = await supabase
+                        .from('logistica_entregas')
+                        .insert({
+                          item_id: baseData.id,
+                          descricao: baseData.descricao || '', // Store item description directly
+                          data: new Date().toISOString().split('T')[0],
+                          is_entrega: true,
+                        })
+
+                      if (logisticsError) {
+                        console.error(
+                          'Error creating logistics entry:',
+                          logisticsError,
+                        )
+                        alert(
+                          `Erro ao criar entrada de logística: ${logisticsError.message}`,
+                        )
+                        setLogisticaLoading(false)
+                        return
+                      }
+
+                      // 4. Update local items state
+                      const newItem = {
+                        id: baseData.id,
+                        folha_obra_id: baseData.folha_obra_id,
+                        descricao: baseData.descricao,
+                        codigo: baseData.codigo,
+                        quantidade: baseData.quantidade,
+                        brindes: baseData.brindes,
+                        paginacao: false,
+                        concluido: false,
+                      }
+                      setAllItems((prevItems) => [...prevItems, newItem])
+
+                      // 5. Refresh logistica data to include the new item
+                      await fetchLogisticaRows()
+
+                      alert('Item adicionado com sucesso!')
+                    } catch (error) {
+                      console.error('Unexpected error adding item:', error)
+                      alert(`Erro inesperado: ${error}`)
+                    } finally {
+                      setLogisticaLoading(false)
+                    }
+                  }}
+                >
+                  {logisticaLoading ? (
+                    <>
+                      <RefreshCcw className="mr-2 h-4 w-4 animate-spin" />
+                      Adicionando...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Adicionar Item
+                    </>
+                  )}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  onClick={async () => {
+                    // Copy original item quantities to logistica_entregas
+                    if (logisticaRows.length === 0) {
+                      alert('Não há itens na tabela de logística.')
+                      return
+                    }
+
+                    const confirmed = confirm(
+                      'Copiar quantidades originais dos itens para a tabela de logística? Isto irá substituir as quantidades existentes.',
+                    )
+                    if (!confirmed) return
+
+                    try {
+                      // Get original quantities from items_base for all items in this FO
+                      const { data: itemsData, error: itemsError } =
+                        await supabase
+                          .from('items_base')
+                          .select('id, quantidade')
+                          .eq('folha_obra_id', job.id)
+
+                      if (itemsError || !itemsData) {
+                        alert('Erro ao buscar quantidades dos itens.')
+                        return
+                      }
+
+                      // Create a map of item_id -> quantidade
+                      const quantityMap = new Map(
+                        itemsData.map((item: any) => [
+                          item.id,
+                          item.quantidade,
+                        ]),
+                      )
+
+                      // Update all logistica_entregas records with original quantities
+                      const updatePromises = logisticaRows
+                        .filter(
+                          (row) => row.item_id && quantityMap.has(row.item_id),
+                        )
+                        .map((row) => {
+                          const originalQuantity = quantityMap.get(row.item_id)
+                          return supabase
+                            .from('logistica_entregas')
+                            .update({ quantidade: originalQuantity })
+                            .eq('id', row.id)
+                        })
+
+                      await Promise.all(updatePromises)
+
+                      // Refresh logistica data to show the updates
+                      await fetchLogisticaRows()
+
+                      alert('Quantidades copiadas com sucesso!')
+                    } catch (error) {
+                      console.error('Error copying quantities:', error)
+                      alert('Erro ao copiar quantidades. Tente novamente.')
+                    }
+                  }}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copiar Quantidades
+                </Button>
+                <Button
+                  size="sm"
+                  variant="default"
+                  onClick={async () => {
+                    // Copy delivery information from source row to all other rows
+                    if (!sourceRowId) {
+                      alert(
+                        'Selecione uma linha como fonte (usando o botão de opção) antes de copiar informações de entrega.',
+                      )
+                      return
+                    }
+
+                    const sourceRow = logisticaRows.find(
+                      (row) => row.id === sourceRowId,
+                    )
+                    if (!sourceRow) {
+                      alert('Linha fonte não encontrada.')
+                      return
+                    }
+
+                    const confirmed = confirm(
+                      `Copiar informações de entrega da linha "${sourceRow.items_base?.descricao || sourceRow.descricao}" para todas as outras linhas?`,
+                    )
+                    if (!confirmed) return
+
+                    const deliveryInfo = {
+                      local_recolha: sourceRow.local_recolha,
+                      local_entrega: sourceRow.local_entrega,
+                      transportadora: sourceRow.transportadora,
+                      id_local_recolha: sourceRow.id_local_recolha,
+                      id_local_entrega: sourceRow.id_local_entrega,
+                    }
+
+                    // Update all other rows (excluding the source row)
+                    const updatePromises = logisticaRows
+                      .filter((row) => row.id && row.id !== sourceRowId)
+                      .map((record) => {
+                        if (record.id) {
+                          return supabase
+                            .from('logistica_entregas')
+                            .update(deliveryInfo)
+                            .eq('id', record.id)
+                        }
+                      })
+
+                    try {
+                      await Promise.all(updatePromises.filter(Boolean))
+                      // Refresh logistica data to show the updates
+                      await fetchLogisticaRows()
+
+                      // Update local state to reflect the changes in comboboxes
+                      setLogisticaRows((prevRows) =>
+                        prevRows.map((record) => {
+                          if (record.id !== sourceRowId) {
+                            return { ...record, ...deliveryInfo }
+                          }
+                          return record
+                        }),
+                      )
+
+                      alert('Informações de entrega copiadas com sucesso!')
+                    } catch (error) {
+                      console.error(
+                        'Error copying delivery information:',
+                        error,
+                      )
+                      alert(
+                        'Erro ao copiar informações de entrega. Tente novamente.',
+                      )
+                    }
+                  }}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Copiar Entrega
+                  {sourceRowId && (
+                    <span className="bg-primary/20 ml-2 rounded px-2 py-1 text-xs">
+                      Fonte:{' '}
+                      {logisticaRows.find((r) => r.id === sourceRowId)
+                        ?.items_base?.descricao || 'Selecionada'}
+                    </span>
+                  )}
+                </Button>
+              </div>
+            </div>
+            {logisticaLoading ? (
+              <div className="mt-6 flex h-40 items-center justify-center">
+                <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
+              </div>
+            ) : (
+              <div className="bg-background border-border mt-6 w-full rounded-none border-2">
+                <div className="w-full rounded-none">
+                  <LogisticaTableWithCreatable
+                    records={logisticaRows}
+                    clientes={logisticaClientes || []}
+                    transportadoras={logisticaTransportadoras || []}
+                    armazens={logisticaArmazens || []}
+                    hideColumns={['cliente', 'saiu']}
+                    showSourceSelection={true}
+                    sourceRowId={sourceRowId}
+                    onSourceRowChange={setSourceRowId}
+                    onItemSave={async (row: any, value) => {
+                      // Update ONLY the logistics entry description, NOT the original item description
+                      if (row.id) {
+                        // Update existing logistics record
+                        await updateLogisticaField(
+                          row.id,
+                          'descricao',
+                          value,
+                          null,
+                        )
+                        setLogisticaRows((prevRows) =>
+                          prevRows.map((r) =>
+                            r.id === row.id ? { ...r, descricao: value } : r,
+                          ),
+                        )
+                      } else if (row.item_id) {
+                        // Create new logistics record with description
+                        const { data, error } = await supabase
+                          .from('logistica_entregas')
+                          .insert({
+                            item_id: row.item_id,
+                            descricao: value,
+                            data: new Date().toISOString().split('T')[0],
+                            is_entrega: true,
+                          })
+                          .select(
+                            `
+                              *,
+                              items_base!inner (
+                                id,
+                                descricao,
+                                codigo,
+                                quantidade,
+                                brindes,
+                                folha_obra_id,
+                                folhas_obras!inner (
+                                  id,
+                                  numero_orc,
+                                  numero_fo,
+                                  cliente,
+                                  id_cliente,
+                                  saiu
+                                )
+                              )
+                            `,
+                          )
+                          .single()
+                        if (!error && data) {
+                          setLogisticaRows((prevRows) =>
+                            prevRows.map((r) =>
+                              r.item_id === row.item_id && !r.id ? data : r,
+                            ),
+                          )
+                        }
+                      }
+                    }}
+                    onConcluidoSave={async (row: any, value) => {
+                      const today = new Date().toISOString().split('T')[0]
+
+                      if (!row.id && row.item_id) {
+                        // When creating a new entry
+                        const { data, error } = await supabase
+                          .from('logistica_entregas')
+                          .insert({
+                            item_id: row.item_id,
+                            concluido: value,
+                            data_concluido: value ? today : null,
+                            data_saida: value ? today : null,
+                            data: today,
+                            is_entrega: true,
+                          })
+                          .select(
+                            `
+                              *,
+                              items_base!inner (
+                                id,
+                                descricao,
+                                codigo,
+                                quantidade,
+                                brindes,
+                                folha_obra_id,
+                                folhas_obras!inner (
+                                  id,
+                                  numero_orc,
+                                  numero_fo,
+                                  cliente,
+                                  id_cliente,
+                                  saiu
+                                )
+                              )
+                            `,
+                          )
+                          .single()
+                        if (!error && data) {
+                          // Update local state instead of refetching
+                          setLogisticaRows((prevRows) =>
+                            prevRows.map((r) =>
+                              r.item_id === row.item_id && !r.id ? data : r,
+                            ),
+                          )
+                        }
+                      } else if (row.id) {
+                        if (value) {
+                          // When checking concluido, always set both dates to today
+                          await Promise.all([
+                            updateLogisticaField(
+                              row.id,
+                              'concluido',
+                              value,
+                              null,
+                            ),
+                            updateLogisticaField(
+                              row.id,
+                              'data_concluido',
+                              today,
+                              null,
+                            ),
+                            updateLogisticaField(
+                              row.id,
+                              'data_saida',
+                              today,
+                              null,
+                            ),
+                          ])
+
+                          // Update local state
+                          setLogisticaRows((prevRows) =>
+                            prevRows.map((r) =>
+                              r.id === row.id
+                                ? {
+                                    ...r,
+                                    concluido: value,
+                                    data_concluido: today,
+                                    data_saida: today,
+                                  }
+                                : r,
+                            ),
+                          )
+                        } else {
+                          // When unchecking concluido, clear both dates
+                          await Promise.all([
+                            updateLogisticaField(
+                              row.id,
+                              'concluido',
+                              value,
+                              null,
+                            ),
+                            updateLogisticaField(
+                              row.id,
+                              'data_concluido',
+                              null,
+                              null,
+                            ),
+                            updateLogisticaField(
+                              row.id,
+                              'data_saida',
+                              null,
+                              null,
+                            ),
+                          ])
+
+                          // Update local state
+                          setLogisticaRows((prevRows) =>
+                            prevRows.map((r) =>
+                              r.id === row.id
+                                ? {
+                                    ...r,
+                                    concluido: value,
+                                    data_concluido: null,
+                                    data_saida: null,
+                                  }
+                                : r,
+                            ),
+                          )
+                        }
+                      }
+                    }}
+                    onSaiuSave={async (row: any, value: boolean) => {
+                      if (row.id) {
+                        await updateLogisticaField(row.id, 'saiu', value, null)
+                        setLogisticaRows((prevRows) =>
+                          prevRows.map((r) =>
+                            r.id === row.id ? { ...r, saiu: value } : r,
+                          ),
+                        )
+                      }
+                    }}
+                    onGuiaSave={async (row: any, value: string) => {
+                      if (row.id) {
+                        await updateLogisticaField(row.id, 'guia', value, null)
+                        setLogisticaRows((prevRows) =>
+                          prevRows.map((r) =>
+                            r.id === row.id ? { ...r, guia: value } : r,
+                          ),
+                        )
+                      }
+                    }}
+                    onBrindesSave={async (row: any, value: boolean) => {
+                      if (row.id) {
+                        await updateLogisticaField(
+                          row.id,
+                          'brindes',
+                          value,
+                          null,
+                        )
+                        setLogisticaRows((prevRows) =>
+                          prevRows.map((r) =>
+                            r.id === row.id ? { ...r, brindes: value } : r,
+                          ),
+                        )
+                      }
+                    }}
+                    onClienteChange={async (row: any, value: string) => {
+                      // Update the associated job's client
+                      if (row.items_base?.folhas_obras?.id) {
+                        await updateFolhaObraField(
+                          row.items_base.folhas_obras.id,
+                          'id_cliente',
+                          value,
+                          new Date(),
+                        )
+                        // Optionally update local state or refresh
+                      }
+                    }}
+                    onRecolhaChange={async (rowId: string, value: string) => {
+                      await updateLogisticaField(
+                        rowId,
+                        'id_local_recolha',
+                        value,
+                        null,
+                      )
+                      setLogisticaRows((prevRows) =>
+                        prevRows.map((r) =>
+                          r.id === rowId
+                            ? { ...r, id_local_recolha: value }
+                            : r,
+                        ),
+                      )
+                    }}
+                    onEntregaChange={async (rowId: string, value: string) => {
+                      await updateLogisticaField(
+                        rowId,
+                        'id_local_entrega',
+                        value,
+                        null,
+                      )
+                      setLogisticaRows((prevRows) =>
+                        prevRows.map((r) =>
+                          r.id === rowId
+                            ? { ...r, id_local_entrega: value }
+                            : r,
+                        ),
+                      )
+                    }}
+                    onTransportadoraChange={async (row: any, value: string) => {
+                      if (row.id) {
+                        await updateLogisticaField(
+                          row.id,
+                          'transportadora',
+                          value,
+                          null,
+                        )
+                        setLogisticaRows((prevRows) =>
+                          prevRows.map((r) =>
+                            r.id === row.id
+                              ? { ...r, transportadora: value }
+                              : r,
+                          ),
+                        )
+                      }
+                    }}
+                    onQuantidadeSave={async (
+                      row: any,
+                      value: number | null,
+                    ) => {
+                      if (row.id) {
+                        await updateLogisticaField(
+                          row.id,
+                          'quantidade',
+                          value,
+                          null,
+                        )
+                        setLogisticaRows((prevRows) =>
+                          prevRows.map((r) =>
+                            r.id === row.id ? { ...r, quantidade: value } : r,
+                          ),
+                        )
+                      }
+                    }}
+                    onDuplicateRow={async (row: any) => {
+                      if (row.id) {
+                        // Create a duplicate logistics entry
+                        const { data, error } = await supabase
+                          .from('logistica_entregas')
+                          .insert({
+                            item_id: row.item_id,
+                            descricao: row.descricao,
+                            quantidade: row.quantidade,
+                            local_recolha: row.local_recolha,
+                            local_entrega: row.local_entrega,
+                            transportadora: row.transportadora,
+                            id_local_recolha: row.id_local_recolha,
+                            id_local_entrega: row.id_local_entrega,
+                            data: new Date().toISOString().split('T')[0],
+                            is_entrega: row.is_entrega,
+                          })
+                          .select(
+                            `
+                              *,
+                              items_base!inner (
+                                id,
+                                descricao,
+                                codigo,
+                                quantidade,
+                                brindes,
+                                folha_obra_id,
+                                folhas_obras!inner (
+                                  id,
+                                  numero_orc,
+                                  numero_fo,
+                                  cliente,
+                                  id_cliente,
+                                  saiu
+                                )
+                              )
+                            `,
+                          )
+                          .single()
+
+                        if (!error && data) {
+                          setLogisticaRows((prevRows) => [...prevRows, data])
+                        }
+                      }
+                    }}
+                    onNotasSave={async (
+                      row: any,
+                      outras: string,
+                      contacto?: string,
+                      telefone?: string,
+                      contacto_entrega?: string,
+                      telefone_entrega?: string,
+                      data?: string | null,
+                    ) => {
+                      if (row.id) {
+                        const updateData = {
+                          notas: outras,
+                          contacto: contacto || null,
+                          telefone: telefone || null,
+                          contacto_entrega: contacto_entrega || null,
+                          telefone_entrega: telefone_entrega || null,
+                          data: data || null,
+                        }
+
+                        await Promise.all(
+                          Object.entries(updateData).map(([field, value]) =>
+                            updateLogisticaField(row.id, field, value, null),
+                          ),
+                        )
+
+                        setLogisticaRows((prevRows) =>
+                          prevRows.map((r) =>
+                            r.id === row.id ? { ...r, ...updateData } : r,
+                          ),
+                        )
+                      }
+                    }}
+                    onDeleteRow={async (rowId: string) => {
+                      if (rowId) {
+                        await deleteLogisticaRow(rowId, new Date())
+                        setLogisticaRows((prevRows) =>
+                          prevRows.filter((r) => r.id !== rowId),
+                        )
+                      }
+                    }}
+                    tableDate={new Date().toISOString().split('T')[0]}
+                    onArmazensUpdate={() => {
+                      // Refresh reference data
+                      fetchReferenceData()
+                    }}
+                    onTransportadorasUpdate={() => {
+                      // Refresh reference data
+                      fetchReferenceData()
+                    }}
+                    onClientesUpdate={() => {
+                      // Refresh reference data
+                      fetchReferenceData()
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
 }

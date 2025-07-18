@@ -58,7 +58,16 @@ export default function FeriadosPage() {
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
 
   // Debounced filter values for performance
-  const debouncedDescriptionFilter = useDebounce(descriptionFilter, 300)
+  const [debouncedDescriptionFilter, setDebouncedDescriptionFilter] =
+    useState(descriptionFilter)
+
+  // Update debounced value with delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedDescriptionFilter(descriptionFilter)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [descriptionFilter])
 
   const supabase = createBrowserClient()
 
@@ -70,7 +79,7 @@ export default function FeriadosPage() {
         let query = supabase.from('feriados').select('*')
 
         // Apply filters at database level
-        if (filters.descriptionFilter?.trim()) {
+        if (filters.descriptionFilter?.trim?.()) {
           query = query.ilike(
             'description',
             `%${filters.descriptionFilter.trim()}%`,
@@ -195,7 +204,7 @@ export default function FeriadosPage() {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={fetchFeriados}
+                    onClick={() => fetchFeriados()}
                     className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
                   >
                     <RotateCw className="h-4 w-4" />

@@ -60,11 +60,21 @@ export default function MaquinasPage() {
     async (filters: { nameFilter?: string } = {}) => {
       setLoading(true)
       try {
-        console.log('Fetching maquinas...')
+        console.log('Fetching maquinas...', filters)
+        console.log(
+          'nameFilter type:',
+          typeof filters.nameFilter,
+          'value:',
+          filters.nameFilter,
+        )
         let query = supabase.from('maquinas').select('*')
 
         // Apply filters at database level
-        if (filters.nameFilter?.trim()) {
+        if (
+          filters.nameFilter &&
+          typeof filters.nameFilter === 'string' &&
+          filters.nameFilter.trim()
+        ) {
           query = query.ilike('maquina', `%${filters.nameFilter.trim()}%`)
         }
 

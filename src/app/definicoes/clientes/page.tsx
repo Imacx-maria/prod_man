@@ -98,7 +98,15 @@ export default function ClientesPage() {
   const [submitting, setSubmitting] = useState(false)
 
   // Debounced filter values for performance
-  const debouncedNameFilter = useDebounce(nameFilter, 300)
+  const [debouncedNameFilter, setDebouncedNameFilter] = useState(nameFilter)
+
+  // Update debounced value with delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedNameFilter(nameFilter)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [nameFilter])
 
   const supabase = createBrowserClient()
 
@@ -110,7 +118,7 @@ export default function ClientesPage() {
         let query = supabase.from('clientes').select('*')
 
         // Apply filters at database level
-        if (filters.nameFilter?.trim()) {
+        if (filters.nameFilter?.trim?.()) {
           const searchTerm = filters.nameFilter.trim()
           // Search in both nome_cl and numero_phc fields
           query = query.or(
@@ -377,7 +385,7 @@ export default function ClientesPage() {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={fetchClientes}
+                    onClick={() => fetchClientes()}
                     aria-label="Atualizar"
                     className="h-10 w-10 rounded-none"
                   >

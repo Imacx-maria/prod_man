@@ -57,7 +57,15 @@ export default function ArmazensPage() {
   const [submitting, setSubmitting] = useState(false)
 
   // Debounced filter values for performance
-  const debouncedNameFilter = useDebounce(nameFilter, 300)
+  const [debouncedNameFilter, setDebouncedNameFilter] = useState(nameFilter)
+
+  // Update debounced value with delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedNameFilter(nameFilter)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [nameFilter])
 
   const supabase = createBrowserClient()
 
@@ -69,7 +77,7 @@ export default function ArmazensPage() {
         let query = supabase.from('armazens').select('*')
 
         // Apply filters at database level
-        if (filters.nameFilter?.trim()) {
+        if (filters.nameFilter?.trim?.()) {
           const searchTerm = filters.nameFilter.trim()
           // Search in both nome_arm and numero_phc fields
           query = query.or(
@@ -209,7 +217,7 @@ export default function ArmazensPage() {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={fetchArmazens}
+                    onClick={() => fetchArmazens()}
                     aria-label="Atualizar lista"
                     className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
                   >

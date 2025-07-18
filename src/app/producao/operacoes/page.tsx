@@ -75,6 +75,7 @@ interface ProductionItem {
   concluido_maq?: boolean | null
   brindes?: boolean
   prioridade?: boolean | null
+  complexidade?: string | null
   created_at?: string | null
   folhas_obras?: {
     numero_fo?: string
@@ -302,6 +303,7 @@ function OperacoesPageContent() {
           concluido_maq,
           brindes,
           prioridade,
+          complexidade,
           created_at,
           folhas_obras (
             numero_fo,
@@ -350,7 +352,7 @@ function OperacoesPageContent() {
 
       console.log('Transformed items:', transformedItems.length)
 
-      // Filter items that meet both conditions:
+      // Filter items that meet all conditions:
       const filteredItems = transformedItems.filter((item) => {
         let hasLogisticaEntregasNotConcluida = false
 
@@ -367,18 +369,24 @@ function OperacoesPageContent() {
 
         const hasPaginacaoTrue = item.designer_items?.paginacao === true
         const isNotBrinde = item.brindes !== true
+        const isNotOffset = item.complexidade !== 'OFFSET'
 
         const includeItem =
-          hasLogisticaEntregasNotConcluida && hasPaginacaoTrue && isNotBrinde
+          hasLogisticaEntregasNotConcluida &&
+          hasPaginacaoTrue &&
+          isNotBrinde &&
+          isNotOffset
 
         if (!includeItem) {
           console.log(`Item ${item.id} filtered out:`, {
             hasLogisticaEntregasNotConcluida,
             hasPaginacaoTrue,
             isNotBrinde,
+            isNotOffset,
             logistica_entregas: item.logistica_entregas,
             designer_items: item.designer_items,
             brindes: item.brindes,
+            complexidade: item.complexidade,
           })
         }
 
@@ -656,6 +664,13 @@ function OperacoesPageContent() {
                 <li>
                   <strong>Entregas não concluídas</strong>{' '}
                   (logistica_entregas.concluido = false)
+                </li>
+                <li>
+                  <strong>Não ser brinde</strong> (brindes ≠ true)
+                </li>
+                <li>
+                  <strong>Complexidade não ser OFFSET</strong> (complexidade ≠
+                  &apos;OFFSET&apos;)
                 </li>
               </ul>
             </div>

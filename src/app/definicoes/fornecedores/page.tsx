@@ -64,7 +64,15 @@ export default function FornecedoresPage() {
   })
 
   // Debounced filter values for performance
-  const debouncedNameFilter = useDebounce(nameFilter, 300)
+  const [debouncedNameFilter, setDebouncedNameFilter] = useState(nameFilter)
+
+  // Update debounced value with delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedNameFilter(nameFilter)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [nameFilter])
 
   const supabase = createBrowserClient()
 
@@ -76,7 +84,7 @@ export default function FornecedoresPage() {
         let query = supabase.from('fornecedores').select('*')
 
         // Apply filters at database level
-        if (filters.nameFilter?.trim()) {
+        if (filters.nameFilter?.trim?.()) {
           const searchTerm = filters.nameFilter.trim()
           // Search in nome_forn, numero_phc, and email fields
           query = query.or(
@@ -267,7 +275,7 @@ export default function FornecedoresPage() {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={fetchFornecedores}
+                    onClick={() => fetchFornecedores()}
                     aria-label="Atualizar"
                   >
                     <RotateCw className="h-4 w-4" />

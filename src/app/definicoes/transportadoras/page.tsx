@@ -50,7 +50,15 @@ export default function TransportadorasPage() {
   const [editName, setEditName] = useState('')
 
   // Debounced filter values for performance
-  const debouncedNameFilter = useDebounce(nameFilter, 300)
+  const [debouncedNameFilter, setDebouncedNameFilter] = useState(nameFilter)
+
+  // Update debounced value with delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedNameFilter(nameFilter)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [nameFilter])
 
   const supabase = createBrowserClient()
 
@@ -62,7 +70,7 @@ export default function TransportadorasPage() {
         let query = supabase.from('transportadora').select('*')
 
         // Apply filters at database level
-        if (filters.nameFilter?.trim()) {
+        if (filters.nameFilter?.trim?.()) {
           query = query.ilike('name', `%${filters.nameFilter.trim()}%`)
         }
 
@@ -224,7 +232,7 @@ export default function TransportadorasPage() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    onClick={fetchTransportadoras}
+                    onClick={() => fetchTransportadoras()}
                     variant="outline"
                     size="icon"
                     aria-label="Atualizar"

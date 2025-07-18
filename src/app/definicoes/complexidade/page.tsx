@@ -39,7 +39,15 @@ export default function ComplexidadePage() {
   const [submitting, setSubmitting] = useState(false)
 
   // Debounced filter values for performance
-  const debouncedGrauFilter = useDebounce(grauFilter, 300)
+  const [debouncedGrauFilter, setDebouncedGrauFilter] = useState(grauFilter)
+
+  // Update debounced value with delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedGrauFilter(grauFilter)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [grauFilter])
 
   const supabase = createBrowserClient()
 
@@ -51,7 +59,7 @@ export default function ComplexidadePage() {
         let query = supabase.from('complexidade').select('*')
 
         // Apply filters at database level
-        if (filters.grauFilter?.trim()) {
+        if (filters.grauFilter?.trim?.()) {
           query = query.ilike('grau', `%${filters.grauFilter.trim()}%`)
         }
 
@@ -166,7 +174,7 @@ export default function ComplexidadePage() {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={fetchComplexidades}
+                    onClick={() => fetchComplexidades()}
                     className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
                   >
                     <RotateCw className="h-4 w-4" />

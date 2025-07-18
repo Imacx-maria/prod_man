@@ -49,6 +49,7 @@ interface Material {
   tipo: string | null
   referencia: string | null
   ref_fornecedor: string | null
+  ref_cliente: string | null
   material: string | null
   carateristica: string | null
   cor: string | null
@@ -59,6 +60,9 @@ interface Material {
   valor_m2: number | null
   qt_palete: number | null
   fornecedor_id: string | null
+  fornecedor: string | null
+  stock_minimo: number | null
+  stock_critico: number | null
   ORC: boolean | null
   created_at: string
   updated_at: string
@@ -109,9 +113,33 @@ export default function MateriaisPage() {
   const [availableTipos, setAvailableTipos] = useState<string[]>([])
 
   // Debounced filter values for performance
-  const debouncedMaterialFilter = useDebounce(materialFilter, 300)
-  const debouncedCaracteristicaFilter = useDebounce(caracteristicaFilter, 300)
-  const debouncedCorFilter = useDebounce(corFilter, 300)
+  const [debouncedMaterialFilter, setDebouncedMaterialFilter] =
+    useState(materialFilter)
+  const [debouncedCaracteristicaFilter, setDebouncedCaracteristicaFilter] =
+    useState(caracteristicaFilter)
+  const [debouncedCorFilter, setDebouncedCorFilter] = useState(corFilter)
+
+  // Update debounced values with delay
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedMaterialFilter(materialFilter)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [materialFilter])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedCaracteristicaFilter(caracteristicaFilter)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [caracteristicaFilter])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedCorFilter(corFilter)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [corFilter])
 
   const supabase = createBrowserClient()
 
@@ -130,18 +158,18 @@ export default function MateriaisPage() {
 
         // Apply filters at database level
         if (filters.materialFilter?.trim()) {
-          query = query.ilike('material', `%${filters.materialFilter.trim()}%`)
+          query = query.ilike('material', `%${filters.materialFilter?.trim()}%`)
         }
 
         if (filters.caracteristicaFilter?.trim()) {
           query = query.ilike(
             'carateristica',
-            `%${filters.caracteristicaFilter.trim()}%`,
+            `%${filters.caracteristicaFilter?.trim()}%`,
           )
         }
 
         if (filters.corFilter?.trim()) {
-          query = query.ilike('cor', `%${filters.corFilter.trim()}%`)
+          query = query.ilike('cor', `%${filters.corFilter?.trim()}%`)
         }
 
         // Apply sorting at database level
@@ -237,6 +265,7 @@ export default function MateriaisPage() {
       setFornecedoresLoading(false)
     }
     fetchFornecedores()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -285,6 +314,7 @@ export default function MateriaisPage() {
     }
 
     fetchCascadingData()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleSort = (column: string) => {
@@ -428,11 +458,6 @@ export default function MateriaisPage() {
         m.id === materialId ? { ...m, fornecedor_id: fornecedorId } : m,
       ),
     )
-  }
-
-  // Add a handler to update fornecedores when new ones are created
-  const handleFornecedoresUpdate = (newFornecedores: FornecedorOption[]) => {
-    setFornecedores(newFornecedores)
   }
 
   // Handler to toggle ORC value
@@ -705,6 +730,7 @@ export default function MateriaisPage() {
           editingMaterial.carateristica,
         )
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openDrawer])
 
   // Convert string arrays to MaterialOption arrays
@@ -1196,11 +1222,20 @@ export default function MateriaisPage() {
                           val ? val.toUpperCase() : '',
                         )
                       }
+                      onCreateNew={async (inputValue: string) => {
+                        // Create new fornecedor logic would go here
+                        // For now, just return the input as a new option
+                        const newOption = {
+                          value: inputValue.toUpperCase(),
+                          label: inputValue.toUpperCase(),
+                        }
+                        setFornecedores((prev) => [...prev, newOption])
+                        return newOption
+                      }}
                       options={fornecedores.map((f) => ({
                         ...f,
                         label: f.label.toUpperCase(),
                       }))}
-                      onOptionsUpdate={handleFornecedoresUpdate}
                       loading={fornecedoresLoading}
                       className="mt-2 w-full"
                       placeholder="FORNECEDOR"
@@ -1215,19 +1250,14 @@ export default function MateriaisPage() {
                     </Label>
                     <Combobox
                       value={editingMaterial?.tipo?.toUpperCase() ?? ''}
-                      onValueChange={handleTipoChange}
-                    >
-                      <Combobox.Trigger className="mt-2 rounded-none">
-                        <Combobox.Value placeholder="SELECIONE O TIPO" />
-                      </Combobox.Trigger>
-                      <Combobox.Content className="rounded-none">
-                        {availableTipos.map((tipo) => (
-                          <Combobox.Item key={tipo} value={tipo}>
-                            {tipo}
-                          </Combobox.Item>
-                        ))}
-                      </Combobox.Content>
-                    </Combobox>
+                      onChange={handleTipoChange}
+                      options={availableTipos.map((tipo) => ({
+                        value: tipo,
+                        label: tipo,
+                      }))}
+                      placeholder="SELECIONE O TIPO"
+                      className="mt-2"
+                    />
                   </div>
                 </div>
 
@@ -1243,6 +1273,17 @@ export default function MateriaisPage() {
                     <CreatableCombobox
                       value={editingMaterial?.material?.toUpperCase() ?? ''}
                       onChange={handleMaterialComboChange}
+                      onCreateNew={async (inputValue: string) => {
+                        const newOption = {
+                          value: inputValue.toUpperCase(),
+                          label: inputValue.toUpperCase(),
+                        }
+                        setAvailableMaterials((prev) => [
+                          ...prev,
+                          inputValue.toUpperCase(),
+                        ])
+                        return newOption
+                      }}
                       options={materialOptions}
                       disabled={!editingMaterial?.tipo}
                       className="mt-2"
@@ -1261,6 +1302,17 @@ export default function MateriaisPage() {
                         editingMaterial?.carateristica?.toUpperCase() ?? ''
                       }
                       onChange={handleCaracteristicaComboChange}
+                      onCreateNew={async (inputValue: string) => {
+                        const newOption = {
+                          value: inputValue.toUpperCase(),
+                          label: inputValue.toUpperCase(),
+                        }
+                        setAvailableCaracteristicas((prev) => [
+                          ...prev,
+                          inputValue.toUpperCase(),
+                        ])
+                        return newOption
+                      }}
                       options={caracteristicaOptions}
                       disabled={!editingMaterial?.material}
                       className="mt-2"
@@ -1277,6 +1329,17 @@ export default function MateriaisPage() {
                     <CreatableCombobox
                       value={editingMaterial?.cor?.toUpperCase() ?? ''}
                       onChange={handleCorComboChange}
+                      onCreateNew={async (inputValue: string) => {
+                        const newOption = {
+                          value: inputValue.toUpperCase(),
+                          label: inputValue.toUpperCase(),
+                        }
+                        setAvailableCores((prev) => [
+                          ...prev,
+                          inputValue.toUpperCase(),
+                        ])
+                        return newOption
+                      }}
                       options={corOptions}
                       disabled={!editingMaterial?.carateristica}
                       className="mt-2"
