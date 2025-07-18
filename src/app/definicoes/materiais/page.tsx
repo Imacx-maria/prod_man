@@ -533,7 +533,10 @@ export default function MateriaisPage() {
       .not('tipo', 'is', null)
     // Only include materials with matching normalized tipo
     const filtered = data?.filter(
-      (item) => item.tipo && item.tipo.trim().toUpperCase() === tipo,
+      (item) =>
+        item.tipo &&
+        typeof item.tipo === 'string' &&
+        item.tipo.trim().toUpperCase() === tipo,
     )
     setAvailableMaterials(
       Array.from(
@@ -562,8 +565,14 @@ export default function MateriaisPage() {
     console.log('Raw características data:', data)
     // Only include carateristicas with matching normalized tipo and material
     const filtered = data?.filter((item) => {
-      const itemTipo = item.tipo && item.tipo.trim().toUpperCase()
-      const itemMaterial = item.material && item.material.trim().toUpperCase()
+      const itemTipo =
+        item.tipo &&
+        typeof item.tipo === 'string' &&
+        item.tipo.trim().toUpperCase()
+      const itemMaterial =
+        item.material &&
+        typeof item.material === 'string' &&
+        item.material.trim().toUpperCase()
       const match = itemTipo === tipo && itemMaterial === material
       if (!match) {
         console.log(
