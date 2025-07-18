@@ -116,7 +116,7 @@ export default function MaquinasPage() {
 
   // Save handler for new row
   const handleAddSave = async () => {
-    if (!editData.maquina.trim()) return
+    if (!editData.maquina?.trim()) return
     setSubmitting(true)
     try {
       const valorM2 = editData.valor_m2 ? parseFloat(editData.valor_m2) : null
@@ -157,7 +157,7 @@ export default function MaquinasPage() {
       await handleAddSave()
       return
     }
-    if (!editData.maquina.trim()) return
+    if (!editData.maquina?.trim()) return
     setSubmitting(true)
     try {
       const valorM2 = editData.valor_m2 ? parseFloat(editData.valor_m2) : null
@@ -383,7 +383,7 @@ export default function MaquinasPage() {
                                   size="icon"
                                   onClick={handleAddSave}
                                   disabled={
-                                    submitting || !editData.maquina.trim()
+                                    submitting || !editData.maquina?.trim()
                                   }
                                   aria-label="Guardar"
                                   className="h-10 w-10 rounded-none"
@@ -471,7 +471,7 @@ export default function MaquinasPage() {
                                       size="icon"
                                       onClick={() => handleEditSave(maquina.id)}
                                       disabled={
-                                        submitting || !editData.maquina.trim()
+                                        submitting || !editData.maquina?.trim()
                                       }
                                       aria-label="Guardar"
                                       className="h-10 w-10 rounded-none"
@@ -639,7 +639,7 @@ export default function MaquinasPage() {
                   <div className="flex gap-2 pt-4">
                     <Button
                       type="submit"
-                      disabled={submitting || !editData.maquina.trim()}
+                      disabled={submitting || !editData.maquina?.trim()}
                       className="h-10 rounded-none"
                     >
                       {submitting ? (
