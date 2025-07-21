@@ -1,5 +1,15 @@
 'use client'
 
+/**
+ * Designer Flow Management
+ * ------------------------
+ * Manages design workflow and designer assignments for production jobs
+ *
+ * FILTERING RULES:
+ * - Only shows jobs that have BOTH FO (numero_fo) and ORC (numero_orc) values
+ * - Jobs missing either FO or ORC are filtered out
+ */
+
 import {
   useState,
   useEffect,
@@ -234,8 +244,12 @@ const fetchJobs = async (
     let query = supabase
       .from('folhas_obras')
       .select(
-        'id, data_in, numero_fo, profile_id, nome_campanha, data_saida, prioridade, notas, created_at',
+        'id, data_in, numero_fo, numero_orc, profile_id, nome_campanha, data_saida, prioridade, notas, created_at',
       )
+      .not('numero_fo', 'is', null)
+      .not('numero_orc', 'is', null)
+      .neq('numero_fo', '')
+      .neq('numero_orc', 0)
 
     // Apply job ID filter if item search was performed
     if (jobIds) {

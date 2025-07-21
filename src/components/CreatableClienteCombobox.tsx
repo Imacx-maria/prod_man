@@ -1,5 +1,7 @@
 import { Label } from '@/components/ui/label'
-import CreatableCombobox, { CreatableComboboxOption } from '@/components/ui/CreatableCombobox'
+import CreatableCombobox, {
+  CreatableComboboxOption,
+} from '@/components/ui/CreatableCombobox'
 import { Loader2 } from 'lucide-react'
 import React from 'react'
 import { createBrowserClient } from '@/utils/supabase'
@@ -22,13 +24,15 @@ interface CreatableClienteComboboxProps {
   error?: string | null
 }
 
-export const CreatableClienteCombobox: React.FC<CreatableClienteComboboxProps> = ({
+export const CreatableClienteCombobox: React.FC<
+  CreatableClienteComboboxProps
+> = ({
   value,
   onChange,
   options,
   onOptionsUpdate,
   label,
-  placeholder = 'Selecione um cliente',
+  placeholder = 'Cliente',
   disabled = false,
   className = '',
   loading = false,
@@ -36,7 +40,9 @@ export const CreatableClienteCombobox: React.FC<CreatableClienteComboboxProps> =
 }) => {
   const supabase = createBrowserClient()
 
-  const handleCreateNew = async (inputValue: string): Promise<CreatableComboboxOption | null> => {
+  const handleCreateNew = async (
+    inputValue: string,
+  ): Promise<CreatableComboboxOption | null> => {
     try {
       // Create new cliente in the database
       const { data, error } = await supabase
@@ -46,7 +52,7 @@ export const CreatableClienteCombobox: React.FC<CreatableClienteComboboxProps> =
           numero_phc: null,
           morada: null,
           codigo_pos: null,
-          telefone: null
+          telefone: null,
         })
         .select('*')
 
@@ -62,7 +68,7 @@ export const CreatableClienteCombobox: React.FC<CreatableClienteComboboxProps> =
       const newCliente = data[0]
       const newOption: CreatableComboboxOption = {
         value: newCliente.id,
-        label: newCliente.nome_cl
+        label: newCliente.nome_cl,
       }
 
       // Update the options list if callback is provided
@@ -83,11 +89,11 @@ export const CreatableClienteCombobox: React.FC<CreatableClienteComboboxProps> =
         <Label className="mb-1 block">{label}</Label>
       )}
       <div className="relative w-full max-w-[160px]">
-        <div className={
-          (disabled || loading)
-            ? 'opacity-60 pointer-events-none'
-            : ''
-        }>
+        <div
+          className={
+            disabled || loading ? 'pointer-events-none opacity-60' : ''
+          }
+        >
           <CreatableCombobox
             value={value}
             onChange={onChange}
@@ -105,7 +111,7 @@ export const CreatableClienteCombobox: React.FC<CreatableClienteComboboxProps> =
         </div>
       </div>
       {error && (
-        <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
+        <div className="mt-1 flex items-center gap-1 text-sm text-red-600">
           <span>{error}</span>
         </div>
       )}
@@ -113,4 +119,4 @@ export const CreatableClienteCombobox: React.FC<CreatableClienteComboboxProps> =
   )
 }
 
-export default CreatableClienteCombobox 
+export default CreatableClienteCombobox

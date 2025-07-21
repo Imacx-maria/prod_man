@@ -1216,14 +1216,12 @@ The notes button must follow these exact specifications for consistency across a
       <div>
         <NotasPopover
           value={row.notas || ''}
-          contacto={row.contacto || ''}
-          telefone={row.telefone || ''}
           contacto_entrega={row.contacto_entrega || ''}
           telefone_entrega={row.telefone_entrega || ''}
           data={row.data || tableDate}
           onChange={(value) => handleEdit(row.id, 'notas', value)}
           onSave={async (fields) => {
-            await onNotasSave(row, fields.outras, fields.contacto, fields.telefone, 
+            await onNotasSave(row, fields.outras, undefined, undefined,
                             fields.contacto_entrega, fields.telefone_entrega, fields.data);
           }}
           iconType="file"

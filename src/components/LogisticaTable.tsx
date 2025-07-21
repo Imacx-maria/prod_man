@@ -557,19 +557,17 @@ export const LogisticaTable: React.FC<LogisticaTableProps> = ({
                 <TableCell className="text-sm">
                   <NotasPopover
                     value={row.notas || ''}
-                    contacto={row.contacto || ''}
-                    telefone={row.telefone || ''}
                     contacto_entrega={row.contacto_entrega || ''}
                     telefone_entrega={row.telefone_entrega || ''}
                     data={row.data || tableDate}
                     onChange={(value) => handleEdit(row.id, 'notas', value)}
                     onSave={async (fields) => {
-                      // Save all fields
+                      // Save all fields - now only delivery fields
                       await onNotasSave(
                         { ...row, ...fields, data: fields.data || tableDate },
                         fields.outras,
-                        fields.contacto,
-                        fields.telefone,
+                        undefined, // No more pickup contact
+                        undefined, // No more pickup phone
                         fields.contacto_entrega,
                         fields.telefone_entrega,
                         fields.data || tableDate,

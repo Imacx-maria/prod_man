@@ -340,18 +340,80 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
 
   const handleRecolhaChange = useCallback(
     async (rowId: string, value: string) => {
-      await updateLogisticaField(rowId, 'id_local_recolha', value, selectedDate)
-      await refetchRow(rowId, selectedDate)
+      console.log('🏠 Updating local_recolha:', {
+        rowId,
+        value,
+      })
+      try {
+        // Find the selected armazem to get the text label
+        const selectedArmazem = armazens.find((a) => a.value === value)
+        const textValue = selectedArmazem ? selectedArmazem.label : ''
+
+        console.log('🏠 Armazem details:', {
+          id: value,
+          text: textValue,
+        })
+
+        // Update both ID and text fields
+        const success = await Promise.all([
+          updateLogisticaField(rowId, 'id_local_recolha', value, selectedDate),
+          updateLogisticaField(rowId, 'local_recolha', textValue, selectedDate),
+        ])
+
+        if (success.every((s) => s)) {
+          console.log(
+            '✅ Successfully updated both id_local_recolha and local_recolha',
+          )
+          await refetchRow(rowId, selectedDate)
+        } else {
+          console.error('❌ Failed to update local_recolha fields')
+          alert('Erro ao atualizar local de recolha')
+        }
+      } catch (error) {
+        console.error('❌ Error updating local_recolha:', error)
+        alert(`Erro ao atualizar local de recolha: ${error}`)
+      }
     },
-    [updateLogisticaField, refetchRow, selectedDate],
+    [updateLogisticaField, refetchRow, selectedDate, armazens],
   )
 
   const handleEntregaChange = useCallback(
     async (rowId: string, value: string) => {
-      await updateLogisticaField(rowId, 'id_local_entrega', value, selectedDate)
-      await refetchRow(rowId, selectedDate)
+      console.log('🚚 Updating local_entrega:', {
+        rowId,
+        value,
+      })
+      try {
+        // Find the selected armazem to get the text label
+        const selectedArmazem = armazens.find((a) => a.value === value)
+        const textValue = selectedArmazem ? selectedArmazem.label : ''
+
+        console.log('🚚 Armazem details:', {
+          id: value,
+          text: textValue,
+        })
+
+        // Update both ID and text fields
+        const success = await Promise.all([
+          updateLogisticaField(rowId, 'id_local_entrega', value, selectedDate),
+          updateLogisticaField(rowId, 'local_entrega', textValue, selectedDate),
+        ])
+
+        if (success.every((s) => s)) {
+          console.log(
+            '✅ Successfully updated both id_local_entrega and local_entrega',
+          )
+          await refetchRow(rowId, selectedDate)
+        } else {
+          console.error('❌ Failed to update local_entrega fields')
+          alert('Erro ao atualizar local de entrega')
+        }
+      } catch (error) {
+        console.error('❌ Error updating local_entrega:', error)
+        alert(`Erro ao atualizar local de entrega: ${error}`)
+      }
     },
-    [updateLogisticaField, refetchRow, selectedDate],
+    [updateLogisticaField, refetchRow, selectedDate, armazens],
   )
 
   const handleTransportadoraChange = useCallback(
@@ -366,8 +428,8 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
     async (
       row: any,
       outras: string,
-      contacto?: string,
-      telefone?: string,
+      contacto?: string, // This will be undefined from updated components
+      telefone?: string, // This will be undefined from updated components
       contacto_entrega?: string,
       telefone_entrega?: string,
       data?: string | null,
@@ -375,10 +437,14 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
       // Save all fields if provided
       if (outras !== undefined)
         await updateLogisticaField(row.id, 'notas', outras, selectedDate)
+
+      // Only save pickup contact fields if they are actually provided (for backward compatibility)
       if (contacto !== undefined)
         await updateLogisticaField(row.id, 'contacto', contacto, selectedDate)
       if (telefone !== undefined)
         await updateLogisticaField(row.id, 'telefone', telefone, selectedDate)
+
+      // Save delivery contact fields
       if (contacto_entrega !== undefined)
         await updateLogisticaField(
           row.id,
@@ -424,28 +490,10 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
   const handleDeleteRow = useCallback(
     async (rowId: string) => {
       try {
-        // Find the row to be deleted
-        const rowToDelete = records.find((row) => row.id === rowId)
-        if (!rowToDelete) {
-          alert('Linha não encontrada.')
-          return
-        }
+        // YOU DECIDE! No restrictions on deletion
+        const confirmed = confirm('Tem certeza que deseja eliminar esta linha?')
+        if (!confirmed) return
 
-        // Check how many logistics entries exist for the same item
-        const itemId = rowToDelete.items_base?.id
-        const entriesForSameItem = records.filter(
-          (row) => row.items_base?.id === itemId,
-        )
-
-        // If this is the only entry for this item, prevent deletion
-        if (entriesForSameItem.length <= 1) {
-          alert(
-            'Não pode eliminar esta entrega, pois não existe outra para o item',
-          )
-          return
-        }
-
-        // Proceed with deletion if there are other entries for the same item
         await deleteLogisticaRow(rowId, selectedDate)
         // Remove the deleted row from local state
         setRecords((prevRecords) =>
@@ -562,14 +610,14 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
         const payload = {
           item_id: itemId,
           descricao: duplicatedDescription, // Use the differentiated description
-          local_recolha: row.local_recolha || '',
+          local_recolha: row.local_recolha || '', // Copy warehouse text
           guia: row.guia || '',
           transportadora: row.transportadora || '',
           contacto: row.contacto || '',
           telefone: row.telefone || '',
           quantidade: row.quantidade ?? null,
           notas: row.notas || '',
-          local_entrega: row.local_entrega || '',
+          local_entrega: row.local_entrega || '', // Copy warehouse text
           contacto_entrega: row.contacto_entrega || '',
           telefone_entrega: row.telefone_entrega || '',
           data:
@@ -577,8 +625,8 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
             (selectedDate
               ? format(selectedDate, 'yyyy-MM-dd')
               : format(new Date(), 'yyyy-MM-dd')),
-          id_local_entrega: row.id_local_entrega || null,
-          id_local_recolha: row.id_local_recolha || null,
+          id_local_entrega: row.id_local_entrega || null, // Copy warehouse ID
+          id_local_recolha: row.id_local_recolha || null, // Copy warehouse ID
           is_entrega: true,
         }
 
@@ -631,12 +679,80 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
 
   // Add item handler - this should be implemented based on your business logic
   const handleAddItem = useCallback(async () => {
-    // This would need to be implemented based on how you want to add new items
-    // For now, just show a message that this feature needs implementation
-    alert(
-      'Funcionalidade "Adicionar Item" ainda não implementada para a vista de calendário',
-    )
-  }, [])
+    if (!selectedDate) {
+      alert('Nenhuma data selecionada.')
+      return
+    }
+
+    try {
+      // Step 1: Create a minimal folha_obra (required for items_base)
+      const { data: folhaObraData, error: folhaObraError } = await supabase
+        .from('folhas_obras')
+        .insert({
+          numero_fo: '', // Empty - user can fill it if they want
+          nome_campanha: '',
+          cliente: '',
+          data_in: new Date().toISOString(),
+          saiu: false,
+        })
+        .select('*')
+        .single()
+
+      if (folhaObraError || !folhaObraData) {
+        console.error('Error creating folha obra:', folhaObraError)
+        alert(`Erro ao criar folha obra: ${folhaObraError?.message}`)
+        return
+      }
+
+      // Step 2: Create a minimal items_base (required for logistica_entregas)
+      const { data: itemBaseData, error: itemBaseError } = await supabase
+        .from('items_base')
+        .insert({
+          folha_obra_id: folhaObraData.id,
+          descricao: '',
+          codigo: '',
+          quantidade: 1,
+        })
+        .select('*')
+        .single()
+
+      if (itemBaseError || !itemBaseData) {
+        console.error('Error creating item base:', itemBaseError)
+        alert(`Erro ao criar item: ${itemBaseError?.message}`)
+        return
+      }
+
+      // Step 3: Create the logistica_entregas entry
+      const { error: logisticsError } = await supabase
+        .from('logistica_entregas')
+        .insert({
+          item_id: itemBaseData.id,
+          descricao: '',
+          data_saida: format(selectedDate, 'yyyy-MM-dd'), // Use data_saida to match the query
+          is_entrega: true,
+          guia: '',
+          local_recolha: '', // This will be populated when user selects from combobox
+          local_entrega: '', // This will be populated when user selects from combobox
+          id_local_recolha: null, // This will be populated when user selects from combobox
+          id_local_entrega: null, // This will be populated when user selects from combobox
+          transportadora: '',
+          notas: '',
+          quantidade: null,
+        })
+
+      if (logisticsError) {
+        console.error('Error creating logistics entry:', logisticsError)
+        alert(`Erro ao criar entrada de logística: ${logisticsError?.message}`)
+        return
+      }
+
+      // Refresh the data for the selected date
+      await fetchLogisticaData(selectedDate)
+    } catch (error) {
+      console.error('Unexpected error adding item:', error)
+      alert(`Erro inesperado: ${error}`)
+    }
+  }, [selectedDate, supabase, fetchLogisticaData])
 
   // Copy quantities handler
   const handleCopyQuantities = useCallback(async () => {
@@ -707,16 +823,16 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
       try {
         // Extract delivery information from the source record
         const deliveryInfo = {
-          local_recolha: sourceRecord.local_recolha || '',
+          local_recolha: sourceRecord.local_recolha || '', // Warehouse text
           transportadora: sourceRecord.transportadora || '',
           contacto: sourceRecord.contacto || '',
           telefone: sourceRecord.telefone || '',
-          local_entrega: sourceRecord.local_entrega || '',
+          local_entrega: sourceRecord.local_entrega || '', // Warehouse text
           contacto_entrega: sourceRecord.contacto_entrega || '',
           telefone_entrega: sourceRecord.telefone_entrega || '',
           notas: sourceRecord.notas || '',
-          id_local_entrega: sourceRecord.id_local_entrega,
-          id_local_recolha: sourceRecord.id_local_recolha,
+          id_local_entrega: sourceRecord.id_local_entrega, // Warehouse ID
+          id_local_recolha: sourceRecord.id_local_recolha, // Warehouse ID
         }
 
         // Update all other logistics records (skip the source one)

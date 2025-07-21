@@ -1,5 +1,13 @@
 'use client'
 
+/**
+ * Production Operations Page
+ * -------------------------
+ * FILTERING RULES:
+ * - Only shows items from jobs that have BOTH FO (numero_fo) and ORC (numero_orc) values
+ * - Items from jobs missing either FO or ORC are filtered out
+ */
+
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import { format } from 'date-fns'
 import { pt } from 'date-fns/locale'
@@ -312,6 +320,7 @@ function OperacoesPageContent() {
           created_at,
           folhas_obras (
             numero_fo,
+            numero_orc,
             nome_campanha,
             cliente
           ),
@@ -376,11 +385,19 @@ function OperacoesPageContent() {
         const isNotBrinde = item.brindes !== true
         const isNotOffset = item.complexidade !== 'OFFSET'
 
+        // Require both FO and ORC values
+        const hasBothFoAndOrc =
+          item.folhas_obras?.numero_fo &&
+          item.folhas_obras?.numero_fo.trim() !== '' &&
+          item.folhas_obras?.numero_orc &&
+          item.folhas_obras?.numero_orc !== 0
+
         const includeItem =
           hasLogisticaEntregasNotConcluida &&
           hasPaginacaoTrue &&
           isNotBrinde &&
-          isNotOffset
+          isNotOffset &&
+          hasBothFoAndOrc
 
         if (!includeItem) {
           console.log(`Item ${item.id} filtered out:`, {
@@ -388,10 +405,13 @@ function OperacoesPageContent() {
             hasPaginacaoTrue,
             isNotBrinde,
             isNotOffset,
+            hasBothFoAndOrc,
             logistica_entregas: item.logistica_entregas,
             designer_items: item.designer_items,
             brindes: item.brindes,
             complexidade: item.complexidade,
+            numero_fo: item.folhas_obras?.numero_fo,
+            numero_orc: item.folhas_obras?.numero_orc,
           })
         }
 
@@ -794,6 +814,10 @@ function OperacoesPageContent() {
                 <strong>Para um item aparecer aqui, deve ter:</strong>
               </p>
               <ul className="list-inside list-disc space-y-1">
+                <li>
+                  <strong>FO e ORC preenchidos</strong> (numero_fo e numero_orc
+                  válidos)
+                </li>
                 <li>
                   <strong>Paginação concluída</strong> (designer_items.paginacao
                   = true)

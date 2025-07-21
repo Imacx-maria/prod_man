@@ -5,6 +5,10 @@
  * --------------------------------------------------------------
  * Optimized version with improved queries and loading states
  * NO caching - preserves real-time data accuracy
+ *
+ * FILTERING RULES:
+ * - Only shows jobs that have BOTH FO (numero_fo) and ORC (numero_orc) values
+ * - Jobs missing either FO or ORC are filtered out on both tabs
  */
 
 // Note: This is a client component - metadata should be added to layout.tsx or a parent server component
@@ -551,6 +555,12 @@ export default function ProducaoPage() {
           { count: 'exact' },
         )
 
+        // ALWAYS filter to require both FO and ORC values
+        query = query.not('numero_fo', 'is', null)
+        query = query.not('numero_orc', 'is', null)
+        query = query.neq('numero_fo', '')
+        query = query.neq('numero_orc', 0)
+
         // If we have job IDs from item search, filter by those ONLY
         if (jobIds) {
           console.log(
@@ -731,6 +741,15 @@ export default function ProducaoPage() {
         }
 
         // Item/codigo filtering is now handled at the beginning of the function
+
+        // Final filter: Only show jobs that have both FO and ORC values
+        filteredJobs = filteredJobs.filter(
+          (job) =>
+            job.numero_fo &&
+            job.numero_fo.trim() !== '' &&
+            job.numero_orc &&
+            job.numero_orc !== 0,
+        )
 
         if (filteredJobs) {
           console.log('📊 Final jobs to display:', filteredJobs.length, 'jobs')
@@ -4399,91 +4418,73 @@ function JobDrawerContent({
                     try {
                       setLogisticaLoading(true)
 
-                      // 1. Create a new item in items_base
-                      const { data: baseData, error: baseError } =
+                      // 1. Create a new folhas_obras entry
+                      const { data: folhaObraData, error: folhaObraError } =
                         await supabase
-                          .from('items_base')
+                          .from('folhas_obras')
                           .insert({
-                            folha_obra_id: job.id,
-                            descricao: 'Novo Item',
-                            codigo: '',
-                            quantidade: 1,
+                            numero_fo: '',
+                            numero_orc: null,
+                            nome_campanha: 'Entrega ou recolha especial',
+                            cliente: '',
+                            data_in: new Date().toISOString(),
+                            saiu: false,
                           })
                           .select('*')
                           .single()
 
-                      if (baseError) {
-                        console.error('Error creating base item:', baseError)
-                        alert(`Erro ao criar item: ${baseError.message}`)
-                        setLogisticaLoading(false)
-                        return
-                      }
-
-                      // 2. Create a new designer_items row linked to the new item
-                      const { error: designerError } = await supabase
-                        .from('designer_items')
-                        .insert({
-                          item_id: baseData.id,
-                          em_curso: true,
-                          duvidas: false,
-                          maquete_enviada: false,
-                          paginacao: false,
-                        })
-
-                      if (designerError) {
-                        console.error(
-                          'Error creating designer item:',
-                          designerError,
-                        )
+                      if (folhaObraError || !folhaObraData) {
                         alert(
-                          `Erro ao criar item de design: ${designerError.message}`,
+                          `Erro ao criar folha obra: ${folhaObraError?.message}`,
                         )
-                        setLogisticaLoading(false)
                         return
                       }
 
-                      // 3. Create logistics entry for the new item
+                      // 2. Create items_base entry
+                      const { data: itemData, error: itemError } =
+                        await supabase
+                          .from('items_base')
+                          .insert({
+                            folha_obra_id: folhaObraData.id,
+                            descricao: '',
+                            codigo: '',
+                            quantidade: 1,
+                            brindes: false,
+                            concluido: false,
+                          })
+                          .select('*')
+                          .single()
+
+                      if (itemError || !itemData) {
+                        alert(`Erro ao criar item: ${itemError?.message}`)
+                        return
+                      }
+
+                      // 3. Create logistica_entregas entry
                       const { error: logisticsError } = await supabase
                         .from('logistica_entregas')
                         .insert({
-                          item_id: baseData.id,
-                          descricao: baseData.descricao || '', // Store item description directly
-                          data: new Date().toISOString().split('T')[0],
+                          item_id: itemData.id,
+                          descricao: '',
+                          data_saida: new Date().toISOString().split('T')[0],
                           is_entrega: true,
                         })
 
                       if (logisticsError) {
-                        console.error(
-                          'Error creating logistics entry:',
-                          logisticsError,
-                        )
                         alert(
-                          `Erro ao criar entrada de logística: ${logisticsError.message}`,
+                          `Erro ao criar logística: ${logisticsError.message}`,
                         )
-                        setLogisticaLoading(false)
                         return
                       }
 
-                      // 4. Update local items state
-                      const newItem = {
-                        id: baseData.id,
-                        folha_obra_id: baseData.folha_obra_id,
-                        descricao: baseData.descricao,
-                        codigo: baseData.codigo,
-                        quantidade: baseData.quantidade,
-                        brindes: baseData.brindes,
-                        paginacao: false,
-                        concluido: false,
-                      }
-                      setAllItems((prevItems) => [...prevItems, newItem])
-
-                      // 5. Refresh logistica data to include the new item
+                      // 4. Update local state and refresh
+                      setJobs((prev) => [...prev, folhaObraData])
+                      setAllItems((prev) => [...prev, itemData])
                       await fetchLogisticaRows()
 
-                      alert('Item adicionado com sucesso!')
+                      alert('Entrada criada com sucesso!')
                     } catch (error) {
-                      console.error('Unexpected error adding item:', error)
-                      alert(`Erro inesperado: ${error}`)
+                      alert(`Erro: ${error}`)
                     } finally {
                       setLogisticaLoading(false)
                     }
@@ -4974,27 +4975,18 @@ function JobDrawerContent({
                     }}
                     onDataConcluidoSave={async (row: any, value: string) => {
                       if (row.id) {
-                        // Update both data_concluido and data_saida when data_concluido changes
-                        await Promise.all([
-                          updateLogisticaField(
-                            row.id,
-                            'data_concluido',
-                            value,
-                            null,
-                          ),
-                          updateLogisticaField(
-                            row.id,
-                            'data_saida',
-                            value,
-                            null,
-                          ),
-                        ])
+                        // Update only data_saida since this is now the DATA SAÍDA column
+                        await updateLogisticaField(
+                          row.id,
+                          'data_saida',
+                          value,
+                          null,
+                        )
                         setLogisticaRows((prevRows) =>
                           prevRows.map((r) =>
                             r.id === row.id
                               ? {
                                   ...r,
-                                  data_concluido: value,
                                   data_saida: value,
                                 }
                               : r,
@@ -5361,20 +5353,26 @@ function JobDrawerContent({
                     onNotasSave={async (
                       row: any,
                       outras: string,
-                      contacto?: string,
-                      telefone?: string,
+                      contacto?: string, // This will be undefined from updated components
+                      telefone?: string, // This will be undefined from updated components
                       contacto_entrega?: string,
                       telefone_entrega?: string,
                       data?: string | null,
                     ) => {
                       if (row.id) {
-                        const updateData = {
+                        const updateData: any = {
                           notas: outras,
-                          contacto: contacto || null,
-                          telefone: telefone || null,
                           contacto_entrega: contacto_entrega || null,
                           telefone_entrega: telefone_entrega || null,
                           data: data || null,
+                        }
+
+                        // Only include pickup contact fields if they are provided (for backward compatibility)
+                        if (contacto !== undefined) {
+                          updateData.contacto = contacto || null
+                        }
+                        if (telefone !== undefined) {
+                          updateData.telefone = telefone || null
                         }
 
                         await Promise.all(

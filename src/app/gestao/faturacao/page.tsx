@@ -1,5 +1,16 @@
 'use client'
 
+/**
+ * Faturacao – Invoice Management
+ * ------------------------------
+ * Manages billing and invoice related operations for production jobs
+ * Uses folhas_obras_with_dias view for enhanced job data with calculated work days
+ *
+ * FILTERING RULES:
+ * - Only shows jobs that have BOTH FO (numero_fo) and ORC (numero_orc) values
+ * - Jobs missing either FO or ORC are filtered out
+ */
+
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import {
   Drawer,
@@ -298,6 +309,12 @@ export default function FaturacaoPage() {
         `,
           { count: 'exact' },
         )
+
+        // ALWAYS filter to require both FO and ORC values
+        query = query.not('numero_fo', 'is', null)
+        query = query.not('numero_orc', 'is', null)
+        query = query.neq('numero_fo', '')
+        query = query.neq('numero_orc', 0)
 
         // For completed jobs, filter by last 2 months
         query = query.or(

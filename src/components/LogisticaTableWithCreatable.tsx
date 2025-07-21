@@ -186,7 +186,7 @@ export const LogisticaTableWithCreatable: React.FC<
         field: 'concluido',
         tooltip: 'Concluído',
       },
-      { label: 'Data Concluído', width: 'w-[160px]', field: 'data_concluido' },
+      { label: 'DATA SAÍDA', width: 'w-[160px]', field: 'data_saida' },
       {
         label: 'S',
         width: 'w-[36px] max-w-[36px]',
@@ -292,8 +292,8 @@ export const LogisticaTableWithCreatable: React.FC<
           return record.notas || ''
         case 'concluido':
           return record.concluido || false
-        case 'data_concluido':
-          return record.data_concluido || ''
+        case 'data_saida':
+          return record.data_saida || ''
         default:
           return ''
       }
@@ -621,8 +621,6 @@ export const LogisticaTableWithCreatable: React.FC<
                             <div>
                               <NotasPopover
                                 value={row.notas || ''}
-                                contacto={row.contacto || ''}
-                                telefone={row.telefone || ''}
                                 contacto_entrega={row.contacto_entrega || ''}
                                 telefone_entrega={row.telefone_entrega || ''}
                                 data={row.data || tableDate}
@@ -630,7 +628,7 @@ export const LogisticaTableWithCreatable: React.FC<
                                   handleEdit(row.id, 'notas', value)
                                 }
                                 onSave={async (fields) => {
-                                  // Save all fields
+                                  // Save all fields - now only delivery fields
                                   await onNotasSave(
                                     {
                                       ...row,
@@ -638,8 +636,8 @@ export const LogisticaTableWithCreatable: React.FC<
                                       data: fields.data || tableDate,
                                     },
                                     fields.outras,
-                                    fields.contacto,
-                                    fields.telefone,
+                                    undefined, // No more pickup contact
+                                    undefined, // No more pickup phone
                                     fields.contacto_entrega,
                                     fields.telefone_entrega,
                                     fields.data || tableDate,
@@ -675,19 +673,19 @@ export const LogisticaTableWithCreatable: React.FC<
                     </div>
                   </TableCell>
 
-                  {/* Data Concluído */}
+                  {/* DATA SAÍDA */}
                   <TableCell className="text-sm">
                     <DatePicker
                       selected={(() => {
                         const dateString =
-                          editRows[row.id]?.data_concluido || row.data_concluido
+                          editRows[row.id]?.data_saida || row.data_saida
                         if (!dateString) return undefined
                         const date = parseDateFromYYYYMMDD(dateString)
                         return date || undefined
                       })()}
                       onSelect={(date) => {
                         const dateString = formatDateToYYYYMMDD(date)
-                        handleEdit(row.id, 'data_concluido', dateString)
+                        handleEdit(row.id, 'data_saida', dateString)
                         if (onDataConcluidoSave) {
                           onDataConcluidoSave(row, dateString || '')
                         }

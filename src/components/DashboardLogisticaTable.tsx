@@ -21,7 +21,23 @@ import {
 import { ArrowUp, ArrowDown, RefreshCcw, Eye, EyeOff, X } from 'lucide-react'
 import DatePicker from '@/components/ui/DatePicker'
 import { createBrowserClient } from '@/utils/supabase'
-import { useDebounce } from '@/hooks/useDebounce'
+
+// Value-based debounce hook for filters
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value)
+    }, delay)
+
+    return () => {
+      clearTimeout(handler)
+    }
+  }, [value, delay])
+
+  return debouncedValue
+}
 
 interface DashboardLogisticaRecord {
   // From folhas_obras
@@ -110,6 +126,11 @@ export const DashboardLogisticaTable: React.FC<
     guia: '',
   })
 
+  // Add date filter state for today/tomorrow
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'tomorrow'>(
+    'all',
+  )
+
   // Debounced filter values for performance
   const debouncedFilters = useDebounce(filters, 300)
 
@@ -157,6 +178,19 @@ export const DashboardLogisticaTable: React.FC<
     },
     [supabase],
   )
+
+  // Helper function to get today's date in YYYY-MM-DD format
+  const getTodayString = useCallback((): string => {
+    const today = new Date()
+    return formatDateForDB(today)
+  }, [formatDateForDB])
+
+  // Helper function to get tomorrow's date in YYYY-MM-DD format
+  const getTomorrowString = useCallback((): string => {
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    return formatDateForDB(tomorrow)
+  }, [formatDateForDB])
 
   // Fetch data with database-level filtering
   const fetchData = useCallback(
@@ -442,11 +476,37 @@ export const DashboardLogisticaTable: React.FC<
         !filters.guia ||
         record.guia?.toLowerCase().includes(filters.guia.toLowerCase())
 
+      // Date filter for data_saida
+      let dateMatch = true
+      if (dateFilter !== 'all' && record.data_saida) {
+        const recordDate = record.data_saida.split('T')[0] // Get YYYY-MM-DD part
+        if (dateFilter === 'today') {
+          dateMatch = recordDate === getTodayString()
+        } else if (dateFilter === 'tomorrow') {
+          dateMatch = recordDate === getTomorrowString()
+        }
+      } else if (dateFilter !== 'all' && !record.data_saida) {
+        // If date filter is active but record has no data_saida, don't show it
+        dateMatch = false
+      }
+
       return (
-        clienteMatch && campanhaMatch && itemMatch && codigoMatch && guiaMatch
+        clienteMatch &&
+        campanhaMatch &&
+        itemMatch &&
+        codigoMatch &&
+        guiaMatch &&
+        dateMatch
       )
     })
-  }, [records, filters, clienteLookup])
+  }, [
+    records,
+    filters,
+    clienteLookup,
+    dateFilter,
+    getTodayString,
+    getTomorrowString,
+  ])
 
   // Updated sorting logic following the same pattern as main production table
   const sorted = useMemo(() => {
@@ -526,6 +586,7 @@ export const DashboardLogisticaTable: React.FC<
       codigo: '',
       guia: '',
     })
+    setDateFilter('all')
   }, [])
 
   // Handle refresh
@@ -684,6 +745,35 @@ export const DashboardLogisticaTable: React.FC<
             setFilters((prev) => ({ ...prev, guia: e.target.value }))
           }
         />
+
+        {/* Date filter buttons */}
+        <div className="border-border flex items-center gap-1 border-l pl-2">
+          <Button
+            variant={dateFilter === 'all' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setDateFilter('all')}
+            className="h-10 rounded-none px-3 text-xs"
+          >
+            Todos
+          </Button>
+          <Button
+            variant={dateFilter === 'today' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setDateFilter('today')}
+            className="h-10 rounded-none px-3 text-xs"
+          >
+            Hoje
+          </Button>
+          <Button
+            variant={dateFilter === 'tomorrow' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setDateFilter('tomorrow')}
+            className="h-10 rounded-none px-3 text-xs"
+          >
+            Amanhã
+          </Button>
+        </div>
+
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>

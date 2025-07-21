@@ -185,7 +185,7 @@ export const LogisticaDrawer: React.FC<LogisticaDrawerProps> = ({
       onTransportadoraChange,
       onQuantidadeSave,
       onConcluidoSave,
-      onDataSaidaSave,
+      onDataConcluidoSave: onDataSaidaSave,
       onDuplicateRow,
       onNotasSave,
       onDeleteRow,

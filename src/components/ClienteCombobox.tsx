@@ -25,20 +25,20 @@ export const ClienteCombobox: React.FC<ClienteComboboxProps> = ({
   onChange,
   options,
   label,
-  placeholder = 'Selecione um cliente',
+  placeholder = 'Cliente',
   disabled = false,
   className = '',
   loading = false,
   error = null,
 }) => (
   <div className={className}>
-    {label !== undefined && label !== null && label !== '' && <Label className="mb-1 block">{label}</Label>}
+    {label !== undefined && label !== null && label !== '' && (
+      <Label className="mb-1 block">{label}</Label>
+    )}
     <div className="relative w-full max-w-[160px]">
-      <div className={
-        (disabled || loading)
-          ? 'opacity-60 pointer-events-none'
-          : ''
-      }>
+      <div
+        className={disabled || loading ? 'pointer-events-none opacity-60' : ''}
+      >
         <Combobox
           value={value}
           onChange={onChange}
@@ -53,11 +53,11 @@ export const ClienteCombobox: React.FC<ClienteComboboxProps> = ({
       </div>
     </div>
     {error && (
-      <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
+      <div className="mt-1 flex items-center gap-1 text-sm text-red-600">
         <span>{error}</span>
       </div>
     )}
   </div>
 )
 
-export default ClienteCombobox; 
+export default ClienteCombobox

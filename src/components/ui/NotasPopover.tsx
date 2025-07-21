@@ -24,8 +24,6 @@ export interface NotasPopoverProps {
   onChange: (val: string) => void
   onSave: (fields: {
     outras: string
-    contacto: string
-    telefone: string
     contacto_entrega: string
     telefone_entrega: string
     data?: string | null
@@ -38,15 +36,11 @@ export interface NotasPopoverProps {
   buttonSize?: 'default' | 'sm' | 'lg' | 'icon'
   maxTextareaHeight?: string
   saveOnBlur?: boolean
-  contacto?: string
-  telefone?: string
   contacto_entrega?: string
   telefone_entrega?: string
   data?: string | null
   onFieldChange?: (fields: {
     outras: string
-    contacto: string
-    telefone: string
     contacto_entrega: string
     telefone_entrega: string
     data?: string | null
@@ -72,8 +66,6 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
   buttonSize = 'icon',
   maxTextareaHeight = '200px',
   saveOnBlur = false,
-  contacto = '',
-  telefone = '',
   contacto_entrega = '',
   telefone_entrega = '',
   data = null,
@@ -84,8 +76,6 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
 }) => {
   const [isOpen, setIsOpen] = useState(false)
   const [localOutras, setLocalOutras] = useState(value)
-  const [localContacto, setLocalContacto] = useState(contacto)
-  const [localTelefone, setLocalTelefone] = useState(telefone)
   const [localContactoEntrega, setLocalContactoEntrega] =
     useState(contacto_entrega)
   const [localTelefoneEntrega, setLocalTelefoneEntrega] =
@@ -95,8 +85,6 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const [originalFields, setOriginalFields] = useState({
     outras: value,
-    contacto,
-    telefone,
     contacto_entrega,
     telefone_entrega,
   })
@@ -109,14 +97,10 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
   useEffect(() => {
     if (isOpen) {
       setLocalOutras(value)
-      setLocalContacto(contacto)
-      setLocalTelefone(telefone)
       setLocalContactoEntrega(contacto_entrega)
       setLocalTelefoneEntrega(telefone_entrega)
       setOriginalFields({
         outras: value,
-        contacto,
-        telefone,
         contacto_entrega,
         telefone_entrega,
       })
@@ -136,8 +120,6 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
       const fields = {
         data: null, // No longer managing data in this component
         outras: localOutras,
-        contacto: localContacto,
-        telefone: localTelefone,
         contacto_entrega: localContactoEntrega,
         telefone_entrega: localTelefoneEntrega,
       }
@@ -167,8 +149,6 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
   const handleBlur = () => {
     const fields = {
       outras: localOutras,
-      contacto: localContacto,
-      telefone: localTelefone,
       contacto_entrega: localContactoEntrega,
       telefone_entrega: localTelefoneEntrega,
     }
@@ -190,16 +170,12 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
     const newFields = {
       data: null, // No longer managing data in this component
       outras: field === 'outras' ? value : localOutras,
-      contacto: field === 'contacto' ? value : localContacto,
-      telefone: field === 'telefone' ? value : localTelefone,
       contacto_entrega:
         field === 'contacto_entrega' ? value : localContactoEntrega,
       telefone_entrega:
         field === 'telefone_entrega' ? value : localTelefoneEntrega,
     }
     setLocalOutras(newFields.outras)
-    setLocalContacto(newFields.contacto)
-    setLocalTelefone(newFields.telefone)
     setLocalContactoEntrega(newFields.contacto_entrega)
     setLocalTelefoneEntrega(newFields.telefone_entrega)
     if (onFieldChange) onFieldChange(newFields)
@@ -241,8 +217,6 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
       if (localOutras !== originalFields.outras) {
         // Revert changes if Escape is pressed
         setLocalOutras(originalFields.outras)
-        setLocalContacto(originalFields.contacto)
-        setLocalTelefone(originalFields.telefone)
         setLocalContactoEntrega(originalFields.contacto_entrega)
         setLocalTelefoneEntrega(originalFields.telefone_entrega)
       }
@@ -276,8 +250,6 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
             data-no-aria-hidden="true"
             onEscapeKeyDown={() => {
               setLocalOutras(originalFields.outras)
-              setLocalContacto(originalFields.contacto)
-              setLocalTelefone(originalFields.telefone)
               setLocalContactoEntrega(originalFields.contacto_entrega)
               setLocalTelefoneEntrega(originalFields.telefone_entrega)
             }}
@@ -305,30 +277,6 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
                 disabled={disabled || isSaving}
                 aria-label="Outras"
                 aria-labelledby={label ? labelId : undefined}
-              />
-            </div>
-            <div className="mb-2">
-              <label className="mb-1 block text-xs font-semibold">
-                Contacto Recolha
-              </label>
-              <Input
-                type="text"
-                value={localContacto}
-                onChange={(e) => handleFieldChange('contacto', e.target.value)}
-                disabled={disabled || isSaving}
-                placeholder="Nome do contacto de recolha"
-              />
-            </div>
-            <div className="mb-2">
-              <label className="mb-1 block text-xs font-semibold">
-                Telefone Recolha
-              </label>
-              <Input
-                type="text"
-                value={localTelefone}
-                onChange={(e) => handleFieldChange('telefone', e.target.value)}
-                disabled={disabled || isSaving}
-                placeholder="Telefone de recolha"
               />
             </div>
             <div className="mb-2">
@@ -398,8 +346,6 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
           data-no-aria-hidden="true"
           onEscapeKeyDown={() => {
             setLocalOutras(originalFields.outras)
-            setLocalContacto(originalFields.contacto)
-            setLocalTelefone(originalFields.telefone)
             setLocalContactoEntrega(originalFields.contacto_entrega)
             setLocalTelefoneEntrega(originalFields.telefone_entrega)
           }}
@@ -426,30 +372,6 @@ const NotasPopover: React.FC<NotasPopoverProps> = ({
               disabled={disabled || isSaving}
               aria-label="Outras"
               aria-labelledby={label ? labelId : undefined}
-            />
-          </div>
-          <div className="mb-2">
-            <label className="mb-1 block text-xs font-semibold">
-              Contacto Recolha
-            </label>
-            <Input
-              type="text"
-              value={localContacto}
-              onChange={(e) => handleFieldChange('contacto', e.target.value)}
-              disabled={disabled || isSaving}
-              placeholder="Nome do contacto de recolha"
-            />
-          </div>
-          <div className="mb-2">
-            <label className="mb-1 block text-xs font-semibold">
-              Telefone Recolha
-            </label>
-            <Input
-              type="text"
-              value={localTelefone}
-              onChange={(e) => handleFieldChange('telefone', e.target.value)}
-              disabled={disabled || isSaving}
-              placeholder="Telefone de recolha"
             />
           </div>
           <div className="mb-2">
