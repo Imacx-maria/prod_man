@@ -183,102 +183,71 @@ const fetchJobs = async (
   const supabase = createBrowserClient()
 
   try {
-    // Check if item filtering is active
-    const itemFiltersActive = !!(
+    console.log('fetchJobs called with filters:', filters)
+
+    let jobIds: string[] | null = null
+
+    // STEP 1: Handle item/codigo filtering first (searches globally across all items)
+    const hasItemFilters = !!(
       filters.itemFilter?.trim() || filters.codigoFilter?.trim()
     )
 
-    console.log('fetchJobs called with filters:', filters)
-    console.log('Item filters active:', itemFiltersActive)
+    if (hasItemFilters) {
+      console.log(
+        '🔍 Item/codigo search active - searching globally in items_base',
+      )
 
-    // For item/codigo filtering, we need to find jobs that have matching items
-    if (itemFiltersActive) {
-      console.log('🔍 Item search active - searching globally in items_base')
+      let itemQuery = supabase.from('items_base').select('folha_obra_id')
 
-      try {
-        // Search globally in items_base for any matching items
-        let itemQuery = supabase.from('items_base').select('folha_obra_id')
+      // Build OR conditions for item search
+      const orConditions = []
+      if (filters.itemFilter?.trim()) {
+        orConditions.push(`descricao.ilike.%${filters.itemFilter.trim()}%`)
+      }
+      if (filters.codigoFilter?.trim()) {
+        orConditions.push(`codigo.ilike.%${filters.codigoFilter.trim()}%`)
+      }
 
-        // Create OR conditions for combined search
-        const searchTerms = []
-        if (filters.itemFilter?.trim()) {
-          searchTerms.push(filters.itemFilter.trim())
-        }
-        if (filters.codigoFilter?.trim()) {
-          searchTerms.push(filters.codigoFilter.trim())
-        }
+      if (orConditions.length > 0) {
+        itemQuery = itemQuery.or(orConditions.join(','))
+      }
 
-        if (searchTerms.length > 0) {
-          // Search both descricao and codigo for all terms
-          for (const term of searchTerms) {
-            const { data: itemData } = await supabase
-              .from('items_base')
-              .select('folha_obra_id')
-              .or(`descricao.ilike.%${term}%,codigo.ilike.%${term}%`)
+      const { data: itemData, error: itemError } = await itemQuery
 
-            if (itemData && itemData.length > 0) {
-              const jobIds = Array.from(
-                new Set(itemData.map((item: any) => item.folha_obra_id)),
-              )
-              console.log(
-                `Found ${jobIds.length} jobs for search term "${term}":`,
-                jobIds,
-              )
-
-              // Get jobs directly - skip all other filters when item search is active
-              const { data: jobsData, error: jobsError } = await supabase
-                .from('folhas_obras')
-                .select(
-                  'id, data_in, numero_fo, profile_id, nome_campanha, data_saida, prioridade, notas, created_at',
-                )
-                .in('id', jobIds)
-                .order('created_at', { ascending: false })
-
-              if (jobsError) {
-                console.error('Error fetching jobs by item search:', jobsError)
-                setJobs([])
-                return
-              }
-
-              if (jobsData) {
-                console.log(
-                  `✅ Item search found ${jobsData.length} jobs - skipping all other filters`,
-                )
-                setJobs(jobsData)
-                return
-              }
-            }
-          }
-        }
-
-        // No matching items found
-        console.log('❌ No items found for search terms')
+      if (itemError) {
+        console.error('Error searching items:', itemError)
         setJobs([])
         return
-      } catch (itemQueryError) {
-        console.error('Error in item filtering:', itemQueryError)
+      }
+
+      if (itemData && itemData.length > 0) {
+        jobIds = Array.from(new Set(itemData.map((item) => item.folha_obra_id)))
+        console.log(`Found ${jobIds.length} jobs matching item/codigo search`)
+      } else {
+        console.log('No items found matching search criteria')
         setJobs([])
         return
       }
     }
 
-    // Standard filtering (only when no item filters are active)
-    console.log('📋 Standard job filtering (no item search)')
-
-    // Build dynamic query
+    // STEP 2: Build main jobs query
     let query = supabase
       .from('folhas_obras')
       .select(
         'id, data_in, numero_fo, profile_id, nome_campanha, data_saida, prioridade, notas, created_at',
       )
 
-    // Apply filters
+    // Apply job ID filter if item search was performed
+    if (jobIds) {
+      query = query.in('id', jobIds)
+    }
+
+    // STEP 3: Apply other filters (only if no item search, or in combination with item search)
     if (filters.selectedDesigner && filters.selectedDesigner !== 'all') {
       query = query.eq('profile_id', filters.selectedDesigner)
     }
 
     if (filters.poFilter?.trim()) {
-      // Convert to string and search - numero_fo is text field
       query = query.ilike('numero_fo', `%${filters.poFilter.trim()}%`)
     }
 
@@ -286,79 +255,104 @@ const fetchJobs = async (
       query = query.ilike('nome_campanha', `%${filters.campaignFilter.trim()}%`)
     }
 
-    const { data, error } = await query.order('created_at', {
-      ascending: false,
-    })
+    // STEP 4: Execute main query
+    const { data: jobsData, error: jobsError } = await query.order(
+      'created_at',
+      { ascending: false },
+    )
 
-    if (error) {
-      console.error('Error fetching jobs:', error)
-      return
-    }
-
-    if (!data) {
+    if (jobsError) {
+      console.error('Error fetching jobs:', jobsError)
       setJobs([])
       return
     }
 
-    // Handle showFechados filter - check if jobs have all items completed
+    if (!jobsData) {
+      setJobs([])
+      return
+    }
+
+    // STEP 5: Handle showFechados filter (completion status)
     if (filters.showFechados !== undefined) {
       try {
-        // Get all designer items for these jobs in one query
-        const jobIds = data.map((job: any) => job.id)
-        const { data: allDesignerItems, error: designerError } = await supabase
+        console.log('🔍 Applying showFechados filter')
+
+        // Get all designer items for these jobs to check completion status
+        const jobIdsToCheck = jobsData.map((job) => job.id)
+
+        const { data: designerItems, error: designerError } = await supabase
           .from('designer_items')
           .select(
             `
+            id,
+            item_id,
             paginacao,
             items_base!inner (
+              id,
               folha_obra_id
             )
           `,
           )
-          .in('items_base.folha_obra_id', jobIds)
+          .in('items_base.folha_obra_id', jobIdsToCheck)
 
         if (designerError) {
-          console.error('Error fetching designer items:', designerError)
-          setJobs(data) // Fall back to unfiltered data
+          console.error(
+            'Error fetching designer items for showFechados filter:',
+            designerError,
+          )
+          setJobs(jobsData) // Fall back to unfiltered data
           return
         }
 
-        // Group items by job
-        const itemsByJob = (allDesignerItems || []).reduce(
-          (acc: any, item: any) => {
-            const jobId = (item.items_base as any)?.folha_obra_id
-            if (!acc[jobId]) acc[jobId] = []
-            acc[jobId].push(item)
+        // Group designer items by job ID
+        const itemsByJob = (designerItems || []).reduce(
+          (acc: Record<string, any[]>, item: any) => {
+            const base = Array.isArray(item.items_base)
+              ? item.items_base[0]
+              : item.items_base
+            const jobId = base?.folha_obra_id
+
+            // Only include valid items with proper structure
+            if (jobId && item.id && base?.id) {
+              if (!acc[jobId]) acc[jobId] = []
+              acc[jobId].push(item)
+            }
             return acc
           },
-          {} as Record<string, any[]>,
+          {},
         )
 
         // Filter jobs based on completion status
-        const filteredJobs = data.filter((job: any) => {
+        const filteredJobs = jobsData.filter((job) => {
           const jobItems = itemsByJob[job.id] || []
           const itemCount = jobItems.length
-          const allPaginated = jobItems.every((item: any) => item.paginacao)
+          const completedItems = jobItems.filter(
+            (item) => !!item.paginacao,
+          ).length
+          const allCompleted = itemCount > 0 && completedItems === itemCount
 
-          if (!filters.showFechados) {
-            // Em Aberto: jobs with zero items OR at least one item not paginado
-            return itemCount === 0 || !allPaginated
+          if (filters.showFechados) {
+            // Show "Fechados": jobs with at least one item and all items are completed
+            return itemCount > 0 && allCompleted
           } else {
-            // Fechados: jobs with at least one item and all items paginado
-            return itemCount > 0 && allPaginated
+            // Show "Em Aberto": jobs with no items OR at least one incomplete item
+            return itemCount === 0 || !allCompleted
           }
         })
 
+        console.log(
+          `Filtered ${jobsData.length} jobs to ${filteredJobs.length} based on showFechados=${filters.showFechados}`,
+        )
         setJobs(filteredJobs)
-      } catch (designerQueryError) {
-        console.error('Error in showFechados filtering:', designerQueryError)
-        setJobs(data) // Fall back to unfiltered data
+      } catch (error) {
+        console.error('Error in showFechados filtering:', error)
+        setJobs(jobsData) // Fall back to unfiltered data
       }
     } else {
-      setJobs(data)
+      setJobs(jobsData)
     }
-  } catch (generalError) {
-    console.error('General error in fetchJobs:', generalError)
+  } catch (error) {
+    console.error('General error in fetchJobs:', error)
     setJobs([])
   }
 }
@@ -368,57 +362,90 @@ const fetchAllItems = async (
   jobs: Job[],
 ) => {
   const supabase = createBrowserClient()
-  const { data, error } = await supabase
-    .from('designer_items')
-    .select(
-      `
-      id,
-      item_id,
-      em_curso,
-      duvidas,
-      maquete_enviada,
-      paginacao,
-      data_in,
-      data_duvidas,
-      data_envio,
-      data_saida,
-      path_trabalho,
-      updated_at,
-      items_base (
+
+  // Only fetch items for current jobs to improve performance
+  const jobIds = jobs.map((job) => job.id)
+
+  if (jobIds.length === 0) {
+    setAllItems([])
+    return
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('designer_items')
+      .select(
+        `
         id,
-        folha_obra_id,
-        descricao,
-        codigo,
-        complexidade_id,
-        complexidade
+        item_id,
+        em_curso,
+        duvidas,
+        maquete_enviada,
+        paginacao,
+        data_in,
+        data_duvidas,
+        data_envio,
+        data_saida,
+        path_trabalho,
+        updated_at,
+        items_base!inner (
+          id,
+          folha_obra_id,
+          descricao,
+          codigo,
+          complexidade_id,
+          complexidade
+        )
+      `,
       )
-    `,
-    )
-    .order('updated_at', { ascending: false })
-  if (!error && data) {
-    const mapped: Item[] = data.map((d: DesignerItem) => {
-      const base = Array.isArray(d.items_base) ? d.items_base[0] : d.items_base
-      return {
-        designer_item_id: d.id,
-        id: base?.id ?? '',
-        folha_obra_id: base?.folha_obra_id ?? '',
-        descricao: base?.descricao ?? '',
-        codigo: base?.codigo ?? null,
-        complexidade_id: base?.complexidade_id ?? null,
-        complexidade: base?.complexidade ?? null,
-        em_curso: d.em_curso,
-        duvidas: d.duvidas,
-        maquete_enviada: d.maquete_enviada,
-        paginacao: d.paginacao,
-        data_in: d.data_in,
-        data_duvidas: d.data_duvidas,
-        data_envio: d.data_envio,
-        data_saida: d.data_saida,
-        path_trabalho: d.path_trabalho,
-        updated_at: d.updated_at,
-      }
-    })
-    setAllItems(mapped)
+      .in('items_base.folha_obra_id', jobIds)
+      .order('updated_at', { ascending: false })
+
+    if (error) {
+      console.error('Error fetching all items:', error)
+      setAllItems([])
+      return
+    }
+
+    if (data) {
+      const mapped: Item[] = data
+        .map((d: DesignerItem) => {
+          const base = Array.isArray(d.items_base)
+            ? d.items_base[0]
+            : d.items_base
+
+          // Skip items with missing data
+          if (!base || !base.id || !base.folha_obra_id) return null
+
+          return {
+            designer_item_id: d.id,
+            id: base.id,
+            folha_obra_id: base.folha_obra_id,
+            descricao: base.descricao ?? '',
+            codigo: base.codigo ?? null,
+            complexidade_id: base.complexidade_id ?? null,
+            complexidade: base.complexidade ?? null,
+            em_curso: d.em_curso,
+            duvidas: d.duvidas,
+            maquete_enviada: d.maquete_enviada,
+            paginacao: d.paginacao,
+            data_in: d.data_in,
+            data_duvidas: d.data_duvidas,
+            data_envio: d.data_envio,
+            data_saida: d.data_saida,
+            path_trabalho: d.path_trabalho,
+            updated_at: d.updated_at,
+          }
+        })
+        .filter(Boolean) as Item[] // Remove null items
+
+      setAllItems(mapped)
+    } else {
+      setAllItems([])
+    }
+  } catch (error) {
+    console.error('Error in fetchAllItems:', error)
+    setAllItems([])
   }
 }
 
@@ -786,73 +813,83 @@ export default function DesignerFlow() {
     const supabase = createBrowserClient()
     setLoadingItems(true)
 
-    const { data, error } = await supabase
-      .from('designer_items')
-      .select(
-        `
-        id,
-        item_id,
-        em_curso,
-        duvidas,
-        maquete_enviada,
-        paginacao,
-        data_in,
-        data_duvidas,
-        data_envio,
-        data_saida,
-        path_trabalho,
-        updated_at,
-        items_base (
+    try {
+      const { data, error } = await supabase
+        .from('designer_items')
+        .select(
+          `
           id,
-          folha_obra_id,
-          descricao,
-          codigo,
-          complexidade_id,
-          complexidade
+          item_id,
+          em_curso,
+          duvidas,
+          maquete_enviada,
+          paginacao,
+          data_in,
+          data_duvidas,
+          data_envio,
+          data_saida,
+          path_trabalho,
+          updated_at,
+          items_base!inner (
+            id,
+            folha_obra_id,
+            descricao,
+            codigo,
+            complexidade_id,
+            complexidade
+          )
+        `,
         )
-      `,
-      )
-      .eq('items_base.folha_obra_id', jobId)
+        .eq('items_base.folha_obra_id', jobId)
+        .order('updated_at', { ascending: false })
 
-    if (error) {
+      if (error) {
+        console.error('Error refreshing items:', error)
+        setLoadingItems(false)
+        return
+      }
+
+      if (data) {
+        const mapped: Item[] = data
+          .map((d: DesignerItem) => {
+            const base = Array.isArray(d.items_base)
+              ? d.items_base[0]
+              : d.items_base
+
+            // Skip items with missing data
+            if (!base || !base.id || !base.folha_obra_id) return null
+
+            return {
+              designer_item_id: d.id,
+              id: base.id,
+              folha_obra_id: base.folha_obra_id,
+              descricao: base.descricao ?? '',
+              codigo: base.codigo ?? null,
+              complexidade_id: base.complexidade_id ?? null,
+              complexidade: base.complexidade ?? null,
+              em_curso: d.em_curso,
+              duvidas: d.duvidas,
+              maquete_enviada: d.maquete_enviada,
+              paginacao: d.paginacao,
+              data_in: d.data_in,
+              data_duvidas: d.data_duvidas,
+              data_envio: d.data_envio,
+              data_saida: d.data_saida,
+              path_trabalho: d.path_trabalho,
+              updated_at: d.updated_at,
+            }
+          })
+          .filter(Boolean) as Item[] // Remove null items
+
+        setDrawerItems((prev) => ({ ...prev, [jobId]: mapped }))
+      } else {
+        setDrawerItems((prev) => ({ ...prev, [jobId]: [] }))
+      }
+    } catch (error) {
+      console.error('Error in refreshItems:', error)
+    } finally {
       setLoadingItems(false)
-      return
     }
-
-    if (data) {
-      const mapped: Item[] = data
-        .map((d: DesignerItem) => {
-          const base = Array.isArray(d.items_base)
-            ? d.items_base[0]
-            : d.items_base
-          // Skip items with missing data
-          if (!base || !base.id) return null
-          return {
-            designer_item_id: d.id,
-            id: base.id,
-            folha_obra_id: base.folha_obra_id,
-            descricao: base.descricao,
-            codigo: base.codigo,
-            complexidade_id: base.complexidade_id ?? null,
-            complexidade: base.complexidade ?? null,
-            em_curso: d.em_curso,
-            duvidas: d.duvidas,
-            maquete_enviada: d.maquete_enviada,
-            paginacao: d.paginacao,
-            data_in: d.data_in,
-            data_duvidas: d.data_duvidas,
-            data_envio: d.data_envio,
-            data_saida: d.data_saida,
-            path_trabalho: d.path_trabalho,
-            updated_at: d.updated_at,
-          }
-        })
-        .filter(Boolean) as Item[] // Remove null items
-
-      setDrawerItems((prev) => ({ ...prev, [jobId]: mapped }))
-    }
-
-    setLoadingItems(false)
   }
 
   // Update useEffect for fetching items when drawer opens
@@ -1389,44 +1426,96 @@ export default function DesignerFlow() {
                                   )
                                 )
                                   return
-                                const supabase = createBrowserClient()
-                                // Get all items_base for this job
-                                const { data: baseItems } = await supabase
-                                  .from('items_base')
-                                  .select('id')
-                                  .eq('folha_obra_id', job.id)
-                                if (baseItems && baseItems.length > 0) {
-                                  // Delete any designer_items linked to these items_base
-                                  await supabase
-                                    .from('designer_items')
-                                    .delete()
-                                    .in(
-                                      'item_id',
-                                      baseItems.map((item) => item.id),
+
+                                try {
+                                  const supabase = createBrowserClient()
+
+                                  // Get all items_base for this job
+                                  const { data: baseItems, error: fetchError } =
+                                    await supabase
+                                      .from('items_base')
+                                      .select('id')
+                                      .eq('folha_obra_id', job.id)
+
+                                  if (fetchError) {
+                                    console.error(
+                                      'Error fetching items for deletion:',
+                                      fetchError,
                                     )
-                                  // Delete any logistica_entregas linked to these items
-                                  await supabase
-                                    .from('logistica_entregas')
-                                    .delete()
-                                    .in(
-                                      'item_id',
-                                      baseItems.map((item) => item.id),
+                                    return
+                                  }
+
+                                  if (baseItems && baseItems.length > 0) {
+                                    const itemIds = baseItems.map(
+                                      (item) => item.id,
                                     )
-                                  // Delete all items_base for this job
-                                  await supabase
-                                    .from('items_base')
+
+                                    // Delete any designer_items linked to these items_base
+                                    const { error: designerError } =
+                                      await supabase
+                                        .from('designer_items')
+                                        .delete()
+                                        .in('item_id', itemIds)
+
+                                    if (designerError) {
+                                      console.error(
+                                        'Error deleting designer items:',
+                                        designerError,
+                                      )
+                                    }
+
+                                    // Delete any logistica_entregas linked to these items
+                                    const { error: logisticaError } =
+                                      await supabase
+                                        .from('logistica_entregas')
+                                        .delete()
+                                        .in('item_id', itemIds)
+
+                                    if (logisticaError) {
+                                      console.error(
+                                        'Error deleting logistica items:',
+                                        logisticaError,
+                                      )
+                                    }
+
+                                    // Delete all items_base for this job
+                                    const { error: itemsError } = await supabase
+                                      .from('items_base')
+                                      .delete()
+                                      .eq('folha_obra_id', job.id)
+
+                                    if (itemsError) {
+                                      console.error(
+                                        'Error deleting base items:',
+                                        itemsError,
+                                      )
+                                    }
+                                  }
+
+                                  // Delete the job
+                                  const { error: jobError } = await supabase
+                                    .from('folhas_obras')
                                     .delete()
-                                    .eq('folha_obra_id', job.id)
+                                    .eq('id', job.id)
+
+                                  if (jobError) {
+                                    console.error(
+                                      'Error deleting job:',
+                                      jobError,
+                                    )
+                                    return
+                                  }
+
+                                  // Remove from local state only if successful
+                                  setJobs((prev) =>
+                                    prev.filter((j) => j.id !== job.id),
+                                  )
+                                } catch (error) {
+                                  console.error(
+                                    'Error during delete operation:',
+                                    error,
+                                  )
                                 }
-                                // Delete the job
-                                await supabase
-                                  .from('folhas_obras')
-                                  .delete()
-                                  .eq('id', job.id)
-                                // Remove from local state
-                                setJobs((prev) =>
-                                  prev.filter((j) => j.id !== job.id),
-                                )
                               }}
                             >
                               <Trash2 className="h-4 w-4" />

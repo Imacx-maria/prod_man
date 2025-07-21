@@ -180,6 +180,12 @@ export const LogisticaTableWithCreatable: React.FC<
       { label: 'Loc. Entrega', width: 'w-[160px]', field: 'local_entrega' },
       { label: 'Transportadora', width: 'w-[200px]', field: 'transportadora' },
       { label: 'Outras', width: 'w-[70px] max-w-[70px]', field: 'notas' },
+      {
+        label: 'C',
+        width: 'w-[36px] max-w-[36px]',
+        field: 'concluido',
+        tooltip: 'Concluído',
+      },
       { label: 'Data Concluído', width: 'w-[160px]', field: 'data_concluido' },
       {
         label: 'S',
@@ -284,6 +290,8 @@ export const LogisticaTableWithCreatable: React.FC<
           return record.quantidade ?? 0
         case 'notas':
           return record.notas || ''
+        case 'concluido':
+          return record.concluido || false
         case 'data_concluido':
           return record.data_concluido || ''
         default:
@@ -371,6 +379,7 @@ export const LogisticaTableWithCreatable: React.FC<
                 col.field === 'source_selection' ||
                 col.field === 'tipo' ||
                 col.field === 'notas' ||
+                col.field === 'concluido' ||
                 col.field === 'saiu' ||
                 col.field === 'acoes'
                   ? 'text-center'
@@ -383,6 +392,7 @@ export const LogisticaTableWithCreatable: React.FC<
                   col.field === 'source_selection' ||
                   col.field === 'tipo' ||
                   col.field === 'notas' ||
+                  col.field === 'concluido' ||
                   col.field === 'saiu' ||
                   col.field === 'acoes'
                     ? 'justify-center'
@@ -647,6 +657,21 @@ export const LogisticaTableWithCreatable: React.FC<
                           )}
                         </Tooltip>
                       </TooltipProvider>
+                    </div>
+                  </TableCell>
+
+                  {/* Concluído */}
+                  <TableCell className="text-sm">
+                    <div className="flex items-center justify-center">
+                      <Checkbox
+                        checked={
+                          editRows[row.id]?.concluido ?? row.concluido ?? false
+                        }
+                        onCheckedChange={(value) => {
+                          handleEdit(row.id, 'concluido', !!value)
+                          onConcluidoSave && onConcluidoSave(row, !!value)
+                        }}
+                      />
                     </div>
                   </TableCell>
 

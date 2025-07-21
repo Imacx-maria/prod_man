@@ -63,6 +63,9 @@ import { Tabs, TabsList, TabsContent, TabsTrigger } from '@/components/ui/tabs'
 import SimpleNotasPopover from '@/components/ui/SimpleNotasPopover'
 import { createBrowserClient } from '@/utils/supabase'
 import ProductionAnalyticsCharts from '@/components/ProductionAnalyticsCharts'
+import LogisticaTableWithCreatable from '@/components/LogisticaTableWithCreatable'
+import { LogisticaRecord } from '@/types/logistica'
+import { useLogisticaData } from '@/utils/useLogisticaData'
 
 // Types
 interface ProductionItem {
@@ -186,8 +189,10 @@ function OperacoesPageContent() {
 
   // State
   const [items, setItems] = useState<ProductionItem[]>([])
+  const [completedItems, setCompletedItems] = useState<ProductionItem[]>([])
   const [openItemId, setOpenItemId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [completedLoading, setCompletedLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [showDebug, setShowDebug] = useState(false)
@@ -352,7 +357,7 @@ function OperacoesPageContent() {
 
       console.log('Transformed items:', transformedItems.length)
 
-      // Filter items that meet all conditions:
+      // Filter items that meet all conditions and don't have completed operations:
       const filteredItems = transformedItems.filter((item) => {
         let hasLogisticaEntregasNotConcluida = false
 
@@ -393,8 +398,33 @@ function OperacoesPageContent() {
         return includeItem
       })
 
-      console.log('Filtered items:', filteredItems.length)
-      setItems(filteredItems)
+      // Now filter out items that have completed production operations
+      const itemsWithoutCompleted = []
+      for (const item of filteredItems) {
+        const { data: operations, error: opError } = await supabase
+          .from('producao_operacoes')
+          .select('concluido')
+          .eq('item_id', item.id)
+          .eq('Tipo_Op', 'Corte')
+
+        if (!opError && operations) {
+          const hasCompletedOperation = operations.some(
+            (op: any) => op.concluido === true,
+          )
+          if (!hasCompletedOperation) {
+            itemsWithoutCompleted.push(item)
+          }
+        } else {
+          // If no operations exist, include the item
+          itemsWithoutCompleted.push(item)
+        }
+      }
+
+      console.log(
+        'Items without completed operations:',
+        itemsWithoutCompleted.length,
+      )
+      setItems(itemsWithoutCompleted)
     } catch (error: any) {
       console.error('Error fetching data:', error)
       const errorMessage =
@@ -478,6 +508,113 @@ function OperacoesPageContent() {
     }
   }, [supabase])
 
+  // Fetch completed items from last 3 months
+  const fetchCompletedItems = useCallback(async () => {
+    setCompletedLoading(true)
+    setError(null)
+
+    try {
+      console.log('Starting to fetch completed production items...')
+
+      // Calculate date 3 months ago
+      const threeMonthsAgo = new Date()
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
+      const threeMonthsAgoStr = threeMonthsAgo.toISOString().split('T')[0]
+
+      // First get items with completed operations from last 3 months
+      const { data: completedOperations, error: completedError } =
+        await supabase
+          .from('producao_operacoes')
+          .select('item_id')
+          .eq('Tipo_Op', 'Corte')
+          .eq('concluido', true)
+          .gte('data_conclusao', threeMonthsAgoStr)
+
+      if (completedError) {
+        console.error('Error fetching completed operations:', completedError)
+        throw new Error(
+          `Failed to fetch completed operations: ${completedError.message}`,
+        )
+      }
+
+      if (!completedOperations || completedOperations.length === 0) {
+        console.log('No completed operations found in last 3 months')
+        setCompletedItems([])
+        return
+      }
+
+      const completedItemIds = Array.from(
+        new Set(completedOperations.map((op: any) => op.item_id)),
+      )
+
+      // Now fetch the full item data for these completed items
+      const { data: itemsData, error: itemsError } = await supabase
+        .from('items_base')
+        .select(
+          `
+          id,
+          folha_obra_id,
+          descricao,
+          codigo,
+          quantidade,
+          concluido,
+          concluido_maq,
+          brindes,
+          prioridade,
+          complexidade,
+          created_at,
+          folhas_obras (
+            numero_fo,
+            nome_campanha,
+            cliente
+          ),
+          designer_items (
+            paginacao,
+            path_trabalho
+          ),
+          logistica_entregas (
+            concluido
+          )
+        `,
+        )
+        .in('id', completedItemIds)
+
+      if (itemsError) {
+        console.error('Error fetching completed items data:', itemsError)
+        throw new Error(
+          `Failed to fetch completed items: ${itemsError.message}`,
+        )
+      }
+
+      // Transform the data
+      const transformedCompletedItems = (itemsData || []).map((item) => ({
+        ...item,
+        folhas_obras: Array.isArray(item.folhas_obras)
+          ? item.folhas_obras[0]
+          : item.folhas_obras,
+        designer_items: Array.isArray(item.designer_items)
+          ? item.designer_items[0]
+          : item.designer_items,
+        logistica_entregas: Array.isArray(item.logistica_entregas)
+          ? item.logistica_entregas
+          : item.logistica_entregas,
+      }))
+
+      console.log(
+        'Completed items retrieved:',
+        transformedCompletedItems.length,
+      )
+      setCompletedItems(transformedCompletedItems)
+    } catch (error: any) {
+      console.error('Error fetching completed items:', error)
+      const errorMessage =
+        error?.message || error?.toString() || 'Unknown error occurred'
+      setError(`Failed to load completed items: ${errorMessage}`)
+    } finally {
+      setCompletedLoading(false)
+    }
+  }, [supabase])
+
   useEffect(() => {
     fetchData()
   }, [fetchData])
@@ -485,11 +622,11 @@ function OperacoesPageContent() {
   // Calculate statistics
   const stats = useMemo(() => {
     const total = items.length
-    const completed = items.filter((item) => item.concluido_maq === true).length
-    const pending = total - completed
+    const completed = completedItems.length
+    const pending = total
 
     return { total, completed, pending }
-  }, [items])
+  }, [items, completedItems])
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -715,8 +852,6 @@ function OperacoesPageContent() {
       {/* Statistics */}
       <div className="flex gap-4 text-sm">
         <span>Total: {stats.total}</span>
-        <span>Concluído: {stats.completed}</span>
-        <span>Pendente: {stats.pending}</span>
       </div>
 
       {/* Filters */}
@@ -753,9 +888,21 @@ function OperacoesPageContent() {
         </Button>
       </div>
 
-      <Tabs defaultValue="operacoes" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+      <Tabs
+        defaultValue="operacoes"
+        className="w-full"
+        onValueChange={async (value) => {
+          if (value === 'concluidas' && completedItems.length === 0) {
+            // Fetch completed data when switching to completed tab for the first time
+            await fetchCompletedItems()
+          }
+        }}
+      >
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="operacoes">Operações ({stats.total})</TabsTrigger>
+          <TabsTrigger value="concluidas">
+            Operações Concluídas ({stats.completed})
+          </TabsTrigger>
           <TabsTrigger value="analytics">Análises & Gráficos</TabsTrigger>
         </TabsList>
 
@@ -835,7 +982,7 @@ function OperacoesPageContent() {
                         </Tooltip>
                       </TooltipProvider>
                     </TableHead>
-                    <TableHead className="border-border sticky top-0 z-10 w-[100px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                    <TableHead className="border-border w-[100px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
                       Ações
                     </TableHead>
                   </TableRow>
@@ -852,8 +999,8 @@ function OperacoesPageContent() {
                         {item.quantidade}
                       </TableCell>
                       <TableCell className="w-[36px] min-w-[36px] text-center">
-                        <button
-                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getPColor(item)}`}
+                        <div
+                          className={`mx-auto flex h-3 w-3 items-center justify-center rounded-full ${getPColor(item)}`}
                           title={
                             item.prioridade
                               ? 'Prioritário'
@@ -865,14 +1012,6 @@ function OperacoesPageContent() {
                                 ? 'Aguardando há mais de 3 dias'
                                 : 'Normal'
                           }
-                          onClick={async () => {
-                            const newPrioridade = !item.prioridade
-                            await updateItem(
-                              item.id,
-                              'prioridade',
-                              newPrioridade,
-                            )
-                          }}
                         />
                       </TableCell>
                       <TableCell className="w-[100px]">
@@ -895,6 +1034,107 @@ function OperacoesPageContent() {
                   )}
                 </TableBody>
               </Table>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="concluidas">
+          {/* Completed operations table */}
+          <div className="bg-background border-border w-full rounded-none border-2">
+            <div className="w-full rounded-none">
+              {completedLoading ? (
+                <div className="flex h-64 items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                  <span className="ml-2">
+                    Carregando operações concluídas...
+                  </span>
+                </div>
+              ) : (
+                <Table className="w-full table-fixed border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="border-border sticky top-0 z-10 w-[120px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        FO
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Campanha
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Item
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[100px] border-b-2 bg-[var(--orange)] text-right text-black uppercase">
+                        Quantidade
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[36px] min-w-[36px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>P</span>
+                            </TooltipTrigger>
+                            <TooltipContent>Prioridade</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      </TableHead>
+                      <TableHead className="border-border w-[100px] border-b-2 bg-[var(--orange)] p-2 text-center text-sm text-black uppercase">
+                        Ações
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {completedItems.map((item) => (
+                      <TableRow
+                        key={item.id}
+                        className="hover:bg-[var(--main)]"
+                      >
+                        <TableCell className="w-[120px]">
+                          {item.folhas_obras?.numero_fo}
+                        </TableCell>
+                        <TableCell>
+                          {item.folhas_obras?.nome_campanha}
+                        </TableCell>
+                        <TableCell>{item.descricao}</TableCell>
+                        <TableCell className="w-[100px] text-right">
+                          {item.quantidade}
+                        </TableCell>
+                        <TableCell className="w-[36px] min-w-[36px] text-center">
+                          <div
+                            className={`mx-auto flex h-3 w-3 items-center justify-center rounded-full ${getPColor(item)}`}
+                            title={
+                              item.prioridade
+                                ? 'Prioritário'
+                                : item.created_at &&
+                                    (Date.now() -
+                                      new Date(item.created_at).getTime()) /
+                                      (1000 * 60 * 60 * 24) >
+                                      3
+                                  ? 'Aguardando há mais de 3 dias'
+                                  : 'Normal'
+                            }
+                          />
+                        </TableCell>
+                        <TableCell className="w-[100px] text-center">
+                          <Button
+                            size="icon"
+                            variant="default"
+                            onClick={() => setOpenItemId(item.id)}
+                            className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {completedItems.length === 0 && !completedLoading && (
+                      <TableRow>
+                        <TableCell colSpan={6} className="py-8 text-center">
+                          Nenhuma operação concluída encontrada nos últimos 3
+                          meses.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
             </div>
           </div>
         </TabsContent>
@@ -958,6 +1198,9 @@ function ItemDrawerContent({
   // State to track totals from each table component
   const [totalQuantidadeImpressao, setTotalQuantidadeImpressao] = useState(0)
   const [totalQuantidadeCorte, setTotalQuantidadeCorte] = useState(0)
+
+  // State for completed checkbox
+  const [isItemCompleted, setIsItemCompleted] = useState(false)
 
   // Fetch operations and reference data
   const fetchOperations = useCallback(async () => {
@@ -1033,10 +1276,32 @@ function ItemDrawerContent({
     }
   }, [supabase])
 
+  // Fetch item completion status
+  const fetchItemCompletion = useCallback(async () => {
+    if (!item) return
+
+    try {
+      // Check if any operations for this item are completed
+      const { data: operations, error } = await supabase
+        .from('producao_operacoes')
+        .select('concluido')
+        .eq('item_id', item.id)
+        .eq('Tipo_Op', 'Corte')
+
+      if (!error && operations) {
+        const hasCompleted = operations.some((op: any) => op.concluido === true)
+        setIsItemCompleted(hasCompleted)
+      }
+    } catch (error) {
+      console.error('Error fetching item completion status:', error)
+    }
+  }, [item, supabase])
+
   useEffect(() => {
     fetchReferenceData()
     fetchOperations()
-  }, [fetchReferenceData, fetchOperations])
+    fetchItemCompletion()
+  }, [fetchReferenceData, fetchOperations, fetchItemCompletion])
 
   if (!item) return null
 
@@ -1111,6 +1376,10 @@ function ItemDrawerContent({
             supabase={supabase}
             onRefresh={fetchOperations}
             onTotalChange={setTotalQuantidadeCorte}
+            isItemCompleted={isItemCompleted}
+            onCompletionChange={(completed) => {
+              setIsItemCompleted(completed)
+            }}
           />
         </TabsContent>
       </Tabs>
@@ -1130,6 +1399,8 @@ interface OperationsTableProps {
   supabase: any
   onRefresh: () => void
   onTotalChange?: (total: number) => void
+  isItemCompleted?: boolean
+  onCompletionChange?: (completed: boolean) => void
 }
 
 function OperationsTable({
@@ -1143,6 +1414,8 @@ function OperationsTable({
   supabase,
   onRefresh,
   onTotalChange,
+  isItemCompleted,
+  onCompletionChange,
 }: OperationsTableProps) {
   const quantityField =
     type === 'impressao' ? 'num_placas_print' : 'num_placas_corte'
@@ -2014,19 +2287,63 @@ function OperationsTable({
         <h3 className="text-lg font-semibold">
           Operações de {type === 'impressao' ? 'Impressão' : 'Corte'}
         </h3>
-        <Button onClick={addOperation} disabled={isUpdating}>
-          {isUpdating ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Processando...
-            </>
-          ) : (
-            <>
-              <Plus className="mr-2 h-4 w-4" />
-              Adicionar
-            </>
+        <div className="flex items-center gap-6">
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  onClick={addOperation}
+                  disabled={isUpdating}
+                  className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                >
+                  {isUpdating ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Adicionar operação</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          {type === 'corte' && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="item-completed"
+                checked={isItemCompleted || false}
+                onCheckedChange={async (checked) => {
+                  try {
+                    // Update all corte operations for this item
+                    const today = new Date().toISOString().split('T')[0]
+                    const updateData = checked
+                      ? { concluido: true, data_conclusao: today }
+                      : { concluido: false, data_conclusao: null }
+
+                    const { error } = await supabase
+                      .from('producao_operacoes')
+                      .update(updateData)
+                      .eq('item_id', itemId)
+                      .eq('Tipo_Op', 'Corte')
+
+                    if (!error) {
+                      onCompletionChange?.(!!checked)
+                      onRefresh()
+                    }
+                  } catch (error) {
+                    console.error('Error updating completion status:', error)
+                  }
+                }}
+              />
+              <label
+                htmlFor="item-completed"
+                className="cursor-pointer text-sm font-medium"
+              >
+                Concluído
+              </label>
+            </div>
           )}
-        </Button>
+        </div>
       </div>
 
       {/* Path trabalho display */}

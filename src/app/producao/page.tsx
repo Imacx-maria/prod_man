@@ -118,6 +118,7 @@ interface Item {
 interface LoadingState {
   jobs: boolean
   items: boolean
+  operacoes: boolean
   clientes: boolean
 }
 
@@ -177,13 +178,16 @@ const getPColor = (job: Job): string => {
   return 'bg-green-500'
 }
 
-const getAColor = (jobId: string, allItems: Item[]): string => {
-  const items = allItems.filter((i) => i.folha_obra_id === jobId)
-  if (items.length === 0) return 'bg-red-500'
-  const withArtwork = items.filter((i) => i.paginacao)
-  if (withArtwork.length === 0) return 'bg-red-500'
-  if (withArtwork.length === items.length) return 'bg-green-500'
-  return 'bg-[var(--blue-light)]'
+const getAColor = (jobId: string, operacoes: any[]): string => {
+  const jobOperacoes = operacoes.filter((op) => op.folha_obra_id === jobId)
+  if (jobOperacoes.length === 0) return 'bg-red-600'
+  return jobOperacoes.some((op) => op.concluido) ? 'bg-green-600' : 'bg-red-600'
+}
+
+const getCColor = (jobId: string, operacoes: any[]): string => {
+  const jobOperacoes = operacoes.filter((op) => op.folha_obra_id === jobId)
+  if (jobOperacoes.length === 0) return 'bg-red-600'
+  return jobOperacoes.some((op) => op.concluido) ? 'bg-green-600' : 'bg-red-600'
 }
 
 /* ---------- Loading Components ---------- */
@@ -223,6 +227,7 @@ export default function ProducaoPage() {
   /* state */
   const [jobs, setJobs] = useState<Job[]>([])
   const [allItems, setAllItems] = useState<Item[]>([])
+  const [allOperacoes, setAllOperacoes] = useState<any[]>([])
   const [openId, setOpenId] = useState<string | null>(null)
   const [clientes, setClientes] = useState<{ value: string; label: string }[]>(
     [],
@@ -255,6 +260,7 @@ export default function ProducaoPage() {
   const [loading, setLoading] = useState<LoadingState>({
     jobs: true,
     items: true,
+    operacoes: true,
     clientes: true,
   })
   const [error, setError] = useState<string | null>(null)
@@ -325,6 +331,7 @@ export default function ProducaoPage() {
     | 'saiu'
     | 'fatura'
     | 'artwork'
+    | 'corte'
   const [sortCol, setSortCol] = useState<SortableJobKey>('prioridade')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
   const toggleSort = useCallback(
@@ -825,7 +832,7 @@ export default function ProducaoPage() {
           // Get logistics entries for these items
           const { data: logisticsData, error: logisticsError } = await supabase
             .from('logistica_entregas')
-            .select('item_id, concluido, data_saida')
+            .select('item_id, concluido')
             .in('item_id', itemIds)
 
           if (logisticsError) throw logisticsError
@@ -846,16 +853,12 @@ export default function ProducaoPage() {
               return
             }
 
-            // Calculate completion percentage based on logistics entries with data_saida
+            // Calculate completion percentage based on logistics entries with concluido=true
             const completedItems = jobItems.filter((item) => {
               const logisticsEntry = logisticsData?.find(
                 (l) => l.item_id === item.id,
               )
-              return (
-                logisticsEntry &&
-                logisticsEntry.concluido === true &&
-                logisticsEntry.data_saida !== null
-              )
+              return logisticsEntry && logisticsEntry.concluido === true
             })
 
             const percentage = Math.round(
@@ -907,7 +910,7 @@ export default function ProducaoPage() {
         // Fetch logistics data for completion status
         const { data: logisticsData, error: logisticsError } = await supabase
           .from('logistica_entregas')
-          .select('item_id, concluido, data_saida')
+          .select('item_id, concluido')
           .in('item_id', itemsData?.map((item) => item.id) || [])
 
         if (logisticsError) throw logisticsError
@@ -942,6 +945,39 @@ export default function ProducaoPage() {
         setError('Failed to load production items')
       } finally {
         setLoading((prev) => ({ ...prev, items: false }))
+      }
+    },
+    [supabase],
+  )
+
+  // Fetch operacoes for loaded jobs
+  const fetchOperacoes = useCallback(
+    async (jobIds: string[]) => {
+      if (jobIds.length === 0) return
+
+      setLoading((prev) => ({ ...prev, operacoes: true }))
+      try {
+        const { data: operacoesData, error } = await supabase
+          .from('producao_operacoes')
+          .select('id, folha_obra_id, concluido')
+          .in('folha_obra_id', jobIds)
+
+        if (error) throw error
+
+        if (operacoesData) {
+          setAllOperacoes((prev) => {
+            // Replace operacoes for these jobs to avoid duplicates
+            const filtered = prev.filter(
+              (op) => !jobIds.includes(op.folha_obra_id),
+            )
+            return [...filtered, ...operacoesData]
+          })
+        }
+      } catch (error) {
+        console.error('Error fetching operacoes:', error)
+        setError('Failed to load production operations')
+      } finally {
+        setLoading((prev) => ({ ...prev, operacoes: false }))
       }
     },
     [supabase],
@@ -1016,7 +1052,7 @@ export default function ProducaoPage() {
     fetchJobs,
   ])
 
-  // Load items when jobs change
+  // Load items and operacoes when jobs change
   useEffect(() => {
     if (jobs.length > 0) {
       const jobIds = jobs
@@ -1024,39 +1060,62 @@ export default function ProducaoPage() {
         .filter((id) => !id.startsWith('temp-'))
       if (jobIds.length > 0) {
         fetchItems(jobIds)
+        fetchOperacoes(jobIds)
         fetchJobsSaiuStatus(jobIds)
         fetchJobsCompletionStatus(jobIds)
       }
     }
-  }, [jobs, fetchItems, fetchJobsSaiuStatus, fetchJobsCompletionStatus])
+  }, [
+    jobs,
+    fetchItems,
+    fetchOperacoes,
+    fetchJobsSaiuStatus,
+    fetchJobsCompletionStatus,
+  ])
 
-  // Auto-complete jobs when all logistics entries are completed (DISABLED to prevent interference with manual control)
-  // useEffect(() => {
-  //   const checkJobCompletion = async () => {
-  //     for (const job of jobs) {
-  //       if (job.id.startsWith('temp-') || job.concluido) continue; // Skip temp jobs and already completed jobs
-  //
-  //       const completionStatus = jobsCompletionStatus[job.id];
-  //
-  //       // If job has logistics entries and all are completed, mark job as completed
-  //       if (completionStatus && completionStatus.completed) {
-  //         // Update local state
-  //         setJobs(prevJobs =>
-  //           prevJobs.map(j =>
-  //             j.id === job.id ? { ...j, concluido: true } : j
-  //           )
-  //         );
-  //
-  //         // Update database
-  //         await supabase.from("folhas_obras").update({ concluido: true }).eq("id", job.id);
-  //       }
-  //     }
-  //   };
+  // Auto-complete jobs when all logistics entries are completed
+  useEffect(() => {
+    const checkJobCompletion = async () => {
+      for (const job of jobs) {
+        if (job.id.startsWith('temp-') || job.concluido) continue // Skip temp jobs and already completed jobs
 
-  //   if (jobs.length > 0 && Object.keys(jobsCompletionStatus).length > 0) {
-  //     checkJobCompletion();
-  //   }
-  // }, [jobsCompletionStatus, jobs, supabase]);
+        const completionStatus = jobsCompletionStatus[job.id]
+
+        // If job has logistics entries and all are completed, mark job as completed
+        if (completionStatus && completionStatus.completed) {
+          console.log(
+            `🎯 Auto-completing job ${job.numero_fo} - all logistics entries completed`,
+          )
+
+          // Update local state
+          setJobs((prevJobs) =>
+            prevJobs.map((j) =>
+              j.id === job.id
+                ? {
+                    ...j,
+                    concluido: true,
+                    data_concluido: new Date().toISOString(),
+                  }
+                : j,
+            ),
+          )
+
+          // Update database
+          await supabase
+            .from('folhas_obras')
+            .update({
+              concluido: true,
+              data_concluido: new Date().toISOString(),
+            })
+            .eq('id', job.id)
+        }
+      }
+    }
+
+    if (jobs.length > 0 && Object.keys(jobsCompletionStatus).length > 0) {
+      checkJobCompletion()
+    }
+  }, [jobsCompletionStatus, jobs, supabase])
 
   // Load more jobs function
   const loadMoreJobs = useCallback(() => {
@@ -1143,13 +1202,30 @@ export default function ProducaoPage() {
           B = b.fatura ?? false
           break
         case 'artwork':
-          // Sort by artwork status (paginacao)
-          const aItems = allItems.filter((i) => i.folha_obra_id === a.id)
-          const bItems = allItems.filter((i) => i.folha_obra_id === b.id)
-          const aHasArtwork = aItems.some((i) => i.paginacao)
-          const bHasArtwork = bItems.some((i) => i.paginacao)
-          A = aHasArtwork
-          B = bHasArtwork
+          // Sort by operacoes completion status
+          const aOperacoes = allOperacoes.filter(
+            (op) => op.folha_obra_id === a.id,
+          )
+          const bOperacoes = allOperacoes.filter(
+            (op) => op.folha_obra_id === b.id,
+          )
+          const aHasCompleted = aOperacoes.some((op) => op.concluido)
+          const bHasCompleted = bOperacoes.some((op) => op.concluido)
+          A = aHasCompleted
+          B = bHasCompleted
+          break
+        case 'corte':
+          // Sort by operacoes completion status
+          const aCorteOps = allOperacoes.filter(
+            (op) => op.folha_obra_id === a.id,
+          )
+          const bCorteOps = allOperacoes.filter(
+            (op) => op.folha_obra_id === b.id,
+          )
+          const aCorteCompleted = aCorteOps.some((op) => op.concluido)
+          const bCorteCompleted = bCorteOps.some((op) => op.concluido)
+          A = aCorteCompleted
+          B = bCorteCompleted
           break
         default:
           A = a.id
@@ -1653,7 +1729,28 @@ export default function ProducaoPage() {
                                       ))}
                                   </span>
                                 </TooltipTrigger>
-                                <TooltipContent>Tem AF&apos;s</TooltipContent>
+                                <TooltipContent>Artes Finais</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableHead>
+                          <TableHead
+                            onClick={() => toggleSort('corte')}
+                            className="border-border sticky top-0 z-10 w-[36px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] p-0 text-center font-bold text-black uppercase select-none"
+                          >
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    C{' '}
+                                    {sortCol === 'corte' &&
+                                      (sortDir === 'asc' ? (
+                                        <ArrowUp className="ml-1 inline h-3 w-3" />
+                                      ) : (
+                                        <ArrowDown className="ml-1 inline h-3 w-3" />
+                                      ))}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Corte</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                           </TableHead>
@@ -2258,14 +2355,29 @@ export default function ProducaoPage() {
                                     <TooltipTrigger asChild>
                                       <span>
                                         <span
-                                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getAColor(job.id, allItems)}`}
-                                          title="Tem AF's"
+                                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getAColor(job.id, allOperacoes)}`}
+                                          title="Artes Finais"
                                         />
                                       </span>
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      Tem AF&apos;s
+                                      Artes Finais
                                     </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </TableCell>
+                              <TableCell className="w-[36px] p-0 text-center">
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span>
+                                        <span
+                                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getCColor(job.id, allOperacoes)}`}
+                                          title="Corte"
+                                        />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Corte</TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
                               </TableCell>
@@ -2380,7 +2492,7 @@ export default function ProducaoPage() {
                         {sorted.length === 0 && (
                           <TableRow>
                             <TableCell
-                              colSpan={10}
+                              colSpan={11}
                               className="py-8 text-center"
                             >
                               Nenhum trabalho encontrado.
@@ -2423,10 +2535,10 @@ export default function ProducaoPage() {
               <JobsTableSkeleton />
             ) : (
               <>
-                {/* jobs table - exact same as em_curso */}
+                {/* jobs table - exact same as em_curso - with P, A, C columns hidden */}
                 <div className="bg-background border-border w-full rounded-none border-2">
                   <div className="w-full rounded-none">
-                    <Table className="w-full border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+                    <Table className="w-full border-0 [&_td]:px-3 [&_td]:py-2 [&_td:nth-last-child(2)]:hidden [&_td:nth-last-child(3)]:hidden [&_td:nth-last-child(4)]:hidden [&_th]:px-3 [&_th]:py-2">
                       <TableHeader>
                         <TableRow className="rounded-none">
                           <TableHead
@@ -2516,7 +2628,7 @@ export default function ProducaoPage() {
 
                           <TableHead
                             onClick={() => toggleSort('prioridade')}
-                            className="border-border sticky top-0 z-10 w-[36px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] p-0 text-center font-bold text-black uppercase select-none"
+                            className="border-border sticky top-0 z-10 hidden w-[36px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] p-0 text-center font-bold text-black uppercase select-none"
                           >
                             <TooltipProvider>
                               <Tooltip>
@@ -2537,7 +2649,7 @@ export default function ProducaoPage() {
                           </TableHead>
                           <TableHead
                             onClick={() => toggleSort('artwork')}
-                            className="border-border sticky top-0 z-10 w-[36px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] p-0 text-center font-bold text-black uppercase select-none"
+                            className="border-border sticky top-0 z-10 hidden w-[36px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] p-0 text-center font-bold text-black uppercase select-none"
                           >
                             <TooltipProvider>
                               <Tooltip>
@@ -2552,7 +2664,28 @@ export default function ProducaoPage() {
                                       ))}
                                   </span>
                                 </TooltipTrigger>
-                                <TooltipContent>Tem AF&apos;s</TooltipContent>
+                                <TooltipContent>Artes Finais</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableHead>
+                          <TableHead
+                            onClick={() => toggleSort('corte')}
+                            className="border-border sticky top-0 z-10 hidden w-[36px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] p-0 text-center font-bold text-black uppercase select-none"
+                          >
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    C{' '}
+                                    {sortCol === 'corte' &&
+                                      (sortDir === 'asc' ? (
+                                        <ArrowUp className="ml-1 inline h-3 w-3" />
+                                      ) : (
+                                        <ArrowDown className="ml-1 inline h-3 w-3" />
+                                      ))}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Corte</TooltipContent>
                               </Tooltip>
                             </TooltipProvider>
                           </TableHead>
@@ -3156,14 +3289,29 @@ export default function ProducaoPage() {
                                     <TooltipTrigger asChild>
                                       <span>
                                         <span
-                                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getAColor(job.id, allItems)}`}
-                                          title="Tem AF's"
+                                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getAColor(job.id, allOperacoes)}`}
+                                          title="Artes Finais"
                                         />
                                       </span>
                                     </TooltipTrigger>
                                     <TooltipContent>
-                                      Tem AF&apos;s
+                                      Artes Finais
                                     </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </TableCell>
+                              <TableCell className="w-[36px] p-0 text-center">
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span>
+                                        <span
+                                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getCColor(job.id, allOperacoes)}`}
+                                          title="Corte"
+                                        />
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Corte</TooltipContent>
                                   </Tooltip>
                                 </TooltipProvider>
                               </TableCell>
@@ -3278,7 +3426,7 @@ export default function ProducaoPage() {
                         {sorted.length === 0 && (
                           <TableRow>
                             <TableCell
-                              colSpan={10}
+                              colSpan={11}
                               className="py-8 text-center"
                             >
                               Nenhum trabalho com logística concluída
@@ -3360,6 +3508,7 @@ export default function ProducaoPage() {
                   setJobs={setJobs}
                   setAllItems={setAllItems}
                   fetchJobsSaiuStatus={fetchJobsSaiuStatus}
+                  fetchJobsCompletionStatus={fetchJobsCompletionStatus}
                 />
               </Suspense>
             )}
@@ -3448,6 +3597,7 @@ interface JobDrawerProps {
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>
   setAllItems: React.Dispatch<React.SetStateAction<Item[]>>
   fetchJobsSaiuStatus: (jobIds: string[]) => Promise<void>
+  fetchJobsCompletionStatus: (jobIds: string[]) => Promise<void>
 }
 
 function JobDrawerContent({
@@ -3459,15 +3609,10 @@ function JobDrawerContent({
   setJobs,
   setAllItems,
   fetchJobsSaiuStatus,
+  fetchJobsCompletionStatus,
 }: JobDrawerProps) {
   // Sorting state for drawer table - MUST be called before any early returns
-  type SortKey =
-    | 'bulk'
-    | 'descricao'
-    | 'codigo'
-    | 'quantidade'
-    | 'concluido'
-    | 'acoes'
+  type SortKey = 'bulk' | 'descricao' | 'codigo' | 'quantidade' | 'acoes'
   const [sortCol, setSortCol] = useState<SortKey | ''>('') // Start with no sorting
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
@@ -3524,10 +3669,6 @@ function JobDrawerContent({
         case 'quantidade':
           A = a.quantidade ?? 0
           B = b.quantidade ?? 0
-          break
-        case 'concluido':
-          A = a.concluido ?? false
-          B = b.concluido ?? false
           break
         case 'acoes':
           A = a.id
@@ -3607,13 +3748,24 @@ function JobDrawerContent({
     )
 
     if (itemsWithoutLogistics.length > 0) {
+      console.log(
+        '📦 Creating logistics entries for items without them:',
+        itemsWithoutLogistics.length,
+      )
       // Create logistics entries for all items without them
-      const newLogisticsEntries = itemsWithoutLogistics.map((item) => ({
-        item_id: item.id,
-        descricao: item.descricao || '', // Store item description directly
-        data: new Date().toISOString().split('T')[0],
-        is_entrega: true,
-      }))
+      const newLogisticsEntries = itemsWithoutLogistics.map((item) => {
+        const description = item.descricao || 'Novo Item'
+        console.log('📦 Creating logistics entry for item:', {
+          itemId: item.id,
+          description,
+        })
+        return {
+          item_id: item.id,
+          descricao: description, // Store item description directly
+          data: new Date().toISOString().split('T')[0],
+          is_entrega: true,
+        }
+      })
 
       const { data: newLogisticsData, error: logisticsInsertError } =
         await supabase.from('logistica_entregas').insert(newLogisticsEntries)
@@ -3740,15 +3892,22 @@ function JobDrawerContent({
                 <Button
                   onClick={async () => {
                     // 1. Create a new item in items_base
+                    console.log('➕ Creating new item in items_base...')
                     const { data: baseData, error: baseError } = await supabase
                       .from('items_base')
                       .insert({
                         folha_obra_id: job.id,
                         descricao: '',
                         codigo: '',
+                        quantidade: 1, // 🔧 FIX: Add default quantity
                       })
                       .select('*')
                       .single()
+
+                    console.log('➕ Created item result:', {
+                      data: baseData,
+                      error: baseError,
+                    })
                     if (baseError || !baseData) {
                       // Optionally show an error message
                       return
@@ -3864,28 +4023,6 @@ function JobDrawerContent({
                       </TableHead>
 
                       <TableHead
-                        className="border-border sticky top-0 z-10 w-[100px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
-                        onClick={() => toggleSort('concluido')}
-                      >
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>
-                                Concluído{' '}
-                                {sortCol === 'concluido' &&
-                                  (sortDir === 'asc' ? (
-                                    <ArrowUp className="ml-1 inline h-3 w-3" />
-                                  ) : (
-                                    <ArrowDown className="ml-1 inline h-3 w-3" />
-                                  ))}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>Estado de Conclusão</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-
-                      <TableHead
                         className="border-border sticky top-0 z-10 w-[120px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
                         onClick={() => toggleSort('acoes')}
                       >
@@ -3939,17 +4076,58 @@ function JobDrawerContent({
                               value={it.descricao}
                               onChange={async (e) => {
                                 const newValue = e.target.value
-                                const { error } = await supabase
-                                  .from('items_base')
-                                  .update({ descricao: newValue })
-                                  .eq('id', it.id)
-                                if (!error) {
-                                  setAllItems((prev) =>
-                                    prev.map((item) =>
-                                      item.id === it.id
-                                        ? { ...item, descricao: newValue }
-                                        : item,
-                                    ),
+                                console.log(
+                                  '📝 Updating item description in Produção tab:',
+                                  { itemId: it.id, newValue },
+                                )
+
+                                try {
+                                  // Update the items_base table
+                                  const { error } = await supabase
+                                    .from('items_base')
+                                    .update({ descricao: newValue })
+                                    .eq('id', it.id)
+
+                                  if (!error) {
+                                    // Update global state
+                                    setAllItems((prev) =>
+                                      prev.map((item) =>
+                                        item.id === it.id
+                                          ? { ...item, descricao: newValue }
+                                          : item,
+                                      ),
+                                    )
+
+                                    // 🔄 SYNC: Also update all logistics entries for this item
+                                    console.log(
+                                      '🔄 Syncing description to logistics entries...',
+                                    )
+                                    const { error: logisticsError } =
+                                      await supabase
+                                        .from('logistica_entregas')
+                                        .update({ descricao: newValue })
+                                        .eq('item_id', it.id)
+
+                                    if (logisticsError) {
+                                      console.error(
+                                        '❌ Failed to sync description to logistics:',
+                                        logisticsError,
+                                      )
+                                    } else {
+                                      console.log(
+                                        '✅ Successfully synced description to logistics entries',
+                                      )
+                                    }
+                                  } else {
+                                    console.error(
+                                      '❌ Failed to update item description:',
+                                      error,
+                                    )
+                                  }
+                                } catch (error) {
+                                  console.error(
+                                    '❌ Error updating item description:',
+                                    error,
                                   )
                                 }
                               }}
@@ -3996,86 +4174,89 @@ function JobDrawerContent({
                                 )
                               }}
                               onBlur={async (e) => {
-                                await supabase
-                                  .from('items_base')
-                                  .update({
-                                    quantidade:
-                                      e.target.value === ''
-                                        ? null
-                                        : Number(e.target.value),
-                                  })
-                                  .eq('id', it.id)
+                                const newQuantity =
+                                  e.target.value === ''
+                                    ? null
+                                    : Number(e.target.value)
+                                const originalQuantity = it.quantidade // Store original value for potential revert
+
+                                console.log(
+                                  '🔢 Updating item quantity in items_base:',
+                                  {
+                                    itemId: it.id,
+                                    originalQuantity,
+                                    newQuantity,
+                                    tableName: 'items_base',
+                                  },
+                                )
+
+                                try {
+                                  const { error } = await supabase
+                                    .from('items_base')
+                                    .update({
+                                      quantidade: newQuantity,
+                                    })
+                                    .eq('id', it.id)
+
+                                  if (error) {
+                                    console.error(
+                                      '❌ Failed to update items_base.quantidade:',
+                                      error,
+                                    )
+                                    console.error('❌ Error details:', {
+                                      message: error.message,
+                                      code: error.code,
+                                      details: error.details,
+                                    })
+                                    alert(
+                                      `Erro ao atualizar quantidade: ${error.message}`,
+                                    )
+
+                                    // Revert the local state if database update failed
+                                    setAllItems((prevItems) =>
+                                      prevItems.map((item) =>
+                                        item.id === it.id
+                                          ? {
+                                              ...item,
+                                              quantidade: originalQuantity,
+                                            } // Use stored original value
+                                          : item,
+                                      ),
+                                    )
+                                  } else {
+                                    console.log(
+                                      '✅ Successfully updated items_base.quantidade from',
+                                      originalQuantity,
+                                      'to',
+                                      newQuantity,
+                                    )
+                                  }
+                                } catch (error: any) {
+                                  console.error(
+                                    '❌ Exception updating item quantity:',
+                                    error,
+                                  )
+                                  alert(
+                                    `Erro ao atualizar quantidade: ${error?.message || error}`,
+                                  )
+
+                                  // Revert on exception as well
+                                  setAllItems((prevItems) =>
+                                    prevItems.map((item) =>
+                                      item.id === it.id
+                                        ? {
+                                            ...item,
+                                            quantidade: originalQuantity,
+                                          }
+                                        : item,
+                                    ),
+                                  )
+                                }
                               }}
                               className="h-10 w-20 rounded-none border-0 text-right text-sm outline-0 focus:border-0 focus:ring-0"
                             />
                           </TableCell>
-                          <TableCell className="text-center">
-                            <Checkbox
-                              checked={!!it.concluido}
-                              onCheckedChange={async (checked) => {
-                                const value =
-                                  checked === 'indeterminate' ? false : checked
-                                const today = new Date()
-                                  .toISOString()
-                                  .split('T')[0]
 
-                                // Update global state
-                                setAllItems((prevItems) =>
-                                  prevItems.map((item) =>
-                                    item.id === it.id
-                                      ? { ...item, concluido: value }
-                                      : item,
-                                  ),
-                                )
-
-                                // Update or create logistics entry
-                                const { data: existingLogistics } =
-                                  await supabase
-                                    .from('logistica_entregas')
-                                    .select('id')
-                                    .eq('item_id', it.id)
-                                    .single()
-
-                                if (existingLogistics) {
-                                  // Update existing logistics entry
-                                  if (value) {
-                                    // When checking, set both data_concluido and data_saida to today
-                                    await supabase
-                                      .from('logistica_entregas')
-                                      .update({
-                                        concluido: value,
-                                        data_concluido: today,
-                                        data_saida: today,
-                                      })
-                                      .eq('item_id', it.id)
-                                  } else {
-                                    // When unchecking, clear both dates
-                                    await supabase
-                                      .from('logistica_entregas')
-                                      .update({
-                                        concluido: value,
-                                        data_concluido: null,
-                                        data_saida: null,
-                                      })
-                                      .eq('item_id', it.id)
-                                  }
-                                } else {
-                                  // Create new logistics entry if it doesn't exist
-                                  await supabase
-                                    .from('logistica_entregas')
-                                    .insert({
-                                      item_id: it.id,
-                                      descricao: it.descricao || '',
-                                      concluido: value,
-                                      data_concluido: value ? today : null,
-                                      data_saida: value ? today : null,
-                                      data: today,
-                                      is_entrega: true,
-                                    })
-                                }
-                              }}
-                            />
-                          </TableCell>
                           <TableCell className="flex w-[100px] justify-center gap-2 pr-2">
                             <TooltipProvider>
                               <Tooltip>
@@ -4324,8 +4505,15 @@ function JobDrawerContent({
                   size="sm"
                   variant="secondary"
                   onClick={async () => {
+                    console.log('📊 Starting quantity copy process...')
+                    console.log(
+                      '📊 Current logistics rows:',
+                      logisticaRows.length,
+                    )
+
                     // Copy original item quantities to logistica_entregas
                     if (logisticaRows.length === 0) {
+                      console.log('❌ No logistics items to copy quantities to')
                       alert('Não há itens na tabela de logística.')
                       return
                     }
@@ -4336,6 +4524,11 @@ function JobDrawerContent({
                     if (!confirmed) return
 
                     try {
+                      console.log(
+                        '📊 Fetching original quantities from items_base for job:',
+                        job.id,
+                      )
+
                       // Get original quantities from items_base for all items in this FO
                       const { data: itemsData, error: itemsError } =
                         await supabase
@@ -4343,10 +4536,21 @@ function JobDrawerContent({
                           .select('id, quantidade')
                           .eq('folha_obra_id', job.id)
 
-                      if (itemsError || !itemsData) {
-                        alert('Erro ao buscar quantidades dos itens.')
+                      if (itemsError) {
+                        console.error('❌ Error fetching items:', itemsError)
+                        alert(
+                          `Erro ao buscar quantidades dos itens: ${itemsError.message}`,
+                        )
                         return
                       }
+
+                      if (!itemsData || itemsData.length === 0) {
+                        console.log('❌ No items found for this job')
+                        alert('Nenhum item encontrado para esta folha de obra.')
+                        return
+                      }
+
+                      console.log('📊 Found items with quantities:', itemsData)
 
                       // Create a map of item_id -> quantidade
                       const quantityMap = new Map(
@@ -4356,28 +4560,87 @@ function JobDrawerContent({
                         ]),
                       )
 
-                      // Update all logistica_entregas records with original quantities
-                      const updatePromises = logisticaRows
-                        .filter(
-                          (row) => row.item_id && quantityMap.has(row.item_id),
-                        )
-                        .map((row) => {
-                          const originalQuantity = quantityMap.get(row.item_id)
-                          return supabase
-                            .from('logistica_entregas')
-                            .update({ quantidade: originalQuantity })
-                            .eq('id', row.id)
-                        })
+                      console.log(
+                        '📊 Quantity map:',
+                        Object.fromEntries(quantityMap),
+                      )
 
-                      await Promise.all(updatePromises)
+                      // Update all logistica_entregas records with original quantities
+                      const rowsToUpdate = logisticaRows.filter(
+                        (row) => row.item_id && quantityMap.has(row.item_id),
+                      )
+
+                      console.log(
+                        '📊 Logistics rows to update:',
+                        rowsToUpdate.length,
+                      )
+                      console.log(
+                        '📊 Rows details:',
+                        rowsToUpdate.map((row) => ({
+                          id: row.id,
+                          item_id: row.item_id,
+                          currentQuantity: row.quantidade,
+                          newQuantity: quantityMap.get(row.item_id),
+                        })),
+                      )
+
+                      if (rowsToUpdate.length === 0) {
+                        console.log('❌ No matching logistics rows to update')
+                        alert(
+                          'Nenhuma linha de logística corresponde aos itens desta folha de obra.',
+                        )
+                        return
+                      }
+
+                      const updatePromises = rowsToUpdate.map((row, index) => {
+                        const originalQuantity = quantityMap.get(row.item_id)
+                        console.log(
+                          `📊 Updating row ${index + 1}/${rowsToUpdate.length}:`,
+                          {
+                            logisticsId: row.id,
+                            itemId: row.item_id,
+                            newQuantity: originalQuantity,
+                          },
+                        )
+
+                        return supabase
+                          .from('logistica_entregas')
+                          .update({ quantidade: originalQuantity })
+                          .eq('id', row.id)
+                      })
+
+                      const results = await Promise.all(updatePromises)
+
+                      // Check for any errors in the update results
+                      const errors = results.filter((result) => result.error)
+                      if (errors.length > 0) {
+                        console.error('❌ Some updates failed:', errors)
+                        alert(
+                          `Alguns updates falharam: ${errors.length}/${results.length}`,
+                        )
+                        return
+                      }
+
+                      console.log('✅ All quantity updates successful')
 
                       // Refresh logistica data to show the updates
+                      console.log('🔄 Refreshing logistics data...')
                       await fetchLogisticaRows()
 
+                      console.log(
+                        '✅ Quantity copy process completed successfully',
+                      )
                       alert('Quantidades copiadas com sucesso!')
-                    } catch (error) {
-                      console.error('Error copying quantities:', error)
-                      alert('Erro ao copiar quantidades. Tente novamente.')
+                    } catch (error: any) {
+                      console.error('❌ Error copying quantities:', error)
+                      console.error('❌ Error details:', {
+                        message: error?.message,
+                        code: error?.code,
+                        details: error?.details,
+                      })
+                      alert(
+                        `Erro ao copiar quantidades: ${error?.message || error}`,
+                      )
                     }
                   }}
                 >
@@ -4485,58 +4748,106 @@ function JobDrawerContent({
                     sourceRowId={sourceRowId}
                     onSourceRowChange={setSourceRowId}
                     onItemSave={async (row: any, value) => {
+                      console.log('📝 Updating item description:', {
+                        rowId: row.id,
+                        itemId: row.item_id,
+                        value,
+                      })
                       // Update ONLY the logistics entry description, NOT the original item description
                       if (row.id) {
                         // Update existing logistics record
-                        await updateLogisticaField(
-                          row.id,
-                          'descricao',
-                          value,
-                          null,
-                        )
-                        setLogisticaRows((prevRows) =>
-                          prevRows.map((r) =>
-                            r.id === row.id ? { ...r, descricao: value } : r,
-                          ),
-                        )
+                        try {
+                          const success = await updateLogisticaField(
+                            row.id,
+                            'descricao',
+                            value,
+                            null,
+                          )
+                          if (success) {
+                            console.log(
+                              '✅ Successfully updated item description',
+                            )
+                            setLogisticaRows((prevRows) =>
+                              prevRows.map((r) =>
+                                r.id === row.id
+                                  ? { ...r, descricao: value }
+                                  : r,
+                              ),
+                            )
+                          } else {
+                            console.error(
+                              '❌ Failed to update item description',
+                            )
+                            alert('Erro ao atualizar descrição do item')
+                          }
+                        } catch (error) {
+                          console.error(
+                            '❌ Error updating item description:',
+                            error,
+                          )
+                          alert(`Erro ao atualizar descrição: ${error}`)
+                        }
                       } else if (row.item_id) {
                         // Create new logistics record with description
-                        const { data, error } = await supabase
-                          .from('logistica_entregas')
-                          .insert({
-                            item_id: row.item_id,
-                            descricao: value,
-                            data: new Date().toISOString().split('T')[0],
-                            is_entrega: true,
-                          })
-                          .select(
-                            `
-                              *,
-                              items_base!inner (
-                                id,
-                                descricao,
-                                codigo,
-                                quantidade,
-                                brindes,
-                                folha_obra_id,
-                                folhas_obras!inner (
+                        console.log(
+                          '🆕 Creating new logistics record with description:',
+                          value,
+                        )
+                        try {
+                          const { data, error } = await supabase
+                            .from('logistica_entregas')
+                            .insert({
+                              item_id: row.item_id,
+                              descricao: value,
+                              data: new Date().toISOString().split('T')[0],
+                              is_entrega: true,
+                            })
+                            .select(
+                              `
+                                *,
+                                items_base!inner (
                                   id,
-                                  numero_orc,
-                                  numero_fo,
-                                  cliente,
-                                  id_cliente,
-                                  saiu
+                                  descricao,
+                                  codigo,
+                                  quantidade,
+                                  brindes,
+                                  folha_obra_id,
+                                  folhas_obras!inner (
+                                    id,
+                                    numero_orc,
+                                    numero_fo,
+                                    cliente,
+                                    id_cliente,
+                                    saiu
+                                  )
                                 )
-                              )
-                            `,
+                              `,
+                            )
+                            .single()
+                          if (!error && data) {
+                            console.log(
+                              '✅ Successfully created new logistics record',
+                            )
+                            setLogisticaRows((prevRows) =>
+                              prevRows.map((r) =>
+                                r.item_id === row.item_id && !r.id ? data : r,
+                              ),
+                            )
+                          } else {
+                            console.error(
+                              '❌ Error creating new logistics record:',
+                              error,
+                            )
+                            alert(
+                              `Erro ao criar novo registo de logística: ${error?.message}`,
+                            )
+                          }
+                        } catch (error) {
+                          console.error(
+                            '❌ Exception creating new logistics record:',
+                            error,
                           )
-                          .single()
-                        if (!error && data) {
-                          setLogisticaRows((prevRows) =>
-                            prevRows.map((r) =>
-                              r.item_id === row.item_id && !r.id ? data : r,
-                            ),
-                          )
+                          alert(`Erro ao criar registo: ${error}`)
                         }
                       }
                     }}
@@ -4661,6 +4972,36 @@ function JobDrawerContent({
                         }
                       }
                     }}
+                    onDataConcluidoSave={async (row: any, value: string) => {
+                      if (row.id) {
+                        // Update both data_concluido and data_saida when data_concluido changes
+                        await Promise.all([
+                          updateLogisticaField(
+                            row.id,
+                            'data_concluido',
+                            value,
+                            null,
+                          ),
+                          updateLogisticaField(
+                            row.id,
+                            'data_saida',
+                            value,
+                            null,
+                          ),
+                        ])
+                        setLogisticaRows((prevRows) =>
+                          prevRows.map((r) =>
+                            r.id === row.id
+                              ? {
+                                  ...r,
+                                  data_concluido: value,
+                                  data_saida: value,
+                                }
+                              : r,
+                          ),
+                        )
+                      }
+                    }}
                     onSaiuSave={async (row: any, value: boolean) => {
                       if (row.id) {
                         await updateLogisticaField(row.id, 'saiu', value, null)
@@ -4672,13 +5013,57 @@ function JobDrawerContent({
                       }
                     }}
                     onGuiaSave={async (row: any, value: string) => {
+                      console.log('📋 Updating guia:', {
+                        rowId: row.id,
+                        value,
+                        valueType: typeof value,
+                      })
                       if (row.id) {
-                        await updateLogisticaField(row.id, 'guia', value, null)
-                        setLogisticaRows((prevRows) =>
-                          prevRows.map((r) =>
-                            r.id === row.id ? { ...r, guia: value } : r,
-                          ),
-                        )
+                        try {
+                          // Additional logging for guia field debugging
+                          console.log('📋 Guia field details:', {
+                            original: value,
+                            trimmed: value?.trim(),
+                            isEmpty:
+                              value === '' ||
+                              value === null ||
+                              value === undefined,
+                            isNumeric: !isNaN(parseInt(value?.trim() || '')),
+                          })
+
+                          const success = await updateLogisticaField(
+                            row.id,
+                            'guia',
+                            value,
+                            null,
+                          )
+                          if (success) {
+                            console.log('✅ Successfully updated guia')
+                            setLogisticaRows((prevRows) =>
+                              prevRows.map((r) =>
+                                r.id === row.id ? { ...r, guia: value } : r,
+                              ),
+                            )
+                          } else {
+                            console.error(
+                              '❌ Failed to update guia - updateLogisticaField returned false',
+                            )
+                            alert('Erro ao atualizar guia - operação falhou')
+                          }
+                        } catch (error: any) {
+                          console.error('❌ Error updating guia:', error)
+                          console.error('❌ Error details:', {
+                            message: error?.message,
+                            code: error?.code,
+                            details: error?.details,
+                          })
+                          alert(
+                            `Erro ao atualizar guia: ${error?.message || error}`,
+                          )
+                        }
+                      } else {
+                        console.error('❌ Missing row.id for guia update')
+                        alert('Erro: ID da linha não encontrado')
                       }
                     }}
                     onBrindesSave={async (row: any, value: boolean) => {
@@ -4709,68 +5094,223 @@ function JobDrawerContent({
                       }
                     }}
                     onRecolhaChange={async (rowId: string, value: string) => {
-                      await updateLogisticaField(
+                      console.log('🏠 Updating local_recolha:', {
                         rowId,
-                        'id_local_recolha',
                         value,
-                        null,
-                      )
-                      setLogisticaRows((prevRows) =>
-                        prevRows.map((r) =>
-                          r.id === rowId
-                            ? { ...r, id_local_recolha: value }
-                            : r,
-                        ),
-                      )
+                      })
+                      try {
+                        // Find the selected armazem to get the text label
+                        const selectedArmazem = logisticaArmazens.find(
+                          (a) => a.value === value,
+                        )
+                        const textValue = selectedArmazem
+                          ? selectedArmazem.label
+                          : ''
+
+                        console.log('🏠 Armazem details:', {
+                          id: value,
+                          text: textValue,
+                        })
+
+                        // Update both ID and text fields
+                        const success = await Promise.all([
+                          updateLogisticaField(
+                            rowId,
+                            'id_local_recolha',
+                            value,
+                            null,
+                          ),
+                          updateLogisticaField(
+                            rowId,
+                            'local_recolha',
+                            textValue,
+                            null,
+                          ),
+                        ])
+
+                        if (success.every((s) => s)) {
+                          console.log(
+                            '✅ Successfully updated both id_local_recolha and local_recolha',
+                          )
+                          setLogisticaRows((prevRows) =>
+                            prevRows.map((r) =>
+                              r.id === rowId
+                                ? {
+                                    ...r,
+                                    id_local_recolha: value,
+                                    local_recolha: textValue,
+                                  }
+                                : r,
+                            ),
+                          )
+                        } else {
+                          console.error(
+                            '❌ Failed to update local_recolha fields',
+                          )
+                          alert('Erro ao atualizar local de recolha')
+                        }
+                      } catch (error) {
+                        console.error('❌ Error updating local_recolha:', error)
+                        alert(`Erro ao atualizar local de recolha: ${error}`)
+                      }
                     }}
                     onEntregaChange={async (rowId: string, value: string) => {
-                      await updateLogisticaField(
+                      console.log('🚚 Updating local_entrega:', {
                         rowId,
-                        'id_local_entrega',
                         value,
-                        null,
-                      )
-                      setLogisticaRows((prevRows) =>
-                        prevRows.map((r) =>
-                          r.id === rowId
-                            ? { ...r, id_local_entrega: value }
-                            : r,
-                        ),
-                      )
+                      })
+                      try {
+                        // Find the selected armazem to get the text label
+                        const selectedArmazem = logisticaArmazens.find(
+                          (a) => a.value === value,
+                        )
+                        const textValue = selectedArmazem
+                          ? selectedArmazem.label
+                          : ''
+
+                        console.log('🚚 Armazem details:', {
+                          id: value,
+                          text: textValue,
+                        })
+
+                        // Update both ID and text fields
+                        const success = await Promise.all([
+                          updateLogisticaField(
+                            rowId,
+                            'id_local_entrega',
+                            value,
+                            null,
+                          ),
+                          updateLogisticaField(
+                            rowId,
+                            'local_entrega',
+                            textValue,
+                            null,
+                          ),
+                        ])
+
+                        if (success.every((s) => s)) {
+                          console.log(
+                            '✅ Successfully updated both id_local_entrega and local_entrega',
+                          )
+                          setLogisticaRows((prevRows) =>
+                            prevRows.map((r) =>
+                              r.id === rowId
+                                ? {
+                                    ...r,
+                                    id_local_entrega: value,
+                                    local_entrega: textValue,
+                                  }
+                                : r,
+                            ),
+                          )
+                        } else {
+                          console.error(
+                            '❌ Failed to update local_entrega fields',
+                          )
+                          alert('Erro ao atualizar local de entrega')
+                        }
+                      } catch (error) {
+                        console.error('❌ Error updating local_entrega:', error)
+                        alert(`Erro ao atualizar local de entrega: ${error}`)
+                      }
                     }}
                     onTransportadoraChange={async (row: any, value: string) => {
+                      console.log('🚛 Updating transportadora:', {
+                        rowId: row.id,
+                        value,
+                      })
                       if (row.id) {
-                        await updateLogisticaField(
-                          row.id,
-                          'transportadora',
-                          value,
-                          null,
+                        try {
+                          // For transportadora, the field stores the ID directly (not separate ID/text fields)
+                          // But let's log what transportadora name this ID represents
+                          const selectedTransportadora =
+                            logisticaTransportadoras.find(
+                              (t) => t.value === value,
+                            )
+                          const textValue = selectedTransportadora
+                            ? selectedTransportadora.label
+                            : ''
+
+                          console.log('🚛 Transportadora details:', {
+                            id: value,
+                            text: textValue,
+                          })
+
+                          const success = await updateLogisticaField(
+                            row.id,
+                            'transportadora',
+                            value, // Store the ID in the transportadora field
+                            null,
+                          )
+                          if (success) {
+                            console.log(
+                              '✅ Successfully updated transportadora',
+                            )
+                            setLogisticaRows((prevRows) =>
+                              prevRows.map((r) =>
+                                r.id === row.id
+                                  ? { ...r, transportadora: value }
+                                  : r,
+                              ),
+                            )
+                          } else {
+                            console.error('❌ Failed to update transportadora')
+                            alert('Erro ao atualizar transportadora')
+                          }
+                        } catch (error) {
+                          console.error(
+                            '❌ Error updating transportadora:',
+                            error,
+                          )
+                          alert(`Erro ao atualizar transportadora: ${error}`)
+                        }
+                      } else {
+                        console.error(
+                          '❌ Missing row.id for transportadora update',
                         )
-                        setLogisticaRows((prevRows) =>
-                          prevRows.map((r) =>
-                            r.id === row.id
-                              ? { ...r, transportadora: value }
-                              : r,
-                          ),
-                        )
+                        alert('Erro: ID da linha não encontrado')
                       }
                     }}
                     onQuantidadeSave={async (
                       row: any,
                       value: number | null,
                     ) => {
+                      console.log('🔢 Updating quantidade:', {
+                        rowId: row.id,
+                        value,
+                        valueType: typeof value,
+                      })
                       if (row.id) {
-                        await updateLogisticaField(
-                          row.id,
-                          'quantidade',
-                          value,
-                          null,
-                        )
-                        setLogisticaRows((prevRows) =>
-                          prevRows.map((r) =>
-                            r.id === row.id ? { ...r, quantidade: value } : r,
-                          ),
-                        )
+                        try {
+                          const success = await updateLogisticaField(
+                            row.id,
+                            'quantidade',
+                            value,
+                            null,
+                          )
+                          if (success) {
+                            console.log('✅ Successfully updated quantidade')
+                            setLogisticaRows((prevRows) =>
+                              prevRows.map((r) =>
+                                r.id === row.id
+                                  ? { ...r, quantidade: value }
+                                  : r,
+                              ),
+                            )
+                          } else {
+                            console.error('❌ Failed to update quantidade')
+                            alert('Erro ao atualizar quantidade')
+                          }
+                        } catch (error: any) {
+                          console.error('❌ Error updating quantidade:', error)
+                          alert(
+                            `Erro ao atualizar quantidade: ${error?.message || error}`,
+                          )
+                        }
+                      } else {
+                        console.error('❌ Missing row.id for quantidade update')
+                        alert('Erro: ID da linha não encontrado')
                       }
                     }}
                     onDuplicateRow={async (row: any) => {
