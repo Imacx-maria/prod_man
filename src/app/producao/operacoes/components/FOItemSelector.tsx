@@ -66,9 +66,7 @@ export const FOItemSelector: React.FC<FOItemSelectorProps> = ({
           `,
           )
           .eq('items_base.designer_items.paginacao', true)
-          .not('numero_fo', 'is', null)
           .not('numero_orc', 'is', null)
-          .neq('numero_fo', '')
           .neq('numero_orc', 0)
           .order('numero_fo', { ascending: false })
           .order('created_at', { ascending: false })

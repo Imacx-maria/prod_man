@@ -4,8 +4,9 @@
  * Production Operations Page
  * -------------------------
  * FILTERING RULES:
- * - Only shows items from jobs that have BOTH FO (numero_fo) and ORC (numero_orc) values
+ * - Only shows items from jobs that have both FO (numero_fo) and ORC (numero_orc) values
  * - Items from jobs missing either FO or ORC are filtered out
+ * - Both numero_fo and numero_orc cannot be null, 0, or "0000"
  */
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react'
@@ -385,35 +386,21 @@ function OperacoesPageContent() {
         const isNotBrinde = item.brindes !== true
         const isNotOffset = item.complexidade !== 'OFFSET'
 
-        // Require both FO and ORC values
-        const hasBothFoAndOrc =
+        // Require both FO and ORC values (cannot be null, 0, or "0000")
+        const hasFoValue =
           item.folhas_obras?.numero_fo &&
-          item.folhas_obras?.numero_fo.trim() !== '' &&
-          item.folhas_obras?.numero_orc &&
-          item.folhas_obras?.numero_orc !== 0
+          item.folhas_obras?.numero_fo !== 0 &&
+          item.folhas_obras?.numero_fo !== '0000'
+        const hasOrcValue =
+          item.folhas_obras?.numero_orc && item.folhas_obras?.numero_orc !== 0
 
         const includeItem =
           hasLogisticaEntregasNotConcluida &&
           hasPaginacaoTrue &&
           isNotBrinde &&
           isNotOffset &&
-          hasBothFoAndOrc
-
-        if (!includeItem) {
-          console.log(`Item ${item.id} filtered out:`, {
-            hasLogisticaEntregasNotConcluida,
-            hasPaginacaoTrue,
-            isNotBrinde,
-            isNotOffset,
-            hasBothFoAndOrc,
-            logistica_entregas: item.logistica_entregas,
-            designer_items: item.designer_items,
-            brindes: item.brindes,
-            complexidade: item.complexidade,
-            numero_fo: item.folhas_obras?.numero_fo,
-            numero_orc: item.folhas_obras?.numero_orc,
-          })
-        }
+          hasFoValue &&
+          hasOrcValue
 
         return includeItem
       })
@@ -816,7 +803,7 @@ function OperacoesPageContent() {
               <ul className="list-inside list-disc space-y-1">
                 <li>
                   <strong>FO e ORC preenchidos</strong> (numero_fo e numero_orc
-                  válidos)
+                  válidos, não nulos, não zero, não &quot;0000&quot;)
                 </li>
                 <li>
                   <strong>Paginação concluída</strong> (designer_items.paginacao

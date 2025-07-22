@@ -723,7 +723,7 @@ export default function DesignerFlow() {
     fetchDesigners()
   }, [])
 
-  // Fetch jobs with filters
+  // Fetch jobs with filters for Em Aberto tab
   useEffect(() => {
     fetchJobs(setJobs, {
       selectedDesigner,
@@ -731,7 +731,7 @@ export default function DesignerFlow() {
       campaignFilter: debouncedCampaignFilter,
       itemFilter: debouncedItemFilter,
       codigoFilter: debouncedCodigoFilter,
-      showFechados,
+      showFechados: false, // Em Aberto jobs
     })
   }, [
     selectedDesigner,
@@ -739,13 +739,34 @@ export default function DesignerFlow() {
     debouncedCampaignFilter,
     debouncedItemFilter,
     debouncedCodigoFilter,
-    showFechados,
+  ])
+
+  // Separate state for Paginados jobs
+  const [paginadosJobs, setPaginadosJobs] = useState<Job[]>([])
+
+  // Fetch jobs for Paginados tab
+  useEffect(() => {
+    fetchJobs(setPaginadosJobs, {
+      selectedDesigner,
+      poFilter: debouncedPoFilter,
+      campaignFilter: debouncedCampaignFilter,
+      itemFilter: debouncedItemFilter,
+      codigoFilter: debouncedCodigoFilter,
+      showFechados: true, // Paginados jobs
+    })
+  }, [
+    selectedDesigner,
+    debouncedPoFilter,
+    debouncedCampaignFilter,
+    debouncedItemFilter,
+    debouncedCodigoFilter,
   ])
 
   // Fetch all items for status calculations
   useEffect(() => {
-    fetchAllItems(setAllItems, jobs)
-  }, [jobs])
+    const allJobs = [...jobs, ...paginadosJobs]
+    fetchAllItems(setAllItems, allJobs)
+  }, [jobs, paginadosJobs])
 
   // Jobs are now filtered at database level
   const filteredJobs = jobs
@@ -1119,31 +1140,7 @@ export default function DesignerFlow() {
               <TooltipContent>Limpar Filtros</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={showFechados ? 'default' : 'outline'}
-                  size="icon"
-                  className={`h-10 w-10 rounded-none ${showFechados ? 'bg-[var(--main)]' : ''}`}
-                  onClick={() => {
-                    setShowFechados((prevState) => !prevState)
-                    // The filtering is now handled automatically by the useEffect that listens to showFechados
-                  }}
-                  aria-label={
-                    showFechados ? 'Mostrar Em Aberto' : 'Mostrar Fechados'
-                  }
-                >
-                  {showFechados ? (
-                    <Eye className="h-5 w-5" />
-                  ) : (
-                    <EyeOff className="h-5 w-5" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Trabalhos concluídos</TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+
           <div className="ml-auto flex gap-2">
             <TooltipProvider>
               <Tooltip>
@@ -1228,17 +1225,20 @@ export default function DesignerFlow() {
           </div>
         </div>
 
-        <Tabs defaultValue="trabalhos" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 rounded-none border-2">
-            <TabsTrigger value="trabalhos" className="rounded-none">
-              Trabalhos
+        <Tabs defaultValue="em-aberto" className="w-full">
+          <TabsList className="grid w-full grid-cols-3 rounded-none border-2">
+            <TabsTrigger value="em-aberto" className="rounded-none">
+              Em Aberto
+            </TabsTrigger>
+            <TabsTrigger value="paginados" className="rounded-none">
+              Paginados
             </TabsTrigger>
             <TabsTrigger value="analytics" className="rounded-none">
               Análises & Gráficos
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="trabalhos" className="space-y-6">
+          <TabsContent value="em-aberto" className="space-y-6">
             {/* Data Table */}
             <div className="bg-background border-border w-full rounded-none border-2">
               <div className="w-full rounded-none">
@@ -1544,6 +1544,312 @@ export default function DesignerFlow() {
             </div>
           </TabsContent>
 
+          <TabsContent value="paginados" className="space-y-6">
+            {/* Data Table */}
+            <div className="bg-background border-border w-full rounded-none border-2">
+              <div className="w-full rounded-none">
+                <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[90px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSort('data_in')}
+                      >
+                        Data In
+                        {sortColumn === 'data_in' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[90px] cursor-pointer border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
+                        onClick={() => handleSort('numero_fo')}
+                      >
+                        FO
+                        {sortColumn === 'numero_fo' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[140px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSort('profile_id')}
+                      >
+                        Designer
+                        {sortColumn === 'profile_id' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 min-w-[200px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSort('nome_campanha')}
+                      >
+                        Nome Campanha
+                        {sortColumn === 'nome_campanha' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[180px] border-b-2 bg-[var(--orange)] font-bold uppercase">
+                        Status
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[36px] cursor-pointer border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
+                        onClick={() => handleSort('prioridade')}
+                      >
+                        P
+                        {sortColumn === 'prioridade' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
+                        Ações
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {paginadosJobs.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={7}
+                          className="text-center text-gray-500"
+                        >
+                          Nenhum trabalho paginado encontrado.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      getSortedJobs(paginadosJobs).map((job, index) => (
+                        <TableRow key={job.id || `job-${index}`}>
+                          <TableCell>
+                            {job.data_in
+                              ? new Date(job.data_in).toLocaleDateString()
+                              : '-'}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {job.numero_fo}
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={job.profile_id || ''}
+                              onValueChange={(val) =>
+                                handleDesignerChange(job.id, val)
+                              }
+                            >
+                              <SelectTrigger className="h-10 w-[120px] rounded-none">
+                                <SelectValue>
+                                  {designers.find(
+                                    (d) => d.value === job.profile_id,
+                                  )?.label || ''}
+                                </SelectValue>
+                              </SelectTrigger>
+                              <SelectContent>
+                                {designers
+                                  .filter((d) => d.value !== 'all')
+                                  .map((designer) => (
+                                    <SelectItem
+                                      key={designer.value}
+                                      value={designer.value}
+                                    >
+                                      {designer.label}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>{job.nome_campanha}</TableCell>
+                          <TableCell>
+                            {/* Status progress bar */}
+                            {(() => {
+                              // Get all items for this job from the new data structure
+                              const jobItems = allItems.filter(
+                                (item) =>
+                                  item.folha_obra_id === job.id &&
+                                  item.id && // Ensure valid items only
+                                  item.designer_item_id, // Ensure it has a designer item association
+                              )
+
+                              // Calculate progress
+                              const total = jobItems.length
+                              const done = jobItems.filter(
+                                (item) => item.paginacao,
+                              ).length
+                              const percent =
+                                total > 0 ? Math.round((done / total) * 100) : 0
+
+                              return (
+                                <div className="flex items-center gap-2">
+                                  <Progress
+                                    value={percent}
+                                    className="w-full"
+                                  />
+                                  <span className="w-10 text-right font-mono text-xs">
+                                    {percent}%
+                                  </span>
+                                </div>
+                              )
+                            })()}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <button
+                              className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getPColor(job)}`}
+                              title={
+                                job.prioridade
+                                  ? 'Prioritário'
+                                  : job.data_in &&
+                                      (Date.now() -
+                                        new Date(job.data_in).getTime()) /
+                                        (1000 * 60 * 60 * 24) >
+                                        3
+                                    ? 'Aguardando há mais de 3 dias'
+                                    : 'Normal'
+                              }
+                              onClick={async () => {
+                                const newPrioridade = !job.prioridade
+                                updateJob(job.id, { prioridade: newPrioridade })
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell className="flex justify-center gap-2">
+                            <Button
+                              variant="default"
+                              size="icon"
+                              aria-label="Ver"
+                              className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                              ref={(el) => {
+                                triggerBtnRefs.current[job.id] = el
+                              }}
+                              onClick={() => setOpenDrawerId(job.id)}
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="icon"
+                              aria-label="Excluir"
+                              className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                              onClick={async () => {
+                                if (
+                                  !window.confirm(
+                                    'Tem certeza que deseja apagar este trabalho e todos os seus itens?',
+                                  )
+                                )
+                                  return
+
+                                try {
+                                  const supabase = createBrowserClient()
+
+                                  // Get all items_base for this job
+                                  const { data: baseItems, error: fetchError } =
+                                    await supabase
+                                      .from('items_base')
+                                      .select('id')
+                                      .eq('folha_obra_id', job.id)
+
+                                  if (fetchError) {
+                                    console.error(
+                                      'Error fetching items for deletion:',
+                                      fetchError,
+                                    )
+                                    return
+                                  }
+
+                                  if (baseItems && baseItems.length > 0) {
+                                    const itemIds = baseItems.map(
+                                      (item) => item.id,
+                                    )
+
+                                    // Delete any designer_items linked to these items_base
+                                    const { error: designerError } =
+                                      await supabase
+                                        .from('designer_items')
+                                        .delete()
+                                        .in('item_id', itemIds)
+
+                                    if (designerError) {
+                                      console.error(
+                                        'Error deleting designer items:',
+                                        designerError,
+                                      )
+                                    }
+
+                                    // Delete any logistica_entregas linked to these items
+                                    const { error: logisticaError } =
+                                      await supabase
+                                        .from('logistica_entregas')
+                                        .delete()
+                                        .in('item_id', itemIds)
+
+                                    if (logisticaError) {
+                                      console.error(
+                                        'Error deleting logistica items:',
+                                        logisticaError,
+                                      )
+                                    }
+
+                                    // Delete all items_base for this job
+                                    const { error: itemsError } = await supabase
+                                      .from('items_base')
+                                      .delete()
+                                      .eq('folha_obra_id', job.id)
+
+                                    if (itemsError) {
+                                      console.error(
+                                        'Error deleting base items:',
+                                        itemsError,
+                                      )
+                                    }
+                                  }
+
+                                  // Delete the job
+                                  const { error: jobError } = await supabase
+                                    .from('folhas_obras')
+                                    .delete()
+                                    .eq('id', job.id)
+
+                                  if (jobError) {
+                                    console.error(
+                                      'Error deleting job:',
+                                      jobError,
+                                    )
+                                    return
+                                  }
+
+                                  // Remove from local state only if successful
+                                  setJobs((prev) =>
+                                    prev.filter((j) => j.id !== job.id),
+                                  )
+                                } catch (error) {
+                                  console.error(
+                                    'Error during delete operation:',
+                                    error,
+                                  )
+                                }
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          </TabsContent>
+
           <TabsContent value="analytics" className="mb-8 space-y-6">
             <DesignerAnalyticsCharts
               onRefresh={async () => {
@@ -1561,7 +1867,7 @@ export default function DesignerFlow() {
         </Tabs>
 
         {/* Drawers rendered separately outside the table */}
-        {sortedJobs.map((job, index) => (
+        {[...jobs, ...paginadosJobs].map((job, index) => (
           <Drawer
             key={`drawer-${job.id || `job-${index}`}`}
             open={

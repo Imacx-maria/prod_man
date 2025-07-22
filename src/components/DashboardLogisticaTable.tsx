@@ -104,6 +104,7 @@ type SortableLogisticaKey =
   | 'guia'
   | 'transportadora'
   | 'data_concluido'
+  | 'concluido'
   | 'local_entrega'
   | 'data_saida'
   | 'saiu'
@@ -552,6 +553,10 @@ export const DashboardLogisticaTable: React.FC<
           A = a.data_concluido ? new Date(a.data_concluido).getTime() : 0
           B = b.data_concluido ? new Date(b.data_concluido).getTime() : 0
           break
+        case 'concluido':
+          A = a.concluido ?? false
+          B = b.concluido ?? false
+          break
         case 'local_entrega':
           A = a.local_entrega ?? ''
           B = b.local_entrega ?? ''
@@ -616,7 +621,7 @@ export const DashboardLogisticaTable: React.FC<
         console.error('Error updating saiu status:', error)
       }
     },
-    [supabase, fetchData],
+    [supabase, fetchData, showDispatched],
   )
 
   // Update data_saida status - now updates logistica_entregas.data_saida field
@@ -643,7 +648,30 @@ export const DashboardLogisticaTable: React.FC<
         console.error('Error updating data_saida:', error)
       }
     },
-    [supabase, fetchData, formatDateForDB],
+    [supabase, fetchData, formatDateForDB, showDispatched],
+  )
+
+  // Update concluido status - updates logistica_entregas.concluido field
+  const handleConcluidoUpdate = useCallback(
+    async (record: DashboardLogisticaRecord, value: boolean) => {
+      try {
+        if (!record.logistica_id) {
+          console.error('Cannot update concluido: missing logistica_id', record)
+          return
+        }
+
+        await supabase
+          .from('logistica_entregas')
+          .update({ concluido: value })
+          .eq('id', record.logistica_id)
+
+        // Refresh data
+        await fetchData(showDispatched)
+      } catch (error) {
+        console.error('Error updating concluido status:', error)
+      }
+    },
+    [supabase, fetchData, showDispatched],
   )
 
   if (loading) {
@@ -894,7 +922,7 @@ export const DashboardLogisticaTable: React.FC<
                 </TableHead>
                 <TableHead
                   onClick={() => toggleSort('data_concluido')}
-                  className="border-border sticky top-0 z-10 cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                  className="border-border sticky top-0 z-10 w-32 cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
                 >
                   Data Concluído{' '}
                   {sortCol === 'data_concluido' &&
@@ -903,6 +931,27 @@ export const DashboardLogisticaTable: React.FC<
                     ) : (
                       <ArrowDown className="ml-1 inline h-3 w-3" />
                     ))}
+                </TableHead>
+                <TableHead
+                  onClick={() => toggleSort('concluido')}
+                  className="border-border sticky top-0 z-10 w-12 cursor-pointer border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
+                >
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          C{' '}
+                          {sortCol === 'concluido' &&
+                            (sortDir === 'asc' ? (
+                              <ArrowUp className="ml-1 inline h-3 w-3" />
+                            ) : (
+                              <ArrowDown className="ml-1 inline h-3 w-3" />
+                            ))}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Concluído</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </TableHead>
                 <TableHead
                   onClick={() => toggleSort('data_saida')}
@@ -976,6 +1025,18 @@ export const DashboardLogisticaTable: React.FC<
                         )
                       : '-'}
                   </TableCell>
+                  <TableCell className="text-center">
+                    <div className="flex items-center justify-center">
+                      <Checkbox
+                        checked={!!record.concluido}
+                        onCheckedChange={(checked) => {
+                          const value =
+                            checked === 'indeterminate' ? false : checked
+                          handleConcluidoUpdate(record, value)
+                        }}
+                      />
+                    </div>
+                  </TableCell>
                   <TableCell>
                     <DatePicker
                       selected={
@@ -1008,7 +1069,7 @@ export const DashboardLogisticaTable: React.FC<
               ))}
               {sorted.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={11} className="py-8 text-center">
+                  <TableCell colSpan={12} className="py-8 text-center">
                     Nenhum trabalho concluído encontrado.
                   </TableCell>
                 </TableRow>

@@ -36,9 +36,7 @@ export const useOperations = () => {
         `,
         )
         .eq('designer_items.paginacao', true)
-        .not('folhas_obras.numero_fo', 'is', null)
         .not('folhas_obras.numero_orc', 'is', null)
-        .neq('folhas_obras.numero_fo', '')
         .neq('folhas_obras.numero_orc', 0)
         .order('created_at', { ascending: false })
 

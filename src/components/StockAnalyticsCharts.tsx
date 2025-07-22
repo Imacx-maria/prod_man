@@ -46,6 +46,22 @@ const COLORS = {
   GOOD: '#72a25e', // Earthy green
 }
 
+// Color palette for characteristics in stacked bars
+const CARACTERISTICA_COLORS = [
+  '#2a687a', // Muted teal blue (main)
+  '#72a25e', // Earthy green
+  '#f9d16a', // Soft pastel yellow
+  '#c3b49e', // Warm beige
+  '#3c3434', // Dark charcoal brown
+  '#5a9bd4', // Soft blue
+  '#b85d3e', // Rust orange
+  '#6b5b95', // Muted purple
+  '#88c999', // Light green
+  '#f4a261', // Sandy orange
+  '#e76f51', // Coral red
+  '#2b4570', // Navy blue
+]
+
 interface CurrentStock {
   id: string
   material: string | null
@@ -128,7 +144,7 @@ export default function StockAnalyticsCharts({
 
   useEffect(() => {
     fetchStockEntries()
-  }, [])
+  }, [fetchStockEntries])
 
   // Process data for charts
   const chartData = useMemo(() => {
@@ -193,7 +209,7 @@ export default function StockAnalyticsCharts({
       .sort((a, b) => b.atual - a.atual)
       .slice(0, 10) // Top 10
 
-    // Other rigid materials stock data (using final stock values)
+    // Other rigid materials stock levels (using final stock values)
     const outrosRigidosStockData = outrosRigidosMaterials
       .map((stock) => {
         const finalStock = getFinalStock(stock)
@@ -209,6 +225,54 @@ export default function StockAnalyticsCharts({
       .filter((item) => item.atual > 0) // Only show items with positive stock
       .sort((a, b) => b.atual - a.atual)
       .slice(0, 10) // Top 10
+
+    // Stacked data for Outros Materiais Rígidos (grouped by material+cor, stacked by caracteristica)
+    const outrosRigidosStackedData = (() => {
+      // Group by material + cor first
+      const groupedByMaterialCor = outrosRigidosMaterials
+        .filter((stock) => getFinalStock(stock) > 0) // Only positive stock
+        .reduce(
+          (acc, stock) => {
+            const materialCor =
+              `${stock.material || ''} ${stock.cor || ''}`.trim()
+            const caracteristica =
+              stock.carateristica?.trim() || 'Sem Característica'
+            const finalStock = getFinalStock(stock)
+
+            if (!acc[materialCor]) {
+              acc[materialCor] = {
+                name: materialCor.substring(0, 20), // For display
+                fullName: materialCor, // For tooltip
+                total: 0,
+              }
+            }
+
+            if (!acc[materialCor][caracteristica]) {
+              acc[materialCor][caracteristica] = 0
+            }
+
+            acc[materialCor][caracteristica] += Math.round(finalStock)
+            acc[materialCor].total += Math.round(finalStock)
+
+            return acc
+          },
+          {} as Record<string, any>,
+        )
+
+      // Convert to array and sort by total stock
+      return Object.values(groupedByMaterialCor)
+        .sort((a: any, b: any) => b.total - a.total)
+        .slice(0, 10) // Top 10 material+color combinations
+    })()
+
+    // Get all unique characteristics for creating Bar components
+    const uniqueCaracteristicas = Array.from(
+      new Set(
+        outrosRigidosMaterials
+          .filter((stock) => getFinalStock(stock) > 0)
+          .map((stock) => stock.carateristica?.trim() || 'Sem Característica'),
+      ),
+    ).sort()
 
     // Flexible materials stock levels (using final stock values)
     const flexiveisStockData = flexiveisMaterials
@@ -324,6 +388,8 @@ export default function StockAnalyticsCharts({
     return {
       cartaoStockData,
       outrosRigidosStockData,
+      outrosRigidosStackedData,
+      uniqueCaracteristicas,
       flexiveisStockData,
       cartaoPercentageData: cartaoPercentageData.slice(0, 8), // Top 8 for pie chart
       outrosRigidosPercentageData: outrosRigidosPercentageData.slice(0, 8), // Top 8 for pie chart
@@ -513,16 +579,16 @@ export default function StockAnalyticsCharts({
               </CardContent>
             </Card>
 
-            {/* Other Rigid Materials Stock Levels */}
+            {/* Other Rigid Materials Stock Levels - Stacked by Characteristics */}
             <Card>
               <CardHeader>
                 <CardTitle>Outros Materiais Rígidos</CardTitle>
                 <CardDescription>
-                  Top 10 outros materiais rígidos
+                  Por material+cor, detalhado por características (Top 10)
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                {chartData.outrosRigidosStockData.length === 0 ? (
+                {chartData.outrosRigidosStackedData.length === 0 ? (
                   <div className="flex h-[400px] items-center justify-center">
                     <div className="text-center">
                       <Package className="text-muted-foreground mx-auto mb-3 h-12 w-12" />
@@ -536,7 +602,7 @@ export default function StockAnalyticsCharts({
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={550}>
-                    <BarChart data={chartData.outrosRigidosStockData}>
+                    <BarChart data={chartData.outrosRigidosStackedData}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis
                         dataKey="name"
@@ -548,18 +614,29 @@ export default function StockAnalyticsCharts({
                       />
                       <YAxis />
                       <Tooltip
-                        formatter={(value, name, props: any) => [
-                          value,
-                          name,
-                          props?.payload?.fullName,
-                        ]}
+                        formatter={(value, name) => [`${value} unidades`, name]}
+                        labelFormatter={(label, payload) =>
+                          payload && payload[0]
+                            ? `Material: ${payload[0].payload.fullName}`
+                            : `Material: ${label}`
+                        }
                       />
                       <Legend />
-                      <Bar
-                        dataKey="atual"
-                        name="Stock Atual"
-                        fill={COLORS.RIGIDOS}
-                      />
+                      {chartData.uniqueCaracteristicas.map(
+                        (caracteristica, index) => (
+                          <Bar
+                            key={caracteristica}
+                            dataKey={caracteristica}
+                            name={caracteristica}
+                            stackId="a"
+                            fill={
+                              CARACTERISTICA_COLORS[
+                                index % CARACTERISTICA_COLORS.length
+                              ]
+                            }
+                          />
+                        ),
+                      )}
                     </BarChart>
                   </ResponsiveContainer>
                 )}
@@ -722,6 +799,97 @@ export default function StockAnalyticsCharts({
               </CardContent>
             </Card>
           </div>
+
+          {/* Overall Rigid Materials Distribution */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Distribuição Geral - Materiais Rígidos</CardTitle>
+              <CardDescription>
+                Percentagem entre Cartão & Favo vs Outros Rígidos
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={400}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      {
+                        name: 'Cartão & Favo',
+                        value: chartData.totalCartaoStock,
+                        percentage:
+                          chartData.totalCartaoStock +
+                            chartData.totalRigidosStock -
+                            chartData.totalCartaoStock >
+                          0
+                            ? (chartData.totalCartaoStock /
+                                (chartData.totalCartaoStock +
+                                  (chartData.totalRigidosStock -
+                                    chartData.totalCartaoStock))) *
+                              100
+                            : 100,
+                      },
+                      {
+                        name: 'Outros Rígidos',
+                        value:
+                          chartData.totalRigidosStock -
+                          chartData.totalCartaoStock,
+                        percentage:
+                          chartData.totalCartaoStock +
+                            chartData.totalRigidosStock -
+                            chartData.totalCartaoStock >
+                          0
+                            ? ((chartData.totalRigidosStock -
+                                chartData.totalCartaoStock) /
+                                (chartData.totalCartaoStock +
+                                  (chartData.totalRigidosStock -
+                                    chartData.totalCartaoStock))) *
+                              100
+                            : 0,
+                      },
+                    ].filter((item) => item.value > 0)}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percentage }) =>
+                      `${name}: ${percentage.toFixed(1)}%`
+                    }
+                    outerRadius={150}
+                    dataKey="value"
+                  >
+                    <Cell fill={COLORS.CARTAO} />
+                    <Cell fill={COLORS.RIGIDOS} />
+                  </Pie>
+                  <Tooltip
+                    formatter={(value, name) => [
+                      `${Math.round(Number(value))} unidades`,
+                      name,
+                    ]}
+                  />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="mt-4 grid grid-cols-2 gap-4 text-center">
+                <div className="border p-4">
+                  <div className="text-2xl font-bold text-orange-600">
+                    {Math.round(chartData.totalCartaoStock)}
+                  </div>
+                  <div className="text-muted-foreground text-sm">
+                    Cartão & Favo (unidades)
+                  </div>
+                </div>
+                <div className="border p-4">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {Math.round(
+                      chartData.totalRigidosStock - chartData.totalCartaoStock,
+                    )}
+                  </div>
+                  <div className="text-muted-foreground text-sm">
+                    Outros Rígidos (unidades)
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="flexiveis" className="space-y-6">

@@ -7,8 +7,9 @@
  * NO caching - preserves real-time data accuracy
  *
  * FILTERING RULES:
- * - Only shows jobs that have BOTH FO (numero_fo) and ORC (numero_orc) values
- * - Jobs missing either FO or ORC are filtered out on both tabs
+ * - Only shows jobs that have ORC (numero_orc) values
+ * - Jobs missing ORC are filtered out on both tabs
+ * - FO (numero_fo) values are optional and not required for display
  */
 
 // Note: This is a client component - metadata should be added to layout.tsx or a parent server component
@@ -182,10 +183,32 @@ const getPColor = (job: Job): string => {
   return 'bg-green-500'
 }
 
-const getAColor = (jobId: string, operacoes: any[]): string => {
-  const jobOperacoes = operacoes.filter((op) => op.folha_obra_id === jobId)
-  if (jobOperacoes.length === 0) return 'bg-red-600'
-  return jobOperacoes.some((op) => op.concluido) ? 'bg-green-600' : 'bg-red-600'
+const getAColor = (
+  jobId: string,
+  items: Item[],
+  designerItems: any[],
+): string => {
+  // Get all items for this job
+  const jobItems = items.filter((item) => item.folha_obra_id === jobId)
+  if (jobItems.length === 0) return 'bg-red-600' // No items = red
+
+  // Get designer items for these job items
+  const jobItemIds = jobItems.map((item) => item.id)
+  const jobDesignerItems = designerItems.filter((designer) =>
+    jobItemIds.includes(designer.item_id),
+  )
+
+  if (jobDesignerItems.length === 0) return 'bg-red-600' // No designer items = red
+
+  // Check paginacao status
+  const completedCount = jobDesignerItems.filter(
+    (designer) => designer.paginacao === true,
+  ).length
+  const totalCount = jobDesignerItems.length
+
+  if (completedCount === 0) return 'bg-red-600' // None completed = red
+  if (completedCount === totalCount) return 'bg-green-600' // All completed = green
+  return 'bg-orange-500' // Some completed = orange
 }
 
 const getCColor = (jobId: string, operacoes: any[]): string => {
@@ -232,6 +255,7 @@ export default function ProducaoPage() {
   const [jobs, setJobs] = useState<Job[]>([])
   const [allItems, setAllItems] = useState<Item[]>([])
   const [allOperacoes, setAllOperacoes] = useState<any[]>([])
+  const [allDesignerItems, setAllDesignerItems] = useState<any[]>([])
   const [openId, setOpenId] = useState<string | null>(null)
   const [clientes, setClientes] = useState<{ value: string; label: string }[]>(
     [],
@@ -555,10 +579,8 @@ export default function ProducaoPage() {
           { count: 'exact' },
         )
 
-        // ALWAYS filter to require both FO and ORC values
-        query = query.not('numero_fo', 'is', null)
+        // ALWAYS filter to require ORC values (FO is optional)
         query = query.not('numero_orc', 'is', null)
-        query = query.neq('numero_fo', '')
         query = query.neq('numero_orc', 0)
 
         // If we have job IDs from item search, filter by those ONLY
@@ -742,13 +764,9 @@ export default function ProducaoPage() {
 
         // Item/codigo filtering is now handled at the beginning of the function
 
-        // Final filter: Only show jobs that have both FO and ORC values
+        // Final filter: Only show jobs that have ORC values (FO is optional)
         filteredJobs = filteredJobs.filter(
-          (job) =>
-            job.numero_fo &&
-            job.numero_fo.trim() !== '' &&
-            job.numero_orc &&
-            job.numero_orc !== 0,
+          (job) => job.numero_orc && job.numero_orc !== 0,
         )
 
         if (filteredJobs) {
@@ -1002,6 +1020,47 @@ export default function ProducaoPage() {
     [supabase],
   )
 
+  const fetchDesignerItems = useCallback(
+    async (jobIds: string[]) => {
+      if (jobIds.length === 0) return
+
+      setLoading((prev) => ({ ...prev, operacoes: true })) // Reuse loading state
+      try {
+        const { data: designerData, error } = await supabase
+          .from('designer_items')
+          .select('id, item_id, paginacao')
+          .in(
+            'item_id',
+            // Need to get item IDs for these jobs first
+            allItems
+              .filter((item) => jobIds.includes(item.folha_obra_id))
+              .map((item) => item.id),
+          )
+
+        if (error) throw error
+
+        if (designerData) {
+          setAllDesignerItems((prev) => {
+            // Replace designer items for these jobs to avoid duplicates
+            const jobItemIds = allItems
+              .filter((item) => jobIds.includes(item.folha_obra_id))
+              .map((item) => item.id)
+            const filtered = prev.filter(
+              (designer) => !jobItemIds.includes(designer.item_id),
+            )
+            return [...filtered, ...designerData]
+          })
+        }
+      } catch (error) {
+        console.error('Error fetching designer items:', error)
+        setError('Failed to load designer items')
+      } finally {
+        setLoading((prev) => ({ ...prev, operacoes: false }))
+      }
+    },
+    [supabase, allItems],
+  )
+
   // Initial data load
   useEffect(() => {
     const loadInitialData = async () => {
@@ -1080,6 +1139,7 @@ export default function ProducaoPage() {
       if (jobIds.length > 0) {
         fetchItems(jobIds)
         fetchOperacoes(jobIds)
+        fetchDesignerItems(jobIds)
         fetchJobsSaiuStatus(jobIds)
         fetchJobsCompletionStatus(jobIds)
       }
@@ -1088,6 +1148,7 @@ export default function ProducaoPage() {
     jobs,
     fetchItems,
     fetchOperacoes,
+    fetchDesignerItems,
     fetchJobsSaiuStatus,
     fetchJobsCompletionStatus,
   ])
@@ -1257,7 +1318,7 @@ export default function ProducaoPage() {
       return 0
     })
     return arr
-  }, [filtered, sortCol, sortDir, allItems])
+  }, [filtered, sortCol, sortDir, allItems, allOperacoes])
 
   /* ---------- render ---------- */
   return (
@@ -2374,7 +2435,7 @@ export default function ProducaoPage() {
                                     <TooltipTrigger asChild>
                                       <span>
                                         <span
-                                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getAColor(job.id, allOperacoes)}`}
+                                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getAColor(job.id, allItems, allDesignerItems)}`}
                                           title="Artes Finais"
                                         />
                                       </span>
@@ -3308,7 +3369,7 @@ export default function ProducaoPage() {
                                     <TooltipTrigger asChild>
                                       <span>
                                         <span
-                                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getAColor(job.id, allOperacoes)}`}
+                                          className={`focus:ring-primary mx-auto flex h-3 w-3 items-center justify-center rounded-full transition-colors focus:ring-2 focus:outline-none ${getAColor(job.id, allItems, allDesignerItems)}`}
                                           title="Artes Finais"
                                         />
                                       </span>
@@ -3656,8 +3717,6 @@ function JobDrawerContent({
     return job ? items.filter((i) => i.folha_obra_id === jobId) : []
   }, [job, items, jobId])
 
-  console.log('🏭 Production items for job', jobId, ':', jobItems)
-  console.log('🏭 All items available:', items.length)
   const toggleSort = (col: SortKey) => {
     if (sortCol === col) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
     else {
@@ -4092,22 +4151,54 @@ function JobDrawerContent({
                           </TableCell>
                           <TableCell>
                             <Input
-                              value={it.descricao}
-                              onChange={async (e) => {
+                              defaultValue={it.descricao}
+                              onChange={(e) => {
                                 const newValue = e.target.value
-                                console.log(
-                                  '📝 Updating item description in Produção tab:',
-                                  { itemId: it.id, newValue },
-                                )
+                                console.log('📝 onChange descricao:', {
+                                  itemId: it.id,
+                                  newValue,
+                                })
+                              }}
+                              onBlur={async (e) => {
+                                const newValue = e.target.value
+                                console.log('📝 onBlur start descricao:', {
+                                  itemId: it.id,
+                                  newValue,
+                                  originalDescricao: it.descricao,
+                                })
+
+                                // Skip if no change
+                                if (newValue === it.descricao) {
+                                  console.log(
+                                    '📝 No change detected, skipping update',
+                                  )
+                                  return
+                                }
 
                                 try {
+                                  console.log(
+                                    '📝 Updating descricao in database...',
+                                  )
+
                                   // Update the items_base table
                                   const { error } = await supabase
                                     .from('items_base')
                                     .update({ descricao: newValue })
                                     .eq('id', it.id)
 
-                                  if (!error) {
+                                  if (error) {
+                                    console.error(
+                                      '❌ Failed to update descricao:',
+                                      error,
+                                    )
+                                    alert(
+                                      `Erro ao atualizar descrição: ${error.message}`,
+                                    )
+                                  } else {
+                                    console.log(
+                                      '✅ Successfully updated descricao',
+                                    )
+
                                     // Update global state
                                     setAllItems((prev) =>
                                       prev.map((item) =>
@@ -4137,16 +4228,14 @@ function JobDrawerContent({
                                         '✅ Successfully synced description to logistics entries',
                                       )
                                     }
-                                  } else {
-                                    console.error(
-                                      '❌ Failed to update item description:',
-                                      error,
-                                    )
                                   }
-                                } catch (error) {
+                                } catch (error: any) {
                                   console.error(
-                                    '❌ Error updating item description:',
+                                    '❌ Exception updating descricao:',
                                     error,
+                                  )
+                                  alert(
+                                    `Erro ao atualizar descrição: ${error?.message || error}`,
                                   )
                                 }
                               }}
@@ -4155,20 +4244,68 @@ function JobDrawerContent({
                           </TableCell>
                           <TableCell>
                             <Input
-                              value={it.codigo || ''}
-                              onChange={async (e) => {
+                              defaultValue={it.codigo || ''}
+                              onChange={(e) => {
+                                const newValue = e.target.value
+                                console.log('🔤 onChange codigo:', {
+                                  itemId: it.id,
+                                  newValue,
+                                })
+                              }}
+                              onBlur={async (e) => {
                                 const newValue = e.target.value || null
-                                const { error } = await supabase
-                                  .from('items_base')
-                                  .update({ codigo: newValue })
-                                  .eq('id', it.id)
-                                if (!error) {
-                                  setAllItems((prev) =>
-                                    prev.map((item) =>
-                                      item.id === it.id
-                                        ? { ...item, codigo: newValue }
-                                        : item,
-                                    ),
+                                console.log('🔤 onBlur start codigo:', {
+                                  itemId: it.id,
+                                  newValue,
+                                  originalCodigo: it.codigo,
+                                })
+
+                                // Skip if no change
+                                if (newValue === it.codigo) {
+                                  console.log(
+                                    '🔤 No change detected, skipping update',
+                                  )
+                                  return
+                                }
+
+                                try {
+                                  console.log(
+                                    '🔤 Updating codigo in database...',
+                                  )
+
+                                  const { error } = await supabase
+                                    .from('items_base')
+                                    .update({ codigo: newValue })
+                                    .eq('id', it.id)
+
+                                  if (error) {
+                                    console.error(
+                                      '❌ Failed to update codigo:',
+                                      error,
+                                    )
+                                    alert(
+                                      `Erro ao atualizar código: ${error.message}`,
+                                    )
+                                  } else {
+                                    console.log(
+                                      '✅ Successfully updated codigo',
+                                    )
+
+                                    setAllItems((prev) =>
+                                      prev.map((item) =>
+                                        item.id === it.id
+                                          ? { ...item, codigo: newValue }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                } catch (error: any) {
+                                  console.error(
+                                    '❌ Exception updating codigo:',
+                                    error,
+                                  )
+                                  alert(
+                                    `Erro ao atualizar código: ${error?.message || error}`,
                                   )
                                 }
                               }}
@@ -4178,95 +4315,117 @@ function JobDrawerContent({
                           <TableCell className="text-right">
                             <Input
                               type="text"
-                              value={it.quantidade ?? ''}
+                              defaultValue={it.quantidade ?? ''}
                               onChange={(e) => {
+                                // Just log for now, don't update state during typing
                                 const value = e.target.value
-                                const numValue =
-                                  value === '' ? null : Number(value)
-                                // Update global state
-                                setAllItems((prevItems) =>
-                                  prevItems.map((item) =>
-                                    item.id === it.id
-                                      ? { ...item, quantidade: numValue }
-                                      : item,
-                                  ),
-                                )
+                                console.log('🔢 onChange:', {
+                                  value,
+                                  itemId: it.id,
+                                })
                               }}
                               onBlur={async (e) => {
-                                const newQuantity =
-                                  e.target.value === ''
-                                    ? null
-                                    : Number(e.target.value)
-                                const originalQuantity = it.quantidade // Store original value for potential revert
+                                const value = e.target.value.trim()
+                                const numValue =
+                                  value === '' ? null : Number(value)
+                                const originalValue = it.quantidade
 
-                                console.log(
-                                  '🔢 Updating item quantity in items_base:',
-                                  {
-                                    itemId: it.id,
-                                    originalQuantity,
-                                    newQuantity,
-                                    tableName: 'items_base',
-                                  },
-                                )
+                                console.log('🔢 onBlur start:', {
+                                  value,
+                                  numValue,
+                                  itemId: it.id,
+                                  originalQuantidade: originalValue,
+                                })
+
+                                // Skip if no change
+                                if (numValue === originalValue) {
+                                  console.log(
+                                    '🔢 No change detected, skipping update',
+                                  )
+                                  return
+                                }
 
                                 try {
+                                  console.log(
+                                    '🔢 Updating quantidade in database...',
+                                    {
+                                      itemId: it.id,
+                                      oldQuantidade: originalValue,
+                                      newQuantidade: numValue,
+                                    },
+                                  )
+
                                   const { error } = await supabase
                                     .from('items_base')
-                                    .update({
-                                      quantidade: newQuantity,
-                                    })
+                                    .update({ quantidade: numValue })
                                     .eq('id', it.id)
 
                                   if (error) {
                                     console.error(
-                                      '❌ Failed to update items_base.quantidade:',
+                                      '❌ Failed to update quantidade:',
                                       error,
                                     )
-                                    console.error('❌ Error details:', {
-                                      message: error.message,
-                                      code: error.code,
-                                      details: error.details,
-                                    })
                                     alert(
                                       `Erro ao atualizar quantidade: ${error.message}`,
                                     )
 
-                                    // Revert the local state if database update failed
+                                    // Revert to original value on error
                                     setAllItems((prevItems) =>
                                       prevItems.map((item) =>
                                         item.id === it.id
                                           ? {
                                               ...item,
-                                              quantidade: originalQuantity,
-                                            } // Use stored original value
+                                              quantidade: originalValue,
+                                            }
                                           : item,
                                       ),
                                     )
                                   } else {
                                     console.log(
-                                      '✅ Successfully updated items_base.quantidade from',
-                                      originalQuantity,
-                                      'to',
-                                      newQuantity,
+                                      '✅ Successfully updated quantidade',
                                     )
+
+                                    // Update parent state
+                                    setAllItems((prevItems) =>
+                                      prevItems.map((item) =>
+                                        item.id === it.id
+                                          ? { ...item, quantidade: numValue }
+                                          : item,
+                                      ),
+                                    )
+
+                                    // Sync to logistics entries
+                                    const { error: logisticsError } =
+                                      await supabase
+                                        .from('logistica_entregas')
+                                        .update({ quantidade: numValue })
+                                        .eq('item_id', it.id)
+
+                                    if (logisticsError) {
+                                      console.error(
+                                        '❌ Failed to sync quantidade to logistics:',
+                                        logisticsError,
+                                      )
+                                    } else {
+                                      console.log(
+                                        '✅ Successfully synced quantidade to logistics entries',
+                                      )
+                                    }
                                   }
                                 } catch (error: any) {
                                   console.error(
-                                    '❌ Exception updating item quantity:',
+                                    '❌ Exception updating quantidade:',
                                     error,
                                   )
                                   alert(
                                     `Erro ao atualizar quantidade: ${error?.message || error}`,
                                   )
 
-                                  // Revert on exception as well
+                                  // Revert to original value on exception
                                   setAllItems((prevItems) =>
                                     prevItems.map((item) =>
                                       item.id === it.id
-                                        ? {
-                                            ...item,
-                                            quantidade: originalQuantity,
-                                          }
+                                        ? { ...item, quantidade: originalValue }
                                         : item,
                                     ),
                                   )
@@ -4507,58 +4666,48 @@ function JobDrawerContent({
                   variant="secondary"
                   onClick={async () => {
                     console.log('📊 Starting quantity copy process...')
+                    console.log('📊 Current job ID:', job.id)
                     console.log(
                       '📊 Current logistics rows:',
                       logisticaRows.length,
                     )
+                    console.log('📊 Current job items:', jobItems.length)
 
-                    // Copy original item quantities to logistica_entregas
                     if (logisticaRows.length === 0) {
                       console.log('❌ No logistics items to copy quantities to')
                       alert('Não há itens na tabela de logística.')
                       return
                     }
 
+                    if (jobItems.length === 0) {
+                      console.log(
+                        '❌ No job items found to copy quantities from',
+                      )
+                      alert(
+                        'Não há itens base encontrados para esta folha de obra.',
+                      )
+                      return
+                    }
+
                     const confirmed = confirm(
-                      'Copiar quantidades originais dos itens para a tabela de logística? Isto irá substituir as quantidades existentes.',
+                      'Copiar quantidades originais dos itens para a tabela de logística? Isto irá substituir as quantidades existentes na logística.',
                     )
                     if (!confirmed) return
 
                     try {
+                      // Use the jobItems that are already loaded instead of fetching again
                       console.log(
-                        '📊 Fetching original quantities from items_base for job:',
-                        job.id,
+                        '📊 Using loaded job items:',
+                        jobItems.map((item) => ({
+                          id: item.id,
+                          descricao: item.descricao,
+                          quantidade: item.quantidade,
+                        })),
                       )
 
-                      // Get original quantities from items_base for all items in this FO
-                      const { data: itemsData, error: itemsError } =
-                        await supabase
-                          .from('items_base')
-                          .select('id, quantidade')
-                          .eq('folha_obra_id', job.id)
-
-                      if (itemsError) {
-                        console.error('❌ Error fetching items:', itemsError)
-                        alert(
-                          `Erro ao buscar quantidades dos itens: ${itemsError.message}`,
-                        )
-                        return
-                      }
-
-                      if (!itemsData || itemsData.length === 0) {
-                        console.log('❌ No items found for this job')
-                        alert('Nenhum item encontrado para esta folha de obra.')
-                        return
-                      }
-
-                      console.log('📊 Found items with quantities:', itemsData)
-
-                      // Create a map of item_id -> quantidade
+                      // Create a map of item_id -> quantidade from jobItems
                       const quantityMap = new Map(
-                        itemsData.map((item: any) => [
-                          item.id,
-                          item.quantidade,
-                        ]),
+                        jobItems.map((item) => [item.id, item.quantidade]),
                       )
 
                       console.log(
@@ -4566,78 +4715,161 @@ function JobDrawerContent({
                         Object.fromEntries(quantityMap),
                       )
 
-                      // Update all logistica_entregas records with original quantities
-                      const rowsToUpdate = logisticaRows.filter(
-                        (row) => row.item_id && quantityMap.has(row.item_id),
-                      )
+                      // Filter logistics rows that belong to items in this job
+                      const rowsToUpdate = logisticaRows.filter((row) => {
+                        const hasItemId =
+                          row.item_id && quantityMap.has(row.item_id)
+                        const hasLogisticsId = row.id // Must have logistics ID to update
+                        console.log(`📊 Checking row:`, {
+                          logisticsId: row.id,
+                          itemId: row.item_id,
+                          hasItemId,
+                          hasLogisticsId,
+                          currentQuantity: row.quantidade,
+                          newQuantity: quantityMap.get(row.item_id),
+                        })
+                        return hasItemId && hasLogisticsId
+                      })
 
                       console.log(
                         '📊 Logistics rows to update:',
                         rowsToUpdate.length,
                       )
-                      console.log(
-                        '📊 Rows details:',
-                        rowsToUpdate.map((row) => ({
-                          id: row.id,
-                          item_id: row.item_id,
-                          currentQuantity: row.quantidade,
-                          newQuantity: quantityMap.get(row.item_id),
-                        })),
-                      )
 
                       if (rowsToUpdate.length === 0) {
-                        console.log('❌ No matching logistics rows to update')
+                        console.log(
+                          '❌ No matching logistics rows found to update',
+                        )
+                        console.log('📊 Debug info:')
+                        console.log(
+                          '- Job items IDs:',
+                          jobItems.map((i) => i.id),
+                        )
+                        console.log(
+                          '- Logistics rows item_ids:',
+                          logisticaRows.map((r) => r.item_id),
+                        )
+                        console.log(
+                          '- Logistics rows with IDs:',
+                          logisticaRows
+                            .filter((r) => r.id)
+                            .map((r) => ({ id: r.id, item_id: r.item_id })),
+                        )
+
                         alert(
-                          'Nenhuma linha de logística corresponde aos itens desta folha de obra.',
+                          'Nenhuma linha de logística corresponde aos itens desta folha de obra. Verifique se os itens têm entradas de logística criadas.',
                         )
                         return
                       }
 
-                      const updatePromises = rowsToUpdate.map((row, index) => {
-                        const originalQuantity = quantityMap.get(row.item_id)
-                        console.log(
-                          `📊 Updating row ${index + 1}/${rowsToUpdate.length}:`,
-                          {
-                            logisticsId: row.id,
-                            itemId: row.item_id,
-                            newQuantity: originalQuantity,
-                          },
-                        )
+                      // Update each logistics row with the corresponding item quantity
+                      const updatePromises = rowsToUpdate.map(
+                        async (row, index) => {
+                          const originalQuantity = quantityMap.get(row.item_id)
+                          console.log(
+                            `📊 Updating row ${index + 1}/${rowsToUpdate.length}:`,
+                            {
+                              logisticsId: row.id,
+                              itemId: row.item_id,
+                              itemDescription: jobItems.find(
+                                (i) => i.id === row.item_id,
+                              )?.descricao,
+                              currentQuantity: row.quantidade,
+                              newQuantity: originalQuantity,
+                            },
+                          )
 
-                        return supabase
-                          .from('logistica_entregas')
-                          .update({ quantidade: originalQuantity })
-                          .eq('id', row.id)
-                      })
+                          try {
+                            const { error } = await supabase
+                              .from('logistica_entregas')
+                              .update({ quantidade: originalQuantity })
+                              .eq('id', row.id)
 
+                            if (error) {
+                              console.error(
+                                `❌ Failed to update row ${row.id}:`,
+                                error,
+                              )
+                              return { success: false, error, rowId: row.id }
+                            }
+
+                            console.log(`✅ Successfully updated row ${row.id}`)
+                            return { success: true, rowId: row.id }
+                          } catch (error) {
+                            console.error(
+                              `❌ Exception updating row ${row.id}:`,
+                              error,
+                            )
+                            return { success: false, error, rowId: row.id }
+                          }
+                        },
+                      )
+
+                      console.log('📊 Executing all updates...')
                       const results = await Promise.all(updatePromises)
 
-                      // Check for any errors in the update results
-                      const errors = results.filter((result) => result.error)
-                      if (errors.length > 0) {
-                        console.error('❌ Some updates failed:', errors)
+                      // Check results
+                      const successful = results.filter((r) => r.success)
+                      const failed = results.filter((r) => !r.success)
+
+                      console.log(
+                        `📊 Update results: ${successful.length} successful, ${failed.length} failed`,
+                      )
+
+                      if (failed.length > 0) {
+                        console.error('❌ Some updates failed:', failed)
                         alert(
-                          `Alguns updates falharam: ${errors.length}/${results.length}`,
+                          `Alguns updates falharam: ${failed.length}/${results.length}. Verifique o console para mais detalhes.`,
                         )
-                        return
+                        // Don't return here, still refresh to show partial updates
                       }
 
-                      console.log('✅ All quantity updates successful')
+                      // Update local state to reflect the changes immediately
+                      setLogisticaRows((prevRows) =>
+                        prevRows.map((row) => {
+                          const newQuantity = quantityMap.get(row.item_id)
+                          const wasUpdated = rowsToUpdate.some(
+                            (r) => r.id === row.id,
+                          )
 
-                      // Refresh logistica data to show the updates
-                      console.log('🔄 Refreshing logistics data...')
+                          if (wasUpdated && newQuantity !== undefined) {
+                            return { ...row, quantidade: newQuantity }
+                          }
+                          return row
+                        }),
+                      )
+
+                      console.log('✅ Local state updated')
+
+                      // Optionally refresh logistics data to ensure consistency
+                      console.log(
+                        '🔄 Refreshing logistics data to ensure consistency...',
+                      )
                       await fetchLogisticaRows()
 
                       console.log(
                         '✅ Quantity copy process completed successfully',
                       )
-                      alert('Quantidades copiadas com sucesso!')
+
+                      if (failed.length === 0) {
+                        alert(
+                          `Quantidades copiadas com sucesso! ${successful.length} registros atualizados.`,
+                        )
+                      } else {
+                        alert(
+                          `Processo concluído com ${successful.length} sucessos e ${failed.length} falhas. Verifique o console para detalhes.`,
+                        )
+                      }
                     } catch (error: any) {
-                      console.error('❌ Error copying quantities:', error)
+                      console.error(
+                        '❌ Error in copy quantities process:',
+                        error,
+                      )
                       console.error('❌ Error details:', {
                         message: error?.message,
                         code: error?.code,
                         details: error?.details,
+                        stack: error?.stack,
                       })
                       alert(
                         `Erro ao copiar quantidades: ${error?.message || error}`,
@@ -4679,6 +4911,7 @@ function JobDrawerContent({
                       transportadora: sourceRow.transportadora,
                       id_local_recolha: sourceRow.id_local_recolha,
                       id_local_entrega: sourceRow.id_local_entrega,
+                      data_saida: sourceRow.data_saida, // Add data_saida field
                     }
 
                     // Update all other rows (excluding the source row)
