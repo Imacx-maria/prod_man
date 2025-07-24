@@ -5,6 +5,8 @@ import { createBrowserClient } from '@/utils/supabase'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
+import Combobox from '@/components/ui/Combobox'
 import {
   Table,
   TableBody,
@@ -29,13 +31,31 @@ import {
 } from '@/components/ui/tooltip'
 import { Plus, Trash2, X, Loader2, Edit, RotateCw } from 'lucide-react'
 import PermissionGuard from '@/components/PermissionGuard'
-import { useDebounce } from '@/hooks/useDebounce'
+// Machine types for combobox
+const MACHINE_TYPES = [
+  { value: 'Impressao', label: 'Impressão' },
+  { value: 'Corte', label: 'Corte' },
+  { value: 'Acabamento', label: 'Acabamento' },
+  { value: 'Outros', label: 'Outros' },
+]
+
+// Value debounce hook
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+  useEffect(() => {
+    const handler = setTimeout(() => setDebouncedValue(value), delay)
+    return () => clearTimeout(handler)
+  }, [value, delay])
+  return debouncedValue
+}
 
 interface Maquina {
   id: string
-  maquina: string | null
+  nome_maquina: string
+  tipo: string
+  ativa: boolean
   valor_m2: number | null
-  integer_id: number
+  valor_m2_custo: number | null
 }
 
 export default function MaquinasPage() {
@@ -46,8 +66,10 @@ export default function MaquinasPage() {
   // Inline editing state
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editData, setEditData] = useState({
-    maquina: '',
+    nome_maquina: '',
     valor_m2: '',
+    tipo: '',
+    ativa: true,
   })
 
   // Debounced filter values for performance
@@ -67,7 +89,7 @@ export default function MaquinasPage() {
           'value:',
           filters.nameFilter,
         )
-        let query = supabase.from('maquinas').select('*')
+        let query = supabase.from('maquinas_operacao').select('*')
 
         // Apply filters at database level
         if (
@@ -75,20 +97,20 @@ export default function MaquinasPage() {
           typeof filters.nameFilter === 'string' &&
           filters.nameFilter.trim()
         ) {
-          query = query.ilike('maquina', `%${filters.nameFilter.trim()}%`)
+          query = query.ilike('nome_maquina', `%${filters.nameFilter.trim()}%`)
         }
 
-        const { data, error } = await query.order('maquina', {
+        const { data, error } = await query.order('nome_maquina', {
           ascending: true,
         })
 
-        console.log('Maquinas fetch result:', { data, error })
+        console.log('Maquinas operacao fetch result:', { data, error })
 
         if (error) {
-          console.error('Supabase error fetching maquinas:', error)
+          console.error('Supabase error fetching maquinas_operacao:', error)
           alert(`Error fetching maquinas: ${error.message}`)
         } else if (data) {
-          console.log('Successfully fetched maquinas:', data)
+          console.log('Successfully fetched maquinas_operacao:', data)
           setMaquinas(data)
         }
       } catch (error) {
@@ -153,7 +175,9 @@ export default function MaquinasPage() {
   const handleEdit = (maquina: Maquina) => {
     setEditingId(maquina.id)
     setEditData({
-      maquina: maquina.maquina || '',
+      nome_maquina: maquina.nome_maquina || '',
+      tipo: maquina.tipo || '',
+      ativa: maquina.ativa,
       valor_m2:
         maquina.valor_m2 !== null && maquina.valor_m2 !== undefined
           ? maquina.valor_m2.toString()
@@ -233,7 +257,7 @@ export default function MaquinasPage() {
                   <Button
                     variant="outline"
                     size="icon"
-                    onClick={fetchMaquinas}
+                    onClick={() => fetchMaquinas()}
                     aria-label="Atualizar"
                     className="h-10 w-10 rounded-none"
                   >
@@ -313,11 +337,14 @@ export default function MaquinasPage() {
             <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
               <TableHeader>
                 <TableRow>
-                  <TableHead className="border-border sticky top-0 z-10 w-[100px] border-b-2 bg-[var(--orange)] font-bold uppercase">
-                    ID
-                  </TableHead>
                   <TableHead className="border-border sticky top-0 z-10 min-w-[300px] border-b-2 bg-[var(--orange)] font-bold uppercase">
                     Nome da Máquina
+                  </TableHead>
+                  <TableHead className="border-border sticky top-0 z-10 w-[120px] border-b-2 bg-[var(--orange)] font-bold uppercase">
+                    Tipo
+                  </TableHead>
+                  <TableHead className="border-border sticky top-0 z-10 w-[80px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
+                    Ativa
                   </TableHead>
                   <TableHead className="border-border sticky top-0 z-10 w-[150px] border-b-2 bg-[var(--orange)] font-bold uppercase">
                     Valor/m²
@@ -331,7 +358,7 @@ export default function MaquinasPage() {
                 {loading ? (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={5}
                       className="h-40 text-center uppercase"
                     >
                       <Loader2 className="text-muted-foreground mx-auto h-8 w-8 animate-spin" />
@@ -340,7 +367,7 @@ export default function MaquinasPage() {
                 ) : filteredMaquinas.length === 0 && editingId !== 'new' ? (
                   <TableRow>
                     <TableCell
-                      colSpan={4}
+                      colSpan={5}
                       className="text-center text-gray-500 uppercase"
                     >
                       Nenhuma máquina encontrada.
@@ -427,17 +454,14 @@ export default function MaquinasPage() {
                     )}
                     {filteredMaquinas.map((maquina) => (
                       <TableRow key={maquina.id}>
-                        <TableCell className="uppercase">
-                          {maquina.integer_id}
-                        </TableCell>
                         <TableCell className="font-medium uppercase">
                           {editingId === maquina.id ? (
                             <Input
-                              value={editData.maquina}
+                              value={editData.nome_maquina}
                               onChange={(e) =>
                                 setEditData((prev) => ({
                                   ...prev,
-                                  maquina: e.target.value,
+                                  nome_maquina: e.target.value,
                                 }))
                               }
                               className="h-10 rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
@@ -446,7 +470,46 @@ export default function MaquinasPage() {
                               disabled={submitting}
                             />
                           ) : (
-                            maquina.maquina || '-'
+                            maquina.nome_maquina || '-'
+                          )}
+                        </TableCell>
+                        <TableCell className="uppercase">
+                          {editingId === maquina.id ? (
+                            <Combobox
+                              value={editData.tipo}
+                              onChange={(value) =>
+                                setEditData((prev) => ({
+                                  ...prev,
+                                  tipo: value,
+                                }))
+                              }
+                              options={MACHINE_TYPES}
+                              placeholder="Selecionar tipo"
+                              disabled={submitting}
+                              className="w-full"
+                              maxWidth="120px"
+                            />
+                          ) : (
+                            MACHINE_TYPES.find((t) => t.value === maquina.tipo)
+                              ?.label ||
+                            maquina.tipo ||
+                            '-'
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {editingId === maquina.id ? (
+                            <Checkbox
+                              checked={editData.ativa}
+                              onCheckedChange={(checked) =>
+                                setEditData((prev) => ({
+                                  ...prev,
+                                  ativa: checked === true,
+                                }))
+                              }
+                              disabled={submitting}
+                            />
+                          ) : (
+                            <Checkbox checked={maquina.ativa} disabled />
                           )}
                         </TableCell>
                         <TableCell className="text-right">

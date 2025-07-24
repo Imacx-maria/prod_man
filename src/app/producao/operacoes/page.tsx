@@ -9,7 +9,7 @@
  * - Both numero_fo and numero_orc cannot be null, 0, or "0000"
  */
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react'
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { format } from 'date-fns'
 import { pt } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
@@ -75,6 +75,10 @@ import ProductionAnalyticsCharts from '@/components/ProductionAnalyticsCharts'
 import LogisticaTableWithCreatable from '@/components/LogisticaTableWithCreatable'
 import { LogisticaRecord } from '@/types/logistica'
 import { useLogisticaData } from '@/utils/useLogisticaData'
+import {
+  fetchEnhancedAuditLogs,
+  resolveOperatorName,
+} from '@/utils/auditLogging'
 
 // Types
 interface ProductionItem {
@@ -193,6 +197,192 @@ export default function OperacoesPage() {
   )
 }
 
+// Helper function to get the authenticated user's profile ID
+const getAuthenticatedUserProfileId = async (supabase: any) => {
+  try {
+    // Get the currently authenticated user
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser()
+    if (authError || !user) {
+      throw new Error('No authenticated user found')
+    }
+
+    console.log('👤 Authenticated user (auth.users.id):', user.id)
+
+    // Find the profile in the profiles table
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, user_id, first_name, last_name')
+      .eq('user_id', user.id)
+      .single()
+
+    if (profileError || !profile) {
+      console.error('❌ Profile not found for authenticated user:', user.id)
+      throw new Error(`Profile not found for authenticated user ${user.id}`)
+    }
+
+    console.log(
+      '✅ Authenticated user profile:',
+      profile.first_name,
+      profile.last_name,
+      `(ID: ${profile.id})`,
+    )
+    return profile.id
+  } catch (error) {
+    console.error('❌ Error getting authenticated user profile:', error)
+    throw error
+  }
+}
+
+// 1. Log operation creation (INSERT)
+const logOperationCreation = async (
+  supabase: any,
+  operationId: string,
+  operationData: any,
+) => {
+  try {
+    console.log('📝 AUDIT: Logging operation creation:', operationId)
+
+    const changedByProfileId = await getAuthenticatedUserProfileId(supabase)
+
+    const auditData = {
+      operacao_id: operationId,
+      action_type: 'INSERT',
+      field_name: 'created',
+      operador_novo: operationData.operador_id || null,
+      quantidade_nova:
+        operationData.num_placas_print ||
+        operationData.num_placas_corte ||
+        null,
+      old_value: null,
+      new_value: 'Operation created',
+      changed_by: changedByProfileId,
+      operation_details: operationData,
+      notes: 'Operação criada',
+    }
+
+    const { error } = await supabase
+      .from('producao_operacoes_audit')
+      .insert(auditData)
+
+    if (error) {
+      console.error('❌ AUDIT: Failed to log operation creation:', error)
+    } else {
+      console.log('✅ AUDIT: Operation creation logged successfully')
+    }
+  } catch (error) {
+    console.error(
+      '❌ AUDIT: Unexpected error logging operation creation:',
+      error,
+    )
+  }
+}
+
+// 2. Log field updates (UPDATE)
+const logFieldUpdate = async (
+  supabase: any,
+  operationId: string,
+  fieldName: string,
+  oldValue: any,
+  newValue: any,
+) => {
+  try {
+    console.log(
+      `📝 AUDIT: Logging field update - ${fieldName}: "${oldValue}" → "${newValue}"`,
+    )
+
+    const changedByProfileId = await getAuthenticatedUserProfileId(supabase)
+
+    const oldValueStr =
+      oldValue !== null && oldValue !== undefined ? String(oldValue) : null
+    const newValueStr =
+      newValue !== null && newValue !== undefined ? String(newValue) : null
+
+    if (oldValueStr === newValueStr) {
+      console.log('📝 AUDIT: No change detected, skipping log')
+      return
+    }
+
+    const auditData: any = {
+      operacao_id: operationId,
+      action_type: 'UPDATE',
+      field_name: fieldName,
+      old_value: oldValueStr,
+      new_value: newValueStr,
+      changed_by: changedByProfileId,
+    }
+
+    if (fieldName === 'operador_id') {
+      auditData.operador_antigo = oldValue
+      auditData.operador_novo = newValue
+    } else if (
+      fieldName === 'num_placas_print' ||
+      fieldName === 'num_placas_corte'
+    ) {
+      auditData.quantidade_antiga = oldValue ? Number(oldValue) : null
+      auditData.quantidade_nova = newValue ? Number(newValue) : null
+    }
+
+    const { error } = await supabase
+      .from('producao_operacoes_audit')
+      .insert(auditData)
+
+    if (error) {
+      console.error('❌ AUDIT: Failed to log field update:', error)
+    } else {
+      console.log('✅ AUDIT: Field update logged successfully')
+    }
+  } catch (error) {
+    console.error('❌ AUDIT: Unexpected error logging field update:', error)
+  }
+}
+
+// 3. Log operation deletion (DELETE)
+const logOperationDeletion = async (
+  supabase: any,
+  operationId: string,
+  operationData: any,
+) => {
+  try {
+    console.log('📝 AUDIT: Logging operation deletion:', operationId)
+
+    const changedByProfileId = await getAuthenticatedUserProfileId(supabase)
+
+    const auditData = {
+      operacao_id: operationId,
+      action_type: 'DELETE',
+      field_name: 'deleted',
+      operador_antigo: operationData.operador_id || null,
+      quantidade_antiga:
+        operationData.num_placas_print ||
+        operationData.num_placas_corte ||
+        null,
+      old_value: `Operation ${operationData.no_interno || operationId} existed`,
+      new_value: 'Operation deleted',
+      changed_by: changedByProfileId,
+      operation_details: operationData,
+      notes: 'Operação eliminada',
+    }
+
+    const { error } = await supabase
+      .from('producao_operacoes_audit')
+      .insert(auditData)
+
+    if (error) {
+      console.error('❌ AUDIT: Failed to log operation deletion:', error)
+    } else {
+      console.log('✅ AUDIT: Operation deletion logged successfully')
+    }
+  } catch (error) {
+    console.error(
+      '❌ AUDIT: Unexpected error logging operation deletion:',
+      error,
+    )
+  }
+}
+
 function OperacoesPageContent() {
   const supabase = useMemo(() => createBrowserClient(), [])
 
@@ -200,11 +390,21 @@ function OperacoesPageContent() {
   const [items, setItems] = useState<ProductionItem[]>([])
   const [completedItems, setCompletedItems] = useState<ProductionItem[]>([])
   const [openItemId, setOpenItemId] = useState<string | null>(null)
+  const [currentTab, setCurrentTab] = useState<string>('operacoes')
   const [loading, setLoading] = useState(true)
   const [completedLoading, setCompletedLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [showDebug, setShowDebug] = useState(false)
+
+  // NEW: Audit logs state
+  const [auditLogs, setAuditLogs] = useState<any[]>([])
+  const [logsLoading, setLogsLoading] = useState(false)
+
+  // NEW: Audit logs filters
+  const [actionFilter, setActionFilter] = useState('all')
+  const [fieldFilter, setFieldFilter] = useState('all')
+  const [dateFilter, setDateFilter] = useState<Date | undefined>(undefined)
 
   // Filters
   const [foFilter, setFoFilter] = useState('')
@@ -405,14 +605,14 @@ function OperacoesPageContent() {
         return includeItem
       })
 
-      // Now filter out items that have completed production operations
+      // Now filter out items that have completed production operations (both Corte and Impressao_Flexiveis)
       const itemsWithoutCompleted = []
       for (const item of filteredItems) {
         const { data: operations, error: opError } = await supabase
           .from('producao_operacoes')
           .select('concluido')
           .eq('item_id', item.id)
-          .eq('Tipo_Op', 'Corte')
+          .in('Tipo_Op', ['Corte', 'Impressao_Flexiveis'])
 
         if (!opError && operations) {
           const hasCompletedOperation = operations.some(
@@ -528,12 +728,12 @@ function OperacoesPageContent() {
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3)
       const threeMonthsAgoStr = threeMonthsAgo.toISOString().split('T')[0]
 
-      // First get items with completed operations from last 3 months
+      // First get items with completed operations from last 3 months (both Corte and Impressao_Flexiveis)
       const { data: completedOperations, error: completedError } =
         await supabase
           .from('producao_operacoes')
           .select('item_id')
-          .eq('Tipo_Op', 'Corte')
+          .in('Tipo_Op', ['Corte', 'Impressao_Flexiveis'])
           .eq('concluido', true)
           .gte('data_conclusao', threeMonthsAgoStr)
 
@@ -622,6 +822,224 @@ function OperacoesPageContent() {
     }
   }, [supabase])
 
+  // 1. UPDATE: Enhanced fetchAuditLogs function with UUID resolution
+  const fetchAuditLogs = useCallback(async () => {
+    setLogsLoading(true)
+    setError(null)
+
+    try {
+      console.log('🔍 Fetching audit logs...')
+
+      // Get audit data
+      const { data: auditData, error } = await supabase
+        .from('producao_operacoes_audit')
+        .select(
+          `
+          id,
+          operacao_id,
+          action_type,
+          field_name,
+          operador_antigo,
+          operador_novo,
+          quantidade_antiga,
+          quantidade_nova,
+          old_value,
+          new_value,
+          operation_details,
+          notes,
+          changed_at,
+          changed_by,
+          producao_operacoes!operacao_id (
+            no_interno,
+            folha_obra_id,
+            item_id,
+            folhas_obras!folha_obra_id (
+              numero_fo
+            ),
+            items_base!item_id (
+              descricao
+            )
+          ),
+          profiles!changed_by (
+            first_name,
+            last_name
+          )
+        `,
+        )
+        .order('changed_at', { ascending: false })
+        .limit(200)
+
+      if (error) {
+        throw new Error(`Failed to fetch audit logs: ${error.message}`)
+      }
+
+      console.log('📋 Raw audit data:', auditData)
+
+      // Get all unique operator IDs that need names
+      const operatorIds = new Set<string>()
+
+      auditData?.forEach((log: any) => {
+        if (log.operador_antigo) operatorIds.add(log.operador_antigo)
+        if (log.operador_novo) operatorIds.add(log.operador_novo)
+
+        // Check if old_value/new_value are UUIDs (36 characters)
+        if (log.field_name === 'operador_id') {
+          if (log.old_value && log.old_value.length === 36)
+            operatorIds.add(log.old_value)
+          if (log.new_value && log.new_value.length === 36)
+            operatorIds.add(log.new_value)
+        }
+      })
+
+      console.log('👥 Operator IDs to resolve:', Array.from(operatorIds))
+
+      // Get operator names
+      let operatorNames = new Map<string, string>()
+      if (operatorIds.size > 0) {
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, first_name, last_name')
+          .in('id', Array.from(operatorIds))
+
+        console.log('📋 Profile data:', profiles)
+
+        if (!profilesError && profiles) {
+          profiles.forEach((profile: any) => {
+            operatorNames.set(
+              profile.id,
+              `${profile.first_name} ${profile.last_name}`,
+            )
+          })
+        }
+      }
+
+      console.log('🗺️ Operator names map:', Object.fromEntries(operatorNames))
+
+      // Enhance the logs
+      const enhancedLogs =
+        auditData?.map((log: any) => {
+          const enhanced = { ...log }
+
+          // Add resolved names for dedicated operator columns
+          if (log.operador_antigo) {
+            enhanced.operador_antigo_nome =
+              operatorNames.get(log.operador_antigo) ||
+              `Unknown (${log.operador_antigo.substring(0, 8)}...)`
+          }
+          if (log.operador_novo) {
+            enhanced.operador_novo_nome =
+              operatorNames.get(log.operador_novo) ||
+              `Unknown (${log.operador_novo.substring(0, 8)}...)`
+          }
+
+          // Handle old_value and new_value display
+          if (log.field_name === 'operador_id') {
+            // For operator changes, resolve UUIDs to names
+            enhanced.old_value_display =
+              log.old_value && log.old_value.length === 36
+                ? operatorNames.get(log.old_value) ||
+                  `Unknown (${log.old_value.substring(0, 8)}...)`
+                : log.old_value || '-'
+
+            enhanced.new_value_display =
+              log.new_value && log.new_value.length === 36
+                ? operatorNames.get(log.new_value) ||
+                  `Unknown (${log.new_value.substring(0, 8)}...)`
+                : log.new_value || '-'
+          } else {
+            // For other fields, show raw values
+            enhanced.old_value_display = log.old_value || '-'
+            enhanced.new_value_display = log.new_value || '-'
+          }
+
+          return enhanced
+        }) || []
+
+      console.log('✅ Enhanced logs:', enhancedLogs)
+      setAuditLogs(enhancedLogs)
+    } catch (error: any) {
+      console.error('❌ Error fetching audit logs:', error)
+      setError(`Failed to load audit logs: ${error.message}`)
+    } finally {
+      setLogsLoading(false)
+    }
+  }, [supabase])
+
+  // NEW: Export audit logs to CSV (simplified approach)
+  const exportAuditLogsToExcel = useCallback(() => {
+    if (auditLogs.length === 0) {
+      alert('Nenhum log disponível para exportar')
+      return
+    }
+
+    const dataToExport = auditLogs.map((log: any) => ({
+      Ação:
+        log.action_type === 'INSERT'
+          ? 'CRIADO'
+          : log.action_type === 'UPDATE'
+            ? 'ALTERADO'
+            : 'ELIMINADO',
+      Operação: log.producao_operacoes?.no_interno || 'N/A',
+      FO: log.producao_operacoes?.folhas_obras?.numero_fo || '-',
+      Item: log.producao_operacoes?.items_base?.descricao || '-',
+      Campo: (() => {
+        const fieldNameMap: { [key: string]: string } = {
+          operador_id: 'Operador',
+          num_placas_print: 'Placas Impressão',
+          num_placas_corte: 'Placas Corte',
+          material_id: 'Material',
+          maquina: 'Máquina',
+          data_operacao: 'Data',
+          notas: 'Notas',
+          notas_imp: 'Notas Impressão',
+          N_Pal: 'Palete',
+          QT_print: 'QT Print',
+          concluido: 'Concluído',
+        }
+        return fieldNameMap[log.field_name] || log.field_name || '-'
+      })(),
+      'Operador Antigo': log.operador_antigo_nome || '-',
+      'Operador Novo': log.operador_novo_nome || '-',
+      'Quantidade Antiga': log.quantidade_antiga || '-',
+      'Quantidade Nova': log.quantidade_nova || '-',
+      'Valor Antigo': log.old_value || '-',
+      'Valor Novo': log.new_value || '-',
+      'Alterado Por': log.profiles
+        ? `${log.profiles.first_name} ${log.profiles.last_name}`
+        : 'Sistema',
+      'Data/Hora': log.changed_at
+        ? format(new Date(log.changed_at), 'dd/MM/yyyy HH:mm:ss', {
+            locale: pt,
+          })
+        : '-',
+    }))
+
+    // Create CSV content
+    const headers = Object.keys(dataToExport[0]).join(',')
+    const csvContent = [
+      headers,
+      ...dataToExport.map((row) =>
+        Object.values(row)
+          .map((value) => `"${value}"`)
+          .join(','),
+      ),
+    ].join('\n')
+
+    // Download CSV file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const link = document.createElement('a')
+    const url = URL.createObjectURL(blob)
+    link.setAttribute('href', url)
+    link.setAttribute(
+      'download',
+      `audit_logs_${format(new Date(), 'yyyy-MM-dd_HH-mm-ss')}.csv`,
+    )
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }, [auditLogs])
+
   useEffect(() => {
     fetchData()
   }, [fetchData])
@@ -631,9 +1049,10 @@ function OperacoesPageContent() {
     const total = items.length
     const completed = completedItems.length
     const pending = total
+    const logs = auditLogs.length
 
-    return { total, completed, pending }
-  }, [items, completedItems])
+    return { total, completed, pending, logs }
+  }, [items, completedItems, auditLogs])
 
   // Filter items
   const filteredItems = useMemo(() => {
@@ -903,25 +1322,31 @@ function OperacoesPageContent() {
         defaultValue="operacoes"
         className="w-full"
         onValueChange={async (value) => {
+          setCurrentTab(value)
           if (value === 'concluidas' && completedItems.length === 0) {
             // Fetch completed data when switching to completed tab for the first time
             await fetchCompletedItems()
           }
+          if (value === 'logs' && auditLogs.length === 0) {
+            // Fetch audit logs when switching to logs tab for the first time
+            await fetchAuditLogs()
+          }
         }}
       >
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="operacoes">Operações ({stats.total})</TabsTrigger>
           <TabsTrigger value="concluidas">
             Operações Concluídas ({stats.completed})
           </TabsTrigger>
           <TabsTrigger value="analytics">Análises & Gráficos</TabsTrigger>
+          <TabsTrigger value="logs">Logs ({stats.logs})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="operacoes">
           {/* Main table */}
           <div className="bg-background border-border w-full rounded-none border-2">
             <div className="w-full rounded-none">
-              <Table className="w-full table-fixed border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+              <Table className="w-full border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
                 <TableHeader>
                   <TableRow>
                     <TableHead
@@ -1061,7 +1486,7 @@ function OperacoesPageContent() {
                   </span>
                 </div>
               ) : (
-                <Table className="w-full table-fixed border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+                <Table className="w-full border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="border-border sticky top-0 z-10 w-[120px] border-b-2 bg-[var(--orange)] text-black uppercase">
@@ -1156,6 +1581,338 @@ function OperacoesPageContent() {
             onRefresh={fetchData}
           />
         </TabsContent>
+
+        <TabsContent value="logs">
+          {/* Audit logs controls */}
+          <div className="mb-4 flex items-center justify-between">
+            <h3 className="text-lg font-semibold">Logs de Auditoria</h3>
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={fetchAuditLogs}
+              title="Atualizar logs"
+              disabled={logsLoading}
+              className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+            >
+              {logsLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCcw className="h-4 w-4" />
+              )}
+            </Button>
+          </div>
+
+          {/* Enhanced audit logs table */}
+          <div className="bg-background border-border w-full rounded-none border-2">
+            <div className="w-full rounded-none">
+              {logsLoading ? (
+                <div className="flex h-64 items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                  <span className="ml-2">Carregando logs...</span>
+                </div>
+              ) : (
+                <Table className="w-full border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="border-border sticky top-0 z-10 w-[120px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Ação
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[150px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Operação
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[120px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Campo
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[150px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Operador Antigo
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[150px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Operador Novo
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[100px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Qtd Antiga
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[100px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Qtd Nova
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[120px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Valor Antigo
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[120px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Valor Novo
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[120px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Alterado Por
+                      </TableHead>
+                      <TableHead className="border-border sticky top-0 z-10 w-[160px] border-b-2 bg-[var(--orange)] text-black uppercase">
+                        Data/Hora
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {auditLogs.map((log: any) => (
+                      <TableRow key={log.id} className="hover:bg-[var(--main)]">
+                        {/* Action Type */}
+                        <TableCell className="w-[120px]">
+                          <Badge
+                            variant={
+                              log.action_type === 'INSERT'
+                                ? 'default'
+                                : log.action_type === 'DELETE'
+                                  ? 'destructive'
+                                  : 'secondary'
+                            }
+                            className="rounded-none text-xs uppercase"
+                          >
+                            {log.action_type === 'INSERT' && '➕ CRIADO'}
+                            {log.action_type === 'UPDATE' && '✏️ ALTERADO'}
+                            {log.action_type === 'DELETE' && '🗑️ ELIMINADO'}
+                          </Badge>
+                        </TableCell>
+
+                        {/* Operation Info */}
+                        <TableCell className="w-[150px] font-mono text-sm">
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="block truncate">
+                                  {log.producao_operacoes?.no_interno || 'N/A'}
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <div className="space-y-1">
+                                  <div>ID: {log.operacao_id}</div>
+                                  {log.producao_operacoes?.folhas_obras
+                                    ?.numero_fo && (
+                                    <div>
+                                      FO:{' '}
+                                      {
+                                        log.producao_operacoes.folhas_obras
+                                          .numero_fo
+                                      }
+                                    </div>
+                                  )}
+                                  {log.producao_operacoes?.items_base
+                                    ?.descricao && (
+                                    <div>
+                                      Item:{' '}
+                                      {
+                                        log.producao_operacoes.items_base
+                                          .descricao
+                                      }
+                                    </div>
+                                  )}
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        </TableCell>
+
+                        {/* Field Name */}
+                        <TableCell className="w-[120px]">
+                          {log.field_name ? (
+                            (() => {
+                              const fieldNameMap: { [key: string]: string } = {
+                                operador_id: 'Operador',
+                                num_placas_print: 'Placas Impressão',
+                                num_placas_corte: 'Placas Corte',
+                                material_id: 'Material',
+                                maquina: 'Máquina',
+                                data_operacao: 'Data',
+                                notas: 'Notas',
+                                notas_imp: 'Notas Impressão',
+                                N_Pal: 'Palete',
+                                QT_print: 'QT Print',
+                                concluido: 'Concluído',
+                              }
+                              return (
+                                fieldNameMap[log.field_name] || log.field_name
+                              )
+                            })()
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+
+                        {/* Operador Antigo */}
+                        <TableCell className="w-[150px]">
+                          {log.operador_antigo_nome ? (
+                            <span
+                              className="block truncate"
+                              title={log.operador_antigo_nome}
+                            >
+                              {log.operador_antigo_nome}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+
+                        {/* Operador Novo */}
+                        <TableCell className="w-[150px]">
+                          {log.operador_novo_nome ? (
+                            <span
+                              className="block truncate"
+                              title={log.operador_novo_nome}
+                            >
+                              {log.operador_novo_nome}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+
+                        {/* Quantidade Antiga */}
+                        <TableCell className="w-[100px] text-right font-mono">
+                          {log.quantidade_antiga !== null &&
+                          log.quantidade_antiga !== undefined ? (
+                            <span className="font-bold">
+                              {log.quantidade_antiga}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+
+                        {/* Quantidade Nova */}
+                        <TableCell className="w-[100px] text-right font-mono">
+                          {log.quantidade_nova !== null &&
+                          log.quantidade_nova !== undefined ? (
+                            <span className="font-bold text-green-600">
+                              {log.quantidade_nova}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+
+                        {/* Valor Antigo */}
+                        <TableCell className="w-[120px]">
+                          {log.old_value_display ? (
+                            <span
+                              className="block truncate"
+                              title={log.old_value_display}
+                            >
+                              {log.old_value_display}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+
+                        {/* Valor Novo */}
+                        <TableCell className="w-[120px]">
+                          {log.new_value_display ? (
+                            <span
+                              className="block truncate font-medium text-green-600"
+                              title={log.new_value_display}
+                            >
+                              {log.new_value_display}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
+                        </TableCell>
+
+                        {/* Alterado Por */}
+                        <TableCell className="w-[120px]">
+                          {log.profiles
+                            ? `${log.profiles.first_name} ${log.profiles.last_name}`
+                            : log.changed_by
+                              ? `Utilizador ${log.changed_by.substring(0, 8)}...`
+                              : 'Sistema'}
+                        </TableCell>
+
+                        {/* Data/Hora */}
+                        <TableCell className="w-[160px] font-mono text-sm">
+                          {log.changed_at
+                            ? format(
+                                new Date(log.changed_at),
+                                'dd/MM/yyyy HH:mm:ss',
+                                {
+                                  locale: pt,
+                                },
+                              )
+                            : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    {auditLogs.length === 0 && !logsLoading && (
+                      <TableRow>
+                        <TableCell colSpan={11} className="py-8 text-center">
+                          Nenhum log de auditoria encontrado.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+          </div>
+
+          {/* Summary Statistics */}
+          <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-4">
+            <Card className="rounded-none border-2 p-4">
+              <h4 className="text-muted-foreground text-sm font-medium">
+                Total de Alterações
+              </h4>
+              <p className="text-2xl font-bold">{auditLogs.length}</p>
+            </Card>
+            <Card className="rounded-none border-2 p-4">
+              <h4 className="text-muted-foreground text-sm font-medium">
+                Operações Criadas
+              </h4>
+              <p className="text-2xl font-bold text-green-600">
+                {
+                  auditLogs.filter((log: any) => log.action_type === 'INSERT')
+                    .length
+                }
+              </p>
+            </Card>
+            <Card className="rounded-none border-2 p-4">
+              <h4 className="text-muted-foreground text-sm font-medium">
+                Campos Alterados
+              </h4>
+              <p className="text-2xl font-bold text-blue-600">
+                {
+                  auditLogs.filter((log: any) => log.action_type === 'UPDATE')
+                    .length
+                }
+              </p>
+            </Card>
+            <Card className="rounded-none border-2 p-4">
+              <h4 className="text-muted-foreground text-sm font-medium">
+                Operações Eliminadas
+              </h4>
+              <p className="text-2xl font-bold text-red-600">
+                {
+                  auditLogs.filter((log: any) => log.action_type === 'DELETE')
+                    .length
+                }
+              </p>
+            </Card>
+          </div>
+
+          {/* Export Option */}
+          <div className="mt-4 flex justify-end">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="default"
+                    size="icon"
+                    onClick={exportAuditLogsToExcel}
+                    disabled={auditLogs.length === 0}
+                    className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Exportar para CSV</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </TabsContent>
       </Tabs>
 
       {/* Drawer */}
@@ -1171,14 +1928,43 @@ function OperacoesPageContent() {
               Gestão de operações de impressão e corte
             </DrawerDescription>
           </DrawerHeader>
-          {openItemId && (
-            <ItemDrawerContent
-              itemId={openItemId}
-              items={items}
-              onClose={() => setOpenItemId(null)}
-              supabase={supabase}
-            />
-          )}
+          {openItemId &&
+            (() => {
+              // Dynamically determine which array contains the item
+              const findItemInArrays = () => {
+                // First check if item exists in the current tab's expected array
+                if (currentTab === 'concluidas') {
+                  const foundInCompleted = completedItems.find(
+                    (item) => item.id === openItemId,
+                  )
+                  if (foundInCompleted) return completedItems
+                  // If not found in completed, check main items (in case it just moved)
+                  return items
+                } else {
+                  const foundInMain = items.find(
+                    (item) => item.id === openItemId,
+                  )
+                  if (foundInMain) return items
+                  // If not found in main, check completed items (in case it just moved)
+                  return completedItems
+                }
+              }
+
+              return (
+                <ItemDrawerContent
+                  itemId={openItemId}
+                  items={findItemInArrays()}
+                  onClose={() => setOpenItemId(null)}
+                  supabase={supabase}
+                  onMainRefresh={async () => {
+                    await fetchData()
+                    if (completedItems.length > 0) {
+                      await fetchCompletedItems()
+                    }
+                  }}
+                />
+              )
+            })()}
         </DrawerContent>
       </Drawer>
     </div>
@@ -1191,6 +1977,7 @@ interface ItemDrawerProps {
   items: ProductionItem[]
   onClose: () => void
   supabase: any
+  onMainRefresh: () => Promise<void>
 }
 
 function ItemDrawerContent({
@@ -1198,6 +1985,7 @@ function ItemDrawerContent({
   items,
   onClose,
   supabase,
+  onMainRefresh,
 }: ItemDrawerProps) {
   const item = items.find((i) => i.id === itemId)
   const [operations, setOperations] = useState<ProductionOperation[]>([])
@@ -1208,10 +1996,17 @@ function ItemDrawerContent({
 
   // State to track totals from each table component
   const [totalQuantidadeImpressao, setTotalQuantidadeImpressao] = useState(0)
+  const [
+    totalQuantidadeImpressaoFlexiveis,
+    setTotalQuantidadeImpressaoFlexiveis,
+  ] = useState(0)
   const [totalQuantidadeCorte, setTotalQuantidadeCorte] = useState(0)
 
   // State for completed checkbox
   const [isItemCompleted, setIsItemCompleted] = useState(false)
+  const [isItemCompletedFlexiveis, setIsItemCompletedFlexiveis] =
+    useState(false)
+  const [hasTemCorteFlexiveis, setHasTemCorteFlexiveis] = useState(false)
 
   // Fetch operations and reference data
   const fetchOperations = useCallback(async () => {
@@ -1303,10 +2098,55 @@ function ItemDrawerContent({
         const hasCompleted = operations.some((op: any) => op.concluido === true)
         setIsItemCompleted(hasCompleted)
       }
+
+      // Check if any Impressão Flexíveis operations for this item are completed
+      const { data: operationsFlexiveis, error: errorFlexiveis } =
+        await supabase
+          .from('producao_operacoes')
+          .select('concluido, tem_corte')
+          .eq('item_id', item.id)
+          .eq('Tipo_Op', 'Impressao_Flexiveis')
+
+      console.log(
+        '🔍 Fetching Impressao_Flexiveis operations for item:',
+        item.id,
+      )
+      console.log(
+        '🔍 Impressao_Flexiveis operations found:',
+        operationsFlexiveis,
+      )
+
+      if (!errorFlexiveis && operationsFlexiveis) {
+        const hasCompletedFlexiveis = operationsFlexiveis.some(
+          (op: any) => op.concluido === true,
+        )
+        setIsItemCompletedFlexiveis(hasCompletedFlexiveis)
+        console.log(
+          '✅ Impressao_Flexiveis completed status:',
+          hasCompletedFlexiveis,
+        )
+
+        const hasTemCorte = operationsFlexiveis.some(
+          (op: any) => op.tem_corte === true,
+        )
+        setHasTemCorteFlexiveis(hasTemCorte)
+        console.log('✅ Impressao_Flexiveis tem_corte status:', hasTemCorte)
+      } else if (errorFlexiveis) {
+        console.error(
+          '❌ Error fetching Impressao_Flexiveis operations:',
+          errorFlexiveis,
+        )
+      }
     } catch (error) {
       console.error('Error fetching item completion status:', error)
     }
   }, [item, supabase])
+
+  // Combined function to refresh both operations and completion status
+  const fetchOperationsAndCompletion = useCallback(async () => {
+    await fetchOperations()
+    await fetchItemCompletion()
+  }, [fetchOperations, fetchItemCompletion])
 
   useEffect(() => {
     fetchReferenceData()
@@ -1316,9 +2156,12 @@ function ItemDrawerContent({
 
   if (!item) return null
 
-  // Both tabs show the same operations - they are independent entries
+  // All tabs show the same operations - they are independent entries
   const impressaoOperations = operations.filter(
     (op) => op.Tipo_Op === 'Impressao',
+  )
+  const impressaoFlexiveisOperations = operations.filter(
+    (op) => op.Tipo_Op === 'Impressao_Flexiveis',
   )
   const corteOperations = operations.filter((op) => op.Tipo_Op === 'Corte')
 
@@ -1355,6 +2198,9 @@ function ItemDrawerContent({
           <TabsTrigger value="impressao">
             Impressão ({totalQuantidadeImpressao})
           </TabsTrigger>
+          <TabsTrigger value="impressao_flexiveis">
+            Impressão Flexíveis ({totalQuantidadeImpressaoFlexiveis})
+          </TabsTrigger>
           <TabsTrigger value="corte">
             Corte ({totalQuantidadeCorte})
           </TabsTrigger>
@@ -1370,8 +2216,35 @@ function ItemDrawerContent({
             machines={machines}
             materials={materials}
             supabase={supabase}
-            onRefresh={fetchOperations}
+            onRefresh={fetchOperationsAndCompletion}
             onTotalChange={setTotalQuantidadeImpressao}
+            onMainRefresh={onMainRefresh}
+            onClose={onClose}
+          />
+        </TabsContent>
+
+        <TabsContent value="impressao_flexiveis">
+          <OperationsTable
+            operations={impressaoFlexiveisOperations}
+            type="impressao_flexiveis"
+            itemId={item.id}
+            item={item}
+            operators={operators}
+            machines={machines}
+            materials={materials}
+            supabase={supabase}
+            onRefresh={fetchOperationsAndCompletion}
+            onTotalChange={setTotalQuantidadeImpressaoFlexiveis}
+            isItemCompleted={isItemCompletedFlexiveis}
+            onCompletionChange={(completed) => {
+              setIsItemCompletedFlexiveis(completed)
+            }}
+            hasTemCorte={hasTemCorteFlexiveis}
+            onTemCorteChange={(hasTemCorte) => {
+              setHasTemCorteFlexiveis(hasTemCorte)
+            }}
+            onMainRefresh={onMainRefresh}
+            onClose={onClose}
           />
         </TabsContent>
 
@@ -1385,12 +2258,14 @@ function ItemDrawerContent({
             machines={machines}
             materials={materials}
             supabase={supabase}
-            onRefresh={fetchOperations}
+            onRefresh={fetchOperationsAndCompletion}
             onTotalChange={setTotalQuantidadeCorte}
             isItemCompleted={isItemCompleted}
             onCompletionChange={(completed) => {
               setIsItemCompleted(completed)
             }}
+            onMainRefresh={onMainRefresh}
+            onClose={onClose}
           />
         </TabsContent>
       </Tabs>
@@ -1401,7 +2276,7 @@ function ItemDrawerContent({
 // Operations table component
 interface OperationsTableProps {
   operations: ProductionOperation[]
-  type: 'impressao' | 'corte'
+  type: 'impressao' | 'impressao_flexiveis' | 'corte'
   itemId: string
   item: ProductionItem
   operators: any[]
@@ -1412,6 +2287,10 @@ interface OperationsTableProps {
   onTotalChange?: (total: number) => void
   isItemCompleted?: boolean
   onCompletionChange?: (completed: boolean) => void
+  hasTemCorte?: boolean
+  onTemCorteChange?: (hasTemCorte: boolean) => void
+  onMainRefresh?: () => Promise<void>
+  onClose: () => void
 }
 
 function OperationsTable({
@@ -1427,11 +2306,20 @@ function OperationsTable({
   onTotalChange,
   isItemCompleted,
   onCompletionChange,
+  hasTemCorte,
+  onTemCorteChange,
+  onMainRefresh,
+  onClose,
 }: OperationsTableProps) {
   const quantityField =
-    type === 'impressao' ? 'num_placas_print' : 'num_placas_corte'
-  const machineField = 'maquina' // Both impressao and corte use the same maquina field
-  const notesField = type === 'impressao' ? 'notas_imp' : 'notas' // Different notes fields
+    type === 'impressao' || type === 'impressao_flexiveis'
+      ? 'num_placas_print'
+      : 'num_placas_corte'
+  const machineField = 'maquina' // All operation types use the same maquina field
+  const notesField =
+    type === 'impressao' || type === 'impressao_flexiveis'
+      ? 'notas_imp'
+      : 'notas' // Different notes fields
 
   // Local state to track material selections for each operation
   const [materialSelections, setMaterialSelections] = useState<{
@@ -1442,18 +2330,34 @@ function OperationsTable({
     }
   }>({})
 
-  // Local state to track notes values for immediate feedback
-  const [notesValues, setNotesValues] = useState<{
-    [operationId: string]: string
+  // Local state to track quantity values for immediate feedback
+  const [quantityValues, setQuantityValues] = useState<{
+    [operationId: string]: number
+  }>({})
+
+  // Local state to track QT_print values for immediate feedback
+  const [qtPrintValues, setQtPrintValues] = useState<{
+    [operationId: string]: number
   }>({})
 
   // Loading state to prevent rapid updates
   const [isUpdating, setIsUpdating] = useState(false)
 
+  // Debounce timer refs for quantity updates
+  const quantityUpdateTimers = useRef<{
+    [operationId: string]: NodeJS.Timeout
+  }>({})
+  const qtPrintUpdateTimers = useRef<{ [operationId: string]: NodeJS.Timeout }>(
+    {},
+  )
+
   // NEW: Pending operations state for unsaved records
   const [pendingOperations, setPendingOperations] = useState<{
     [tempId: string]: Partial<ProductionOperation & { isPending: boolean }>
   }>({})
+
+  // Track active updates to prevent duplicate calls
+  const activeUpdatesRef = useRef<Set<string>>(new Set())
 
   // NEW: State for paletes data (only for Impressão tab)
   const [paletes, setPaletes] = useState<Palete[]>([])
@@ -1464,13 +2368,27 @@ function OperationsTable({
     [operationId: string]: string
   }>({})
 
+  // Helper function to determine if material dropdowns should be disabled
+  const isMaterialFromPalette = (operationId: string): boolean => {
+    const selectedPaletteId = paletteSelections[operationId]
+    if (!selectedPaletteId) return false
+
+    const selectedPalette = paletes.find((p) => p.id === selectedPaletteId)
+    return !!selectedPalette?.ref_cartao // If palette has ref_cartao, it defines the material
+  }
+
   // Combine pending and saved operations for display
   const displayOperations = useMemo(() => {
-    const saved = operations.filter(
-      (op) => op.Tipo_Op === (type === 'impressao' ? 'Impressao' : 'Corte'),
-    )
+    const getOperationType = () => {
+      if (type === 'impressao') return 'Impressao'
+      if (type === 'impressao_flexiveis') return 'Impressao_Flexiveis'
+      return 'Corte'
+    }
+
+    const operationType = getOperationType()
+    const saved = operations.filter((op) => op.Tipo_Op === operationType)
     const pending = Object.values(pendingOperations).filter(
-      (op) => op.Tipo_Op === (type === 'impressao' ? 'Impressao' : 'Corte'),
+      (op) => op.Tipo_Op === operationType,
     )
     return [...saved, ...(pending as ProductionOperation[])]
   }, [operations, pendingOperations, type])
@@ -1507,7 +2425,7 @@ function OperationsTable({
     fetchPaletes()
   }, [fetchPaletes])
 
-  // Initialize material selections and notes - simplified approach
+  // Initialize material selections and notes - optimized approach
   useEffect(() => {
     if (isUpdating) return // Skip if currently updating to prevent loops
 
@@ -1518,60 +2436,102 @@ function OperationsTable({
         cor?: string
       }
     } = {}
-    const newNotesValues: { [operationId: string]: string } = {}
     const newPaletteSelections: { [operationId: string]: string } = {}
+    const newQuantityValues: { [operationId: string]: number } = {}
+    const newQtPrintValues: { [operationId: string]: number } = {}
 
     displayOperations.forEach((operation) => {
+      // Only update if values have actually changed
+      const currentMaterialSelection = materialSelections[operation.id]
+      const currentPaletteSelection = paletteSelections[operation.id]
+
       // Initialize material selections
       if (operation.material_id && materials.length > 0) {
         const material = materials.find((m) => m.id === operation.material_id)
         if (material) {
-          newSelections[operation.id] = {
-            material: material.material,
-            caracteristica: material.carateristica,
-            cor: material.cor,
+          const newMaterialSelection = {
+            material: material.material?.toUpperCase(),
+            caracteristica: material.carateristica?.toUpperCase(),
+            cor: material.cor?.toUpperCase(),
           }
+          // Only update if different
+          if (
+            JSON.stringify(currentMaterialSelection) !==
+            JSON.stringify(newMaterialSelection)
+          ) {
+            newSelections[operation.id] = newMaterialSelection
+          } else {
+            newSelections[operation.id] = currentMaterialSelection || {}
+          }
+        } else {
+          // If material not found, keep current selection or empty
+          newSelections[operation.id] = currentMaterialSelection || {}
         }
       } else {
-        newSelections[operation.id] = {}
+        newSelections[operation.id] = currentMaterialSelection || {}
       }
 
       // Initialize palette selections from N_Pal field
       if (operation.N_Pal && paletes.length > 0) {
         const palette = paletes.find((p) => p.no_palete === operation.N_Pal)
-        if (palette) {
+        if (palette && palette.id !== currentPaletteSelection) {
           newPaletteSelections[operation.id] = palette.id
+        } else {
+          newPaletteSelections[operation.id] = currentPaletteSelection || ''
         }
+      } else {
+        newPaletteSelections[operation.id] = currentPaletteSelection || ''
       }
 
-      // Use the appropriate notes field based on operation type
-      const notesValue =
-        type === 'impressao' ? operation.notas_imp : (operation as any).notas
-      newNotesValues[operation.id] = notesValue || ''
+      // Initialize quantity values
+      const quantityField =
+        type === 'impressao' || type === 'impressao_flexiveis'
+          ? 'num_placas_print'
+          : 'num_placas_corte'
+      const currentQuantityValue = quantityValues[operation.id]
+      const dbQuantityValue = operation[quantityField] || 0
 
-      // Debug log to verify field connection
-      if (type === 'impressao') {
-        console.log(
-          `Operation ${operation.id} - notas_imp value:`,
-          operation.notas_imp,
-        )
+      // Only update if different
+      if (dbQuantityValue !== currentQuantityValue) {
+        newQuantityValues[operation.id] = dbQuantityValue
       } else {
-        console.log(
-          `Operation ${operation.id} - notas value:`,
-          (operation as any).notas,
-        )
+        newQuantityValues[operation.id] = currentQuantityValue || 0
+      }
+
+      // Initialize QT_print values (for corte operations)
+      const currentQtPrintValue = qtPrintValues[operation.id]
+      const dbQtPrintValue = operation.QT_print || 0
+
+      // Only update if different
+      if (dbQtPrintValue !== currentQtPrintValue) {
+        newQtPrintValues[operation.id] = dbQtPrintValue
+      } else {
+        newQtPrintValues[operation.id] = currentQtPrintValue || 0
       }
     })
 
-    setMaterialSelections(newSelections)
-    setNotesValues(newNotesValues)
-    setPaletteSelections(newPaletteSelections)
-  }, [displayOperations, materials, paletes, isUpdating, type])
+    // Only update state if there are actual changes
+    const hasChanges =
+      JSON.stringify(newSelections) !== JSON.stringify(materialSelections) ||
+      JSON.stringify(newPaletteSelections) !==
+        JSON.stringify(paletteSelections) ||
+      JSON.stringify(newQuantityValues) !== JSON.stringify(quantityValues) ||
+      JSON.stringify(newQtPrintValues) !== JSON.stringify(qtPrintValues)
+
+    if (hasChanges) {
+      setMaterialSelections(newSelections)
+      setPaletteSelections(newPaletteSelections)
+      setQuantityValues(newQuantityValues)
+      setQtPrintValues(newQtPrintValues)
+    }
+  }, [displayOperations, materials, paletes, type]) // Removed isUpdating from deps
 
   // Calculate and report total quantity including pending operations
   useEffect(() => {
     const quantityField =
-      type === 'impressao' ? 'num_placas_print' : 'num_placas_corte'
+      type === 'impressao' || type === 'impressao_flexiveis'
+        ? 'num_placas_print'
+        : 'num_placas_corte'
     const total = displayOperations.reduce(
       (sum, op) => sum + (op[quantityField] || 0),
       0,
@@ -1592,6 +2552,12 @@ function OperationsTable({
     const tempId = `temp_${Date.now()}`
 
     // Create pending operation (not saved to database)
+    const getOperationType = () => {
+      if (type === 'impressao') return 'Impressao'
+      if (type === 'impressao_flexiveis') return 'Impressao_Flexiveis'
+      return 'Corte'
+    }
+
     const pendingOp = {
       id: tempId,
       item_id: itemId,
@@ -1599,7 +2565,7 @@ function OperationsTable({
       no_interno: `${item.folhas_obras?.numero_fo || 'FO'}-${item.descricao?.substring(0, 10) || 'ITEM'}`,
       [quantityField]: 1,
       data_operacao: new Date().toISOString().split('T')[0],
-      Tipo_Op: type === 'impressao' ? 'Impressao' : 'Corte',
+      Tipo_Op: getOperationType(),
       isPending: true, // Flag to identify pending operations
     }
 
@@ -1610,7 +2576,7 @@ function OperationsTable({
     }))
   }
 
-  // NEW: Accept operation function (Save + Copy for Impressão)
+  // 2. UPDATE: Enhanced acceptOperation function with creation logging
   const acceptOperation = async (
     pendingOperation: ProductionOperation & { isPending?: boolean },
   ) => {
@@ -1640,49 +2606,46 @@ function OperationsTable({
 
       if (saveError) throw saveError
 
-      // 2. If this is an Impressão operation, automatically create corresponding Corte operation
-      if (type === 'impressao' && savedOperation) {
-        console.log('🔄 Creating Corte operation from Impressão:', {
-          pendingOperation_material_id: pendingOperation.material_id,
-          pendingOperation_num_placas_print: pendingOperation.num_placas_print,
-          pendingOperation_N_Pal: pendingOperation.N_Pal,
-          copying_to_QT_print: pendingOperation.num_placas_print,
-        })
+      // 2. LOG AUDIT: Operation creation
+      await logOperationCreation(supabase, savedOperation.id, operationData)
 
+      // 3. If this is an Impressão operation, automatically create corresponding Corte operation
+      if (type === 'impressao' && savedOperation) {
         const corteOperation = {
           item_id: pendingOperation.item_id,
           folha_obra_id: pendingOperation.folha_obra_id,
           no_interno: pendingOperation.no_interno,
-          material_id: pendingOperation.material_id, // Copy material
-          QT_print: pendingOperation.num_placas_print, // Copy quantity to QT_print field
-          // num_placas_corte: leave empty - don't copy quantity here
-          notas: pendingOperation.notas_imp, // Copy notes
-          N_Pal: pendingOperation.N_Pal, // Copy palette number
-          data_operacao: new Date().toISOString().split('T')[0], // Today's date
+          material_id: pendingOperation.material_id,
+          QT_print: pendingOperation.num_placas_print,
+          notas: pendingOperation.notas_imp,
+          N_Pal: pendingOperation.N_Pal,
+          data_operacao: new Date().toISOString().split('T')[0],
           Tipo_Op: 'Corte',
-          // operador_id and maquina left empty for cutting operator
         }
 
-        console.log('📋 Corte operation to be created:', corteOperation)
-
-        const { error: corteError } = await supabase
+        const { data: savedCorteOperation, error: corteError } = await supabase
           .from('producao_operacoes')
           .insert(corteOperation)
+          .select()
+          .single()
 
-        if (corteError) {
-          console.error('Error creating Corte operation:', corteError)
-          // Don't throw here - the Impressão operation was saved successfully
+        if (!corteError && savedCorteOperation) {
+          // LOG AUDIT: Corte operation creation (auto-created from Impressão)
+          await logOperationCreation(supabase, savedCorteOperation.id, {
+            ...corteOperation,
+            notes: 'Auto-criado a partir de operação de impressão',
+          })
         }
       }
 
-      // 3. Remove from pending operations
+      // 4. Remove from pending operations
       setPendingOperations((prev) => {
         const updated = { ...prev }
         delete updated[pendingOperation.id]
         return updated
       })
 
-      // 4. Refresh both tabs
+      // 5. Refresh both tabs
       onRefresh()
     } catch (error) {
       console.error('Error accepting operation:', error)
@@ -1699,6 +2662,21 @@ function OperationsTable({
       delete updated[tempId]
       return updated
     })
+  }
+
+  // NEW: Update pending operation function
+  const updatePendingOperation = (
+    tempId: string,
+    field: string,
+    value: any,
+  ) => {
+    setPendingOperations((prev) => ({
+      ...prev,
+      [tempId]: {
+        ...prev[tempId],
+        [field]: value,
+      },
+    }))
   }
 
   // NEW: Duplicate operation function
@@ -1747,61 +2725,11 @@ function OperationsTable({
       }))
     }
 
-    // Copy notes values if they exist
-    if (sourceOperation[notesField]) {
-      setNotesValues((prev) => ({
-        ...prev,
-        [tempId]: sourceOperation[notesField] || '',
-      }))
-    }
-
     // Copy palette selection if it exists
     if (sourceOperation.N_Pal) {
       setPaletteSelections((prev) => ({
         ...prev,
         [tempId]: sourceOperation.N_Pal || '',
-      }))
-    }
-  }
-
-  // NEW: Update pending operation function
-  const updatePendingOperation = (
-    tempId: string,
-    field: string,
-    value: any,
-  ) => {
-    console.log(`📝 Updating pending operation ${tempId}: ${field} = ${value}`)
-
-    setPendingOperations((prev) => {
-      const updated = {
-        ...prev,
-        [tempId]: {
-          ...prev[tempId],
-          [field]: value,
-        },
-      }
-
-      console.log(`📊 Updated pending operation:`, updated[tempId])
-      return updated
-    })
-
-    // Also update local state for material selections and notes
-    if (field === 'material_id') {
-      const material = materials.find((m) => m.id === value)
-      if (material) {
-        setMaterialSelections((prev) => ({
-          ...prev,
-          [tempId]: {
-            material: material.material,
-            caracteristica: material.carateristica,
-            cor: material.cor,
-          },
-        }))
-      }
-    } else if (field === notesField) {
-      setNotesValues((prev) => ({
-        ...prev,
-        [tempId]: value,
       }))
     }
   }
@@ -1883,200 +2811,142 @@ function OperationsTable({
     }
   }
 
+  // 3. UPDATE: Enhanced updateOperation function with field change logging
   const updateOperation = async (
     operationId: string,
     field: string,
     value: any,
   ) => {
-    console.log(
-      `🚀 updateOperation called: operationId=${operationId}, field=${field}, value="${value}", isUpdating=${isUpdating}`,
-    )
-
     // Check if this is a pending operation
     if (operationId.startsWith('temp_')) {
       updatePendingOperation(operationId, field, value)
       return
     }
 
-    if (isUpdating) {
-      console.log(`⏸️ Update blocked - already updating`)
-      return // Prevent multiple simultaneous updates
+    const operationKey = `${operationId}-${field}`
+    if (activeUpdatesRef.current.has(operationKey)) {
+      return
     }
 
     try {
-      console.log(`⏳ Setting isUpdating to true and starting update...`)
-      setIsUpdating(true)
+      activeUpdatesRef.current.add(operationKey)
 
-      // Get the current operation to compare values - needed for stock operations AND sync logic
-      let currentOperation = null
-      if (
-        field === 'material_id' ||
-        field === 'num_placas_corte' ||
-        field === 'num_placas_print' ||
-        field === 'notas_imp' ||
-        field === 'N_Pal'
-      ) {
-        const { data } = await supabase
-          .from('producao_operacoes')
-          .select(
-            'id, material_id, num_placas_corte, num_placas_print, Tipo_Op, item_id, folha_obra_id, no_interno, N_Pal',
-          )
-          .eq('id', operationId)
-          .single()
-        currentOperation = data
+      // Get the current operation to compare values
+      const { data: currentOperation } = await supabase
+        .from('producao_operacoes')
+        .select('*')
+        .eq('id', operationId)
+        .single()
+
+      if (!currentOperation) {
+        console.error('Operation not found for update')
+        return
       }
 
-      // Debug log for notes fields
-      if (field === 'notas_imp' || field === 'notas') {
-        console.log(
-          `🔄 Updating operation ${operationId} - field: ${field}, value: "${value}"`,
-        )
+      // Store old value for audit logging
+      const oldValue = currentOperation[field]
 
-        // Test if we can read the current operation first
-        const { data: testRead, error: testReadError } = await supabase
-          .from('producao_operacoes')
-          .select('id, notas, notas_imp')
-          .eq('id', operationId)
-          .single()
-        console.log(`🔍 Test read result:`, { testRead, testReadError })
+      // Skip if no change
+      if (oldValue === value) {
+        console.log('No change detected, skipping update')
+        return
       }
 
+      // Update the database
       const { data, error } = await supabase
         .from('producao_operacoes')
         .update({ [field]: value })
         .eq('id', operationId)
         .select()
 
-      // Debug log for notes update results
-      if (field === 'notas_imp' || field === 'notas') {
-        console.log(`✅ Update result for ${field}:`, { data, error })
-        if (data && data.length > 0) {
-          console.log(`📝 Updated operation data:`, data[0])
-        }
-      }
-
       if (error) {
         console.error(
           `Error updating operation ${operationId} field ${field}:`,
-          error?.message || error,
+          error,
         )
-        alert(
-          `Erro ao atualizar ${field}: ${error?.message || JSON.stringify(error)}`,
-        )
-      } else {
-        // Handle automatic stock deduction for cutting operations
-        if (currentOperation && currentOperation.Tipo_Op === 'Corte') {
-          if (field === 'material_id') {
-            // Material changed - revert old material stock and deduct from new material
-            const oldMaterialId = currentOperation.material_id
-            const newMaterialId = value
-            const quantity = currentOperation.num_placas_corte || 0
-
-            if (oldMaterialId && quantity > 0) {
-              // Add back to old material
-              await updateStockOnOperation(oldMaterialId, quantity, 0)
-            }
-            if (newMaterialId && quantity > 0) {
-              // Deduct from new material
-              await updateStockOnOperation(newMaterialId, 0, quantity)
-            }
-          } else if (field === 'num_placas_corte') {
-            // Quantity changed - update stock accordingly
-            const materialId = currentOperation.material_id
-            const oldQuantity = currentOperation.num_placas_corte || 0
-            const newQuantity = value || 0
-
-            if (materialId) {
-              await updateStockOnOperation(materialId, oldQuantity, newQuantity)
-            }
-          }
-        }
-
-        // NEW: Auto-sync Impressão changes to corresponding Corte operation
-        if (currentOperation && currentOperation.Tipo_Op === 'Impressao') {
-          if (
-            field === 'material_id' ||
-            field === 'num_placas_print' ||
-            field === 'notas_imp' ||
-            field === 'N_Pal'
-          ) {
-            console.log(`🔄 Impressão operation updated, syncing to Corte...`)
-
-            // Find corresponding Corte operation
-            const { data: corteOperations } = await supabase
-              .from('producao_operacoes')
-              .select('id')
-              .eq('item_id', currentOperation.item_id || itemId)
-              .eq(
-                'folha_obra_id',
-                currentOperation.folha_obra_id || item.folha_obra_id,
-              )
-              .eq(
-                'no_interno',
-                currentOperation.no_interno ||
-                  `${item.folhas_obras?.numero_fo || 'FO'}-${item.descricao?.substring(0, 10) || 'ITEM'}`,
-              )
-              .eq('Tipo_Op', 'Corte')
-
-            if (corteOperations && corteOperations.length > 0) {
-              const corteId = corteOperations[0].id
-              console.log(`✅ Found corresponding Corte operation: ${corteId}`)
-
-              // Prepare update data for Corte operation
-              const corteUpdateData: any = {}
-
-              if (field === 'material_id') {
-                corteUpdateData.material_id = value
-                console.log(`📦 Syncing material_id: ${value}`)
-              }
-
-              if (field === 'num_placas_print') {
-                corteUpdateData.QT_print = value
-                console.log(`🔢 Syncing quantity to QT_print: ${value}`)
-              }
-
-              if (field === 'notas_imp') {
-                corteUpdateData.notas = value
-                console.log(`📝 Syncing notes: ${value}`)
-              }
-
-              if (field === 'N_Pal') {
-                corteUpdateData.N_Pal = value
-                console.log(`🎨 Syncing palette: ${value}`)
-              }
-
-              // Update the Corte operation
-              const { error: corteError } = await supabase
-                .from('producao_operacoes')
-                .update(corteUpdateData)
-                .eq('id', corteId)
-
-              if (corteError) {
-                console.error('Error syncing to Corte operation:', corteError)
-              } else {
-                console.log(`✅ Successfully synced changes to Corte operation`)
-              }
-            } else {
-              console.log(`ℹ️ No corresponding Corte operation found to sync`)
-            }
-          }
-        }
-
-        // Update local state immediately for notes fields
-        if (field === 'notas' || field === 'notas_imp') {
-          setNotesValues((prev) => ({
-            ...prev,
-            [operationId]: value,
-          }))
-        }
-
-        onRefresh()
+        alert(`Erro ao atualizar ${field}: ${error.message}`)
+        return
       }
+
+      // LOG AUDIT: Field change
+      await logFieldUpdate(supabase, operationId, field, oldValue, value)
+
+      // Handle stock operations and syncing (existing logic)
+      if (currentOperation && currentOperation.Tipo_Op === 'Corte') {
+        if (field === 'material_id') {
+          const oldMaterialId = currentOperation.material_id
+          const newMaterialId = value
+          const quantity = currentOperation.num_placas_corte || 0
+
+          if (oldMaterialId && quantity > 0) {
+            await updateStockOnOperation(oldMaterialId, quantity, 0)
+          }
+          if (newMaterialId && quantity > 0) {
+            await updateStockOnOperation(newMaterialId, 0, quantity)
+          }
+        } else if (field === 'num_placas_corte') {
+          const materialId = currentOperation.material_id
+          const oldQuantity = currentOperation.num_placas_corte || 0
+          const newQuantity = value || 0
+
+          if (materialId) {
+            await updateStockOnOperation(materialId, oldQuantity, newQuantity)
+          }
+        }
+      }
+
+      // Auto-sync Impressão changes to corresponding Corte operation (existing logic)
+      if (currentOperation && currentOperation.Tipo_Op === 'Impressao') {
+        if (
+          ['material_id', 'num_placas_print', 'notas_imp', 'N_Pal'].includes(
+            field,
+          )
+        ) {
+          const { data: corteOperations } = await supabase
+            .from('producao_operacoes')
+            .select('id')
+            .eq('item_id', currentOperation.item_id)
+            .eq('folha_obra_id', currentOperation.folha_obra_id)
+            .eq('no_interno', currentOperation.no_interno)
+            .eq('Tipo_Op', 'Corte')
+
+          if (corteOperations && corteOperations.length > 0) {
+            const corteId = corteOperations[0].id
+            const corteUpdateData: any = {}
+
+            if (field === 'material_id') corteUpdateData.material_id = value
+            if (field === 'num_placas_print') corteUpdateData.QT_print = value
+            if (field === 'notas_imp') corteUpdateData.notas = value
+            if (field === 'N_Pal') corteUpdateData.N_Pal = value
+
+            const { error: corteError } = await supabase
+              .from('producao_operacoes')
+              .update(corteUpdateData)
+              .eq('id', corteId)
+
+            if (!corteError) {
+              // LOG AUDIT: Auto-sync to Corte operation
+              for (const [corteField, corteValue] of Object.entries(
+                corteUpdateData,
+              )) {
+                await logFieldUpdate(
+                  supabase,
+                  corteId,
+                  corteField,
+                  null,
+                  corteValue,
+                )
+              }
+            }
+          }
+        }
+      }
+
+      onRefresh()
     } catch (error) {
       console.error('❌ Error updating operation:', error)
     } finally {
-      console.log(`🔧 Setting isUpdating back to false`)
-      setIsUpdating(false)
+      activeUpdatesRef.current.delete(operationKey)
     }
   }
 
@@ -2088,6 +2958,34 @@ function OperationsTable({
     console.log(
       `🎨 Palette selection: operation=${operationId}, palette=${paletteId}`,
     )
+
+    // If empty value is selected, clear palette and enable material dropdowns
+    if (!paletteId) {
+      setPaletteSelections((prev) => ({
+        ...prev,
+        [operationId]: '',
+      }))
+
+      // Clear material selections to allow manual input
+      setMaterialSelections((prev) => ({
+        ...prev,
+        [operationId]: {
+          material: '',
+          caracteristica: '',
+          cor: '',
+        },
+      }))
+
+      // Clear palette and material from operation
+      if (operationId.startsWith('temp_')) {
+        updatePendingOperation(operationId, 'N_Pal', '')
+        updatePendingOperation(operationId, 'material_id', null)
+      } else {
+        await updateOperation(operationId, 'N_Pal', '')
+        await updateOperation(operationId, 'material_id', null)
+      }
+      return
+    }
 
     // Find the selected palette
     const selectedPalette = paletes.find((p) => p.id === paletteId)
@@ -2114,22 +3012,13 @@ function OperationsTable({
         console.log(
           `🔍 Looking for material with ref_cartao: ${selectedPalette.ref_cartao}`,
         )
-        console.log(
-          `📦 Available materials:`,
-          materials
-            .filter((m) => m.tipo === 'RÍGIDOS')
-            .map((m) => ({
-              id: m.id,
-              referencia: m.referencia,
-              material: m.material,
-              carateristica: m.carateristica,
-              cor: m.cor,
-            })),
-        )
 
+        const materialTipo =
+          (type as string) === 'impressao_flexiveis' ? 'FLEXÍVEIS' : 'RÍGIDOS'
         const matchingMaterial = materials.find(
           (m) =>
-            m.referencia === selectedPalette.ref_cartao && m.tipo === 'RÍGIDOS',
+            m.referencia === selectedPalette.ref_cartao &&
+            m.tipo === materialTipo,
         )
 
         console.log(`🎯 Found matching material:`, matchingMaterial)
@@ -2150,9 +3039,10 @@ function OperationsTable({
           setMaterialSelections((prev) => ({
             ...prev,
             [operationId]: {
-              material: matchingMaterial.material || '',
-              caracteristica: matchingMaterial.carateristica || '',
-              cor: matchingMaterial.cor || '',
+              material: matchingMaterial.material?.toUpperCase() || '',
+              caracteristica:
+                matchingMaterial.carateristica?.toUpperCase() || '',
+              cor: matchingMaterial.cor?.toUpperCase() || '',
             },
           }))
         }
@@ -2165,10 +3055,13 @@ function OperationsTable({
 
       // If the palette has a reference, try to auto-fill material
       if (selectedPalette.ref_cartao) {
-        // Find material by reference (ref_cartao)
+        // Find material by reference (ref_cartao) - use correct material type
+        const materialTipo =
+          (type as string) === 'impressao_flexiveis' ? 'FLEXÍVEIS' : 'RÍGIDOS'
         const matchingMaterial = materials.find(
           (m) =>
-            m.referencia === selectedPalette.ref_cartao && m.tipo === 'RÍGIDOS',
+            m.referencia === selectedPalette.ref_cartao &&
+            m.tipo === materialTipo,
         )
 
         if (matchingMaterial) {
@@ -2181,14 +3074,15 @@ function OperationsTable({
           setMaterialSelections((prev) => ({
             ...prev,
             [operationId]: {
-              material: matchingMaterial.material || '',
-              caracteristica: matchingMaterial.carateristica || '',
-              cor: matchingMaterial.cor || '',
+              material: matchingMaterial.material?.toUpperCase() || '',
+              caracteristica:
+                matchingMaterial.carateristica?.toUpperCase() || '',
+              cor: matchingMaterial.cor?.toUpperCase() || '',
             },
           }))
         } else {
           console.log(
-            `❌ No matching material found for reference: ${selectedPalette.ref_cartao}`,
+            `❌ No matching material found for reference: ${selectedPalette.ref_cartao} with tipo: ${materialTipo}`,
           )
         }
       } else {
@@ -2199,64 +3093,49 @@ function OperationsTable({
     }
   }
 
+  // 4. UPDATE: Enhanced deleteOperation function with deletion logging
   const deleteOperation = async (operationId: string) => {
     if (isUpdating) return
 
-    // Add confirmation dialog
     if (!confirm('Tem certeza que deseja eliminar esta operação?')) {
       return
     }
 
     try {
       setIsUpdating(true)
-      console.log(`🗑️ Attempting to delete operation: ${operationId}`)
 
-      // Check if this is a pending operation (temp ID)
+      // Check if this is a pending operation
       if (operationId.startsWith('temp_')) {
-        console.log(`🔄 Deleting pending operation: ${operationId}`)
-        // Remove from pending operations state
         setPendingOperations((prev) => {
           const updated = { ...prev }
           delete updated[operationId]
           return updated
         })
-        alert('Operação eliminada com sucesso!')
         return
       }
 
-      // For saved operations, try to get operation details before deleting
+      // Get operation details before deleting for audit log
       const { data: operation, error: fetchError } = await supabase
         .from('producao_operacoes')
-        .select('material_id, num_placas_corte, Tipo_Op')
+        .select('*')
         .eq('id', operationId)
         .single()
 
       if (fetchError) {
-        console.error('Error fetching operation before delete:', fetchError)
-
-        // If operation doesn't exist (already deleted or sync issue), just refresh
         if (fetchError.code === 'PGRST116') {
-          console.log(
-            `ℹ️ Operation not found in database, probably already deleted`,
-          )
+          console.log('Operation not found, probably already deleted')
           onRefresh()
-          alert('Operação não encontrada (possivelmente já eliminada)')
           return
         }
-
         alert(`Erro ao buscar operação: ${fetchError.message}`)
         return
       }
 
-      console.log(`📋 Operation to delete:`, operation)
-
-      const { data: deleteData, error: deleteError } = await supabase
+      // Delete the operation
+      const { error: deleteError } = await supabase
         .from('producao_operacoes')
         .delete()
         .eq('id', operationId)
-        .select()
-
-      console.log(`🗑️ Delete result:`, { deleteData, deleteError })
 
       if (deleteError) {
         console.error('Error deleting operation:', deleteError)
@@ -2264,7 +3143,8 @@ function OperationsTable({
         return
       }
 
-      console.log(`✅ Operation deleted successfully`)
+      // LOG AUDIT: Operation deletion
+      await logOperationDeletion(supabase, operationId, operation)
 
       // Add stock back if it was a cutting operation
       if (
@@ -2273,7 +3153,6 @@ function OperationsTable({
         operation.material_id &&
         operation.num_placas_corte
       ) {
-        console.log(`📦 Restoring stock for cutting operation`)
         await updateStockOnOperation(
           operation.material_id,
           operation.num_placas_corte,
@@ -2281,9 +3160,7 @@ function OperationsTable({
         )
       }
 
-      // Refresh the data
       onRefresh()
-      alert('Operação eliminada com sucesso!')
     } catch (error) {
       console.error('Error deleting operation:', error)
       alert(`Erro inesperado ao eliminar operação: ${error}`)
@@ -2296,7 +3173,12 @@ function OperationsTable({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold">
-          Operações de {type === 'impressao' ? 'Impressão' : 'Corte'}
+          Operações de{' '}
+          {type === 'impressao'
+            ? 'Impressão'
+            : type === 'impressao_flexiveis'
+              ? 'Impressão Flexíveis'
+              : 'Corte'}
         </h3>
         <div className="flex items-center gap-6">
           <TooltipProvider>
@@ -2318,28 +3200,145 @@ function OperationsTable({
               <TooltipContent>Adicionar operação</TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          {type === 'corte' && (
+          {type === 'impressao_flexiveis' && (
             <div className="flex items-center gap-2">
               <Checkbox
-                id="item-completed"
-                checked={isItemCompleted || false}
+                id="item-tem-corte-flexiveis"
+                checked={hasTemCorte || false}
                 onCheckedChange={async (checked) => {
                   try {
-                    // Update all corte operations for this item
-                    const today = new Date().toISOString().split('T')[0]
-                    const updateData = checked
-                      ? { concluido: true, data_conclusao: today }
-                      : { concluido: false, data_conclusao: null }
+                    // Update all Impressão Flexíveis operations for this item
+                    const updateData = { tem_corte: !!checked }
 
                     const { error } = await supabase
                       .from('producao_operacoes')
                       .update(updateData)
                       .eq('item_id', itemId)
-                      .eq('Tipo_Op', 'Corte')
+                      .eq('Tipo_Op', 'Impressao_Flexiveis')
 
                     if (!error) {
+                      onTemCorteChange?.(!!checked)
+                      onRefresh()
+                    }
+                  } catch (error) {
+                    console.error('Error updating tem_corte status:', error)
+                  }
+                }}
+              />
+              <label
+                htmlFor="item-tem-corte-flexiveis"
+                className="cursor-pointer text-sm font-medium"
+              >
+                Impressão Concluída tem corte
+              </label>
+            </div>
+          )}
+          {(type === 'corte' || type === 'impressao_flexiveis') && (
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id={
+                  type === 'corte'
+                    ? 'item-completed'
+                    : 'item-completed-flexiveis'
+                }
+                checked={isItemCompleted || false}
+                onCheckedChange={async (checked) => {
+                  try {
+                    // Get current user for audit logging
+                    const {
+                      data: { user },
+                      error: authError,
+                    } = await supabase.auth.getUser()
+
+                    // Update all operations for this item based on type
+                    const today = new Date().toISOString().split('T')[0]
+                    const updateData = checked
+                      ? { concluido: true, data_conclusao: today }
+                      : { concluido: false, data_conclusao: null }
+
+                    const tipoOp =
+                      type === 'corte' ? 'Corte' : 'Impressao_Flexiveis'
+
+                    console.log(
+                      `🔄 Updating ${tipoOp} operations for item ${itemId}:`,
+                      updateData,
+                    )
+
+                    // First, get current operations to capture old values for audit
+                    const { data: currentOperations } = await supabase
+                      .from('producao_operacoes')
+                      .select('id, concluido')
+                      .eq('item_id', itemId)
+                      .eq('Tipo_Op', tipoOp)
+
+                    const { error, data } = await supabase
+                      .from('producao_operacoes')
+                      .update(updateData)
+                      .eq('item_id', itemId)
+                      .eq('Tipo_Op', tipoOp)
+                      .select()
+
+                    console.log(`✅ Update result for ${tipoOp}:`, {
+                      error,
+                      data,
+                    })
+
+                    if (!error) {
+                      // Log audit entries for bulk completion changes
+                      if (user && currentOperations) {
+                        const auditPromises = currentOperations.map(
+                          async (op: { id: string; concluido: boolean }) => {
+                            const oldValue = op.concluido
+                            const newValue = checked
+
+                            if (oldValue !== newValue) {
+                              try {
+                                await supabase
+                                  .from('producao_operacoes_audit')
+                                  .insert({
+                                    operacao_id: op.id,
+                                    field_name: 'concluido',
+                                    old_value: oldValue ? 'Sim' : 'Não',
+                                    new_value: newValue ? 'Sim' : 'Não',
+                                    changed_by: user.id,
+                                    changed_at: new Date().toISOString(),
+                                  })
+                                console.log(
+                                  `📝 Audit: Logged bulk completion change for operation ${op.id}`,
+                                )
+                              } catch (auditError) {
+                                console.warn(
+                                  '⚠️ Failed to log audit entry for operation:',
+                                  op.id,
+                                  auditError,
+                                )
+                              }
+                            }
+                          },
+                        )
+
+                        // Execute audit logging in background
+                        Promise.all(auditPromises).catch((err) => {
+                          console.warn(
+                            '⚠️ Some audit log entries failed (non-critical):',
+                            err,
+                          )
+                        })
+                      }
+
                       onCompletionChange?.(!!checked)
                       onRefresh()
+                      // Also refresh main data so item moves between tabs
+                      if (onMainRefresh) {
+                        await onMainRefresh()
+                      }
+                      // Close drawer since item moved to different tab
+                      onClose()
+                    } else {
+                      console.error(
+                        `❌ Error updating ${tipoOp} completion status:`,
+                        error,
+                      )
                     }
                   } catch (error) {
                     console.error('Error updating completion status:', error)
@@ -2347,7 +3346,11 @@ function OperationsTable({
                 }}
               />
               <label
-                htmlFor="item-completed"
+                htmlFor={
+                  type === 'corte'
+                    ? 'item-completed'
+                    : 'item-completed-flexiveis'
+                }
                 className="cursor-pointer text-sm font-medium"
               >
                 Concluído
@@ -2395,7 +3398,7 @@ function OperationsTable({
       )}
 
       <div className="bg-background border-border w-full rounded-none border-2">
-        <div className="w-full rounded-none">
+        <div className="w-full overflow-x-auto rounded-none">
           <Table className="w-full border-0">
             <TableHeader>
               <TableRow>
@@ -2428,8 +3431,10 @@ function OperationsTable({
                 <TableHead className="border-border w-[80px] min-w-[80px] border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
                   Quantidade
                 </TableHead>
-                <TableHead className="border-border border-b-2 bg-[var(--orange)] p-2 text-sm text-black uppercase">
-                  {type === 'impressao' ? 'Notas Imp.' : 'Notas'}
+                <TableHead className="border-border w-[60px] min-w-[60px] border-b-2 bg-[var(--orange)] p-2 text-center text-sm text-black uppercase">
+                  {type === 'impressao' || type === 'impressao_flexiveis'
+                    ? 'Notas'
+                    : 'Notas'}
                 </TableHead>
                 <TableHead className="border-border w-[130px] min-w-[130px] border-b-2 bg-[var(--orange)] p-2 text-center text-sm text-black uppercase">
                   Ações
@@ -2552,13 +3557,7 @@ function OperationsTable({
                             machineField,
                             value,
                           )
-                          if (selectedMachine) {
-                            updatePendingOperation(
-                              operation.id,
-                              'Tipo_Op',
-                              selectedMachine.tipo,
-                            )
-                          }
+                          // Don't update Tipo_Op for pending operations - it should stay as set when created
                         } else {
                           // For saved operations, update database immediately
                           await updateOperation(
@@ -2594,11 +3593,13 @@ function OperationsTable({
                       </SelectTrigger>
                       <SelectContent disablePortal>
                         {machines
-                          .filter(
-                            (machine) =>
-                              machine.tipo ===
-                              (type === 'impressao' ? 'Impressao' : 'Corte'),
-                          )
+                          .filter((machine) => {
+                            if (type === 'impressao')
+                              return machine.tipo === 'Impressao'
+                            if (type === 'impressao_flexiveis')
+                              return machine.tipo === 'Impressao_Vinil'
+                            return machine.tipo === 'Corte'
+                          })
                           .map((machine) => (
                             <SelectItem
                               key={machine.id}
@@ -2611,112 +3612,87 @@ function OperationsTable({
                       </SelectContent>
                     </Select>
                   </TableCell>
-                  {/* PALLETE Column - For both Impressão and Corte */}
+                  {/* PALLETE Column - For Impressão, Impressão Flexíveis, and Corte */}
+                  <TableCell className="w-[160px] min-w-[160px] p-2 text-sm">
+                    {type === 'impressao_flexiveis' ? (
+                      <Button
+                        variant="ghost"
+                        disabled
+                        className="h-10 w-full justify-start uppercase"
+                      >
+                        N/A
+                      </Button>
+                    ) : (
+                      <Combobox
+                        options={[
+                          { value: '', label: 'Sem palete' },
+                          ...paletes.map((palete) => ({
+                            value: palete.id,
+                            label: palete.no_palete,
+                          })),
+                        ]}
+                        value={paletteSelections[operation.id] || ''}
+                        onChange={(value: string) => {
+                          // Use consistent handlePaletteSelection function for both pending and saved operations
+                          handlePaletteSelection(operation.id, value)
+                        }}
+                        placeholder="Selecionar palete"
+                        emptyMessage="Nenhuma palete encontrada"
+                        searchPlaceholder="Procurar palete..."
+                        disabled={paletesLoading}
+                        className="h-10 w-full"
+                        buttonClassName="uppercase truncate"
+                      />
+                    )}
+                  </TableCell>
+                  {/* Material Combo 1 - Searchable */}
                   <TableCell className="w-[160px] min-w-[160px] p-2 text-sm">
                     <Combobox
-                      options={paletes.map((palete) => ({
-                        value: palete.id,
-                        label: palete.no_palete,
-                      }))}
-                      value={paletteSelections[operation.id] || ''}
-                      onChange={(value: string) => {
-                        // For pending operations, update locally only
-                        if ((operation as any).isPending) {
-                          const selectedPalette = paletes.find(
-                            (p) => p.id === value,
-                          )
-                          if (selectedPalette) {
-                            updatePendingOperation(
-                              operation.id,
-                              'N_Pal',
-                              selectedPalette.no_palete,
-                            )
-                            setPaletteSelections((prev) => ({
-                              ...prev,
-                              [operation.id]: value,
-                            }))
-                            // Handle material auto-fill for pending operations
-                            if (selectedPalette.ref_cartao) {
-                              const matchingMaterial = materials.find(
-                                (m) =>
-                                  m.referencia === selectedPalette.ref_cartao &&
-                                  m.tipo === 'RÍGIDOS',
-                              )
-                              if (matchingMaterial) {
-                                updatePendingOperation(
-                                  operation.id,
-                                  'material_id',
-                                  matchingMaterial.id,
+                      options={Array.from(
+                        new Set(
+                          materials
+                            .filter((m) => {
+                              // Corte tab should show all materials since it can receive from both Impressão types
+                              if (type === 'corte')
+                                return (
+                                  m.tipo === 'RÍGIDOS' || m.tipo === 'FLEXÍVEIS'
                                 )
-                                setMaterialSelections((prev) => ({
-                                  ...prev,
-                                  [operation.id]: {
-                                    material: matchingMaterial.material || '',
-                                    caracteristica:
-                                      matchingMaterial.carateristica || '',
-                                    cor: matchingMaterial.cor || '',
-                                  },
-                                }))
-                              }
-                            }
-                          }
-                        } else {
-                          // For saved operations, use existing function
-                          handlePaletteSelection(operation.id, value)
+                              // Impressão Flexíveis shows only FLEXÍVEIS materials
+                              if (type === 'impressao_flexiveis')
+                                return m.tipo === 'FLEXÍVEIS'
+                              // Regular Impressão shows only RÍGIDOS materials
+                              return m.tipo === 'RÍGIDOS'
+                            })
+                            .map((m) => m.material?.toUpperCase())
+                            .filter(Boolean),
+                        ),
+                      ).map((material) => ({
+                        value: material,
+                        label: material,
+                      }))}
+                      value={materialSelections[operation.id]?.material || ''}
+                      onChange={(value: string) => {
+                        // Only allow changes if material is not from palette
+                        if (!isMaterialFromPalette(operation.id)) {
+                          setMaterialSelections((prev) => ({
+                            ...prev,
+                            [operation.id]: {
+                              material: value,
+                              caracteristica: undefined,
+                              cor: undefined,
+                            },
+                          }))
+                          // For pending operations, no database update needed yet
+                          // Material ID will be set when all three dropdowns are selected
                         }
                       }}
-                      placeholder="Selecionar palete"
-                      emptyMessage="Nenhuma palete encontrada"
-                      searchPlaceholder="Procurar palete..."
-                      disabled={paletesLoading}
+                      placeholder="Material"
+                      emptyMessage="Nenhum material encontrado"
+                      searchPlaceholder="Procurar material..."
                       className="h-10 w-full"
-                      buttonClassName="uppercase truncate"
+                      buttonClassName={`uppercase truncate ${isMaterialFromPalette(operation.id) ? 'cursor-not-allowed opacity-60' : ''}`}
+                      disabled={isMaterialFromPalette(operation.id)}
                     />
-                  </TableCell>
-                  {/* Material Combo 1 */}
-                  <TableCell className="w-[160px] min-w-[160px] p-2 text-sm">
-                    <Select
-                      value={materialSelections[operation.id]?.material || ''}
-                      onValueChange={(value) => {
-                        setMaterialSelections((prev) => ({
-                          ...prev,
-                          [operation.id]: {
-                            material: value,
-                            caracteristica: undefined,
-                            cor: undefined,
-                          },
-                        }))
-                        // For pending operations, no database update needed yet
-                        // Material ID will be set when all three dropdowns are selected
-                      }}
-                    >
-                      <SelectTrigger className="h-10 w-full">
-                        <SelectValue placeholder="Mat">
-                          <span className="truncate uppercase">
-                            {materialSelections[operation.id]?.material ||
-                              'Mat'}
-                          </span>
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent disablePortal>
-                        {Array.from(
-                          new Set(
-                            materials
-                              .filter((m) => m.tipo === 'RÍGIDOS')
-                              .map((m) => m.material)
-                              .filter(Boolean),
-                          ),
-                        ).map((material) => (
-                          <SelectItem
-                            key={material}
-                            value={material}
-                            className="uppercase"
-                          >
-                            {material}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
                   </TableCell>
                   {/* Material Combo 2 */}
                   <TableCell className="w-[160px] min-w-[160px] p-2 text-sm">
@@ -2726,41 +3702,66 @@ function OperationsTable({
                         materialSelections[operation.id]?.caracteristica || ''
                       }
                       onValueChange={(value) => {
-                        const currentSelection =
-                          materialSelections[operation.id]
-                        setMaterialSelections((prev) => ({
-                          ...prev,
-                          [operation.id]: {
-                            ...currentSelection,
-                            caracteristica: value,
-                            cor: undefined,
-                          },
-                        }))
-                        // For pending operations, no database update needed yet
-                        // Material ID will be set when all three dropdowns are selected
+                        // Only allow changes if material is not from palette
+                        if (!isMaterialFromPalette(operation.id)) {
+                          const currentSelection =
+                            materialSelections[operation.id]
+                          setMaterialSelections((prev) => ({
+                            ...prev,
+                            [operation.id]: {
+                              ...currentSelection,
+                              caracteristica: value,
+                              cor: undefined,
+                            },
+                          }))
+                          // For pending operations, no database update needed yet
+                          // Material ID will be set when all three dropdowns are selected
+                        }
                       }}
-                      disabled={!materialSelections[operation.id]?.material}
+                      disabled={
+                        !materialSelections[operation.id]?.material ||
+                        isMaterialFromPalette(operation.id)
+                      }
                     >
-                      <SelectTrigger className="h-10 w-full">
+                      <SelectTrigger
+                        className={`h-10 w-full ${isMaterialFromPalette(operation.id) ? 'cursor-not-allowed opacity-60' : ''}`}
+                      >
                         <SelectValue placeholder="Caract">
                           <span className="truncate uppercase">
                             {materialSelections[operation.id]?.caracteristica ||
                               'Caract'}
+                            {isMaterialFromPalette(operation.id) && (
+                              <span className="text-muted-foreground ml-1 text-xs">
+                                (Palete)
+                              </span>
+                            )}
                           </span>
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent disablePortal>
                         {(() => {
                           const filtered = materials
-                            .filter(
-                              (m) =>
-                                m.tipo === 'RÍGIDOS' &&
-                                m.material?.toLowerCase() ===
+                            .filter((m) => {
+                              // Check material type based on tab
+                              let correctTipo = false
+                              if (type === 'corte') {
+                                correctTipo =
+                                  m.tipo === 'RÍGIDOS' || m.tipo === 'FLEXÍVEIS'
+                              } else if (type === 'impressao_flexiveis') {
+                                correctTipo = m.tipo === 'FLEXÍVEIS'
+                              } else {
+                                correctTipo = m.tipo === 'RÍGIDOS'
+                              }
+
+                              return (
+                                correctTipo &&
+                                m.material?.toUpperCase() ===
                                   materialSelections[
                                     operation.id
-                                  ]?.material?.toLowerCase(),
-                            )
-                            .map((m) => m.carateristica)
+                                  ]?.material?.toUpperCase()
+                              )
+                            })
+                            .map((m) => m.carateristica?.toUpperCase())
                             .filter(Boolean)
                           const unique = Array.from(new Set(filtered))
                           return unique
@@ -2782,76 +3783,111 @@ function OperationsTable({
                       key={`cor-${operation.id}-${materialSelections[operation.id]?.material || 'none'}-${materialSelections[operation.id]?.caracteristica || 'none'}`}
                       value={materialSelections[operation.id]?.cor || ''}
                       onValueChange={(value) => {
-                        const currentSelection =
-                          materialSelections[operation.id]
-                        const updatedSelection = {
-                          ...currentSelection,
-                          cor: value,
-                        }
-                        setMaterialSelections((prev) => ({
-                          ...prev,
-                          [operation.id]: updatedSelection,
-                        }))
-                        // Only update material_id if all three are selected and a matching material exists
-                        const foundMaterial = materials.find(
-                          (m) =>
-                            m.tipo === 'RÍGIDOS' &&
-                            m.material?.toLowerCase() ===
-                              updatedSelection.material?.toLowerCase() &&
-                            m.carateristica?.toLowerCase() ===
-                              updatedSelection.caracteristica?.toLowerCase() &&
-                            m.cor?.toLowerCase() === value?.toLowerCase(),
-                        )
-                        if (
-                          foundMaterial &&
-                          updatedSelection.material &&
-                          updatedSelection.caracteristica &&
-                          value
-                        ) {
-                          // For pending operations, update locally only
-                          if ((operation as any).isPending) {
-                            updatePendingOperation(
-                              operation.id,
-                              'material_id',
-                              foundMaterial.id,
+                        // Only allow changes if material is not from palette
+                        if (!isMaterialFromPalette(operation.id)) {
+                          const currentSelection =
+                            materialSelections[operation.id]
+                          const updatedSelection = {
+                            ...currentSelection,
+                            cor: value,
+                          }
+                          setMaterialSelections((prev) => ({
+                            ...prev,
+                            [operation.id]: updatedSelection,
+                          }))
+                          // Only update material_id if all three are selected and a matching material exists
+                          const foundMaterial = materials.find((m) => {
+                            // Check material type based on tab
+                            let correctTipo = false
+                            if (type === 'corte') {
+                              correctTipo =
+                                m.tipo === 'RÍGIDOS' || m.tipo === 'FLEXÍVEIS'
+                            } else if (type === 'impressao_flexiveis') {
+                              correctTipo = m.tipo === 'FLEXÍVEIS'
+                            } else {
+                              correctTipo = m.tipo === 'RÍGIDOS'
+                            }
+
+                            return (
+                              correctTipo &&
+                              m.material?.toUpperCase() ===
+                                updatedSelection.material?.toUpperCase() &&
+                              m.carateristica?.toUpperCase() ===
+                                updatedSelection.caracteristica?.toUpperCase() &&
+                              m.cor?.toUpperCase() === value?.toUpperCase()
                             )
-                          } else {
-                            // For saved operations, update database immediately with stock deduction
-                            updateOperation(
-                              operation.id,
-                              'material_id',
-                              foundMaterial.id,
-                            )
+                          })
+                          if (
+                            foundMaterial &&
+                            updatedSelection.material &&
+                            updatedSelection.caracteristica &&
+                            value
+                          ) {
+                            // For pending operations, update locally only
+                            if ((operation as any).isPending) {
+                              updatePendingOperation(
+                                operation.id,
+                                'material_id',
+                                foundMaterial.id,
+                              )
+                            } else {
+                              // For saved operations, update database immediately with stock deduction
+                              updateOperation(
+                                operation.id,
+                                'material_id',
+                                foundMaterial.id,
+                              )
+                            }
                           }
                         }
                       }}
                       disabled={
-                        !materialSelections[operation.id]?.caracteristica
+                        !materialSelections[operation.id]?.caracteristica ||
+                        isMaterialFromPalette(operation.id)
                       }
                     >
-                      <SelectTrigger className="h-10 w-full">
+                      <SelectTrigger
+                        className={`h-10 w-full ${isMaterialFromPalette(operation.id) ? 'cursor-not-allowed opacity-60' : ''}`}
+                      >
                         <SelectValue placeholder="Cor">
                           <span className="truncate uppercase">
                             {materialSelections[operation.id]?.cor || 'Cor'}
+                            {isMaterialFromPalette(operation.id) && (
+                              <span className="text-muted-foreground ml-1 text-xs">
+                                (Palete)
+                              </span>
+                            )}
                           </span>
                         </SelectValue>
                       </SelectTrigger>
                       <SelectContent disablePortal>
                         {(() => {
                           const filtered = materials
-                            .filter(
-                              (m) =>
-                                m.tipo === 'RÍGIDOS' &&
-                                m.material?.toLowerCase() ===
+                            .filter((m) => {
+                              // Check material type based on tab
+                              let correctTipo = false
+                              if (type === 'corte') {
+                                correctTipo =
+                                  m.tipo === 'RÍGIDOS' || m.tipo === 'FLEXÍVEIS'
+                              } else if (type === 'impressao_flexiveis') {
+                                correctTipo = m.tipo === 'FLEXÍVEIS'
+                              } else {
+                                correctTipo = m.tipo === 'RÍGIDOS'
+                              }
+
+                              return (
+                                correctTipo &&
+                                m.material?.toUpperCase() ===
                                   materialSelections[
                                     operation.id
-                                  ]?.material?.toLowerCase() &&
-                                m.carateristica?.toLowerCase() ===
+                                  ]?.material?.toUpperCase() &&
+                                m.carateristica?.toUpperCase() ===
                                   materialSelections[
                                     operation.id
-                                  ]?.caracteristica?.toLowerCase(),
-                            )
-                            .map((m) => m.cor)
+                                  ]?.caracteristica?.toUpperCase()
+                              )
+                            })
+                            .map((m) => m.cor?.toUpperCase())
                             .filter(Boolean)
                           const unique = Array.from(new Set(filtered))
                           return unique
@@ -2872,10 +3908,58 @@ function OperationsTable({
                       <Input
                         type="number"
                         className="h-10 w-full [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                        value={operation.QT_print || ''}
+                        value={
+                          qtPrintValues[operation.id] ??
+                          operation.QT_print ??
+                          ''
+                        }
                         onChange={(e) => {
-                          const newValue = Number(e.target.value)
-                          // For pending operations, update locally only
+                          const newValue = Number(e.target.value) || 0
+
+                          // Update local state immediately for visual feedback
+                          setQtPrintValues((prev) => ({
+                            ...prev,
+                            [operation.id]: newValue,
+                          }))
+
+                          // Clear existing timer for both pending and saved operations
+                          if (qtPrintUpdateTimers.current[operation.id]) {
+                            clearTimeout(
+                              qtPrintUpdateTimers.current[operation.id],
+                            )
+                          }
+
+                          // Set new timer to update after 500ms of no typing
+                          qtPrintUpdateTimers.current[operation.id] =
+                            setTimeout(() => {
+                              if ((operation as any).isPending) {
+                                updatePendingOperation(
+                                  operation.id,
+                                  'QT_print',
+                                  newValue,
+                                )
+                              } else {
+                                // For saved operations, update database with debouncing
+                                updateOperation(
+                                  operation.id,
+                                  'QT_print',
+                                  newValue,
+                                )
+                              }
+                              delete qtPrintUpdateTimers.current[operation.id]
+                            }, 500)
+                        }}
+                        onBlur={(e) => {
+                          const newValue = Number(e.target.value) || 0
+
+                          // Clear any pending timer and update immediately on blur
+                          if (qtPrintUpdateTimers.current[operation.id]) {
+                            clearTimeout(
+                              qtPrintUpdateTimers.current[operation.id],
+                            )
+                            delete qtPrintUpdateTimers.current[operation.id]
+                          }
+
                           if ((operation as any).isPending) {
                             updatePendingOperation(
                               operation.id,
@@ -2883,7 +3967,7 @@ function OperationsTable({
                               newValue,
                             )
                           } else {
-                            // For saved operations, update database immediately
+                            // For saved operations, always update to ensure final value is saved
                             updateOperation(operation.id, 'QT_print', newValue)
                           }
                         }}
@@ -2896,10 +3980,60 @@ function OperationsTable({
                     <Input
                       type="number"
                       className="h-10 w-full [-moz-appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                      value={operation[quantityField] || ''}
+                      value={
+                        quantityValues[operation.id] ??
+                        operation[quantityField] ??
+                        ''
+                      }
                       onChange={(e) => {
-                        const newValue = Number(e.target.value)
-                        // For pending operations, update locally only
+                        const newValue = Number(e.target.value) || 0
+
+                        // Update local state immediately for visual feedback
+                        setQuantityValues((prev) => ({
+                          ...prev,
+                          [operation.id]: newValue,
+                        }))
+
+                        // Clear existing timer for both pending and saved operations
+                        if (quantityUpdateTimers.current[operation.id]) {
+                          clearTimeout(
+                            quantityUpdateTimers.current[operation.id],
+                          )
+                        }
+
+                        // Set new timer to update after 500ms of no typing
+                        quantityUpdateTimers.current[operation.id] = setTimeout(
+                          () => {
+                            if ((operation as any).isPending) {
+                              updatePendingOperation(
+                                operation.id,
+                                quantityField,
+                                newValue,
+                              )
+                            } else {
+                              // For saved operations, update database with debouncing
+                              updateOperation(
+                                operation.id,
+                                quantityField,
+                                newValue,
+                              )
+                            }
+                            delete quantityUpdateTimers.current[operation.id]
+                          },
+                          500,
+                        )
+                      }}
+                      onBlur={(e) => {
+                        const newValue = Number(e.target.value) || 0
+
+                        // Clear any pending timer and update immediately on blur
+                        if (quantityUpdateTimers.current[operation.id]) {
+                          clearTimeout(
+                            quantityUpdateTimers.current[operation.id],
+                          )
+                          delete quantityUpdateTimers.current[operation.id]
+                        }
+
                         if ((operation as any).isPending) {
                           updatePendingOperation(
                             operation.id,
@@ -2907,37 +4041,68 @@ function OperationsTable({
                             newValue,
                           )
                         } else {
-                          // For saved operations, update database immediately
+                          // For saved operations, always update to ensure final value is saved
                           updateOperation(operation.id, quantityField, newValue)
                         }
                       }}
                     />
                   </TableCell>
                   <TableCell className="p-2 text-sm">
-                    <Input
-                      value={notesValues[operation.id] || ''}
-                      onChange={(e) => {
-                        // Update local state immediately for better UX
-                        const newValue = e.target.value
-                        console.log(
-                          `📝 onChange for operation ${operation.id}: "${newValue}"`,
-                        )
-                        setNotesValues((prev) => ({
-                          ...prev,
-                          [operation.id]: newValue,
-                        }))
-
-                        // Save to database immediately (no need to wait for onBlur)
-                        console.log(`💾 Saving immediately via onChange`)
-                        updateOperation(operation.id, notesField, newValue)
-                      }}
-                      placeholder={
-                        type === 'impressao'
-                          ? 'Notas de impressão...'
-                          : 'Notas...'
-                      }
-                      className="h-8 w-full rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
-                    />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div>
+                            <SimpleNotasPopover
+                              value={
+                                type === 'impressao' ||
+                                type === 'impressao_flexiveis'
+                                  ? (operation.notas_imp ?? '')
+                                  : ((operation as any).notas ?? '')
+                              }
+                              onSave={async (newNotas) => {
+                                if ((operation as any).isPending) {
+                                  updatePendingOperation(
+                                    operation.id,
+                                    notesField,
+                                    newNotas,
+                                  )
+                                } else {
+                                  await updateOperation(
+                                    operation.id,
+                                    notesField,
+                                    newNotas,
+                                  )
+                                }
+                              }}
+                              placeholder={
+                                type === 'impressao' ||
+                                type === 'impressao_flexiveis'
+                                  ? 'Adicionar notas de impressão...'
+                                  : 'Adicionar notas...'
+                              }
+                              label="Notas"
+                              buttonSize="icon"
+                              className="mx-auto aspect-square"
+                              disabled={false}
+                            />
+                          </div>
+                        </TooltipTrigger>
+                        {(type === 'impressao' || type === 'impressao_flexiveis'
+                          ? operation.notas_imp
+                          : (operation as any).notas) &&
+                          (type === 'impressao' ||
+                          type === 'impressao_flexiveis'
+                            ? operation.notas_imp?.trim()
+                            : (operation as any).notas?.trim()) !== '' && (
+                            <TooltipContent>
+                              {type === 'impressao' ||
+                              type === 'impressao_flexiveis'
+                                ? operation.notas_imp
+                                : (operation as any).notas}
+                            </TooltipContent>
+                          )}
+                      </Tooltip>
+                    </TooltipProvider>
                   </TableCell>
                   <TableCell className="w-[130px] min-w-[130px] p-2 text-sm">
                     {(operation as any).isPending ? (

@@ -64,6 +64,13 @@ import { Tabs, TabsList, TabsContent, TabsTrigger } from '@/components/ui/tabs'
 import PermissionGuard from '@/components/PermissionGuard'
 import { Loader2 } from 'lucide-react'
 import { Suspense } from 'react'
+import FinancialAnalyticsCharts from '@/components/FinancialAnalyticsCharts'
+import {
+  groupDataByMonth,
+  groupDataByYear,
+  formatPeriodDisplay,
+  type DateGroupableData,
+} from '@/utils/date'
 
 /* ---------- constants ---------- */
 const JOBS_PER_PAGE = 50 // Pagination limit for better performance
@@ -674,771 +681,810 @@ export default function FaturacaoPage() {
   return (
     <PermissionGuard>
       <div className="w-full space-y-6">
-        {/* filter bar */}
-        <div className="space-y-4">
-          <h1 className="text-2xl font-bold">Faturação</h1>
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="Filtra FO"
-              className="h-10 w-28 rounded-none"
-              value={foF}
-              onChange={(e) => setFoF(e.target.value)}
-            />
-            <Input
-              placeholder="Filtra Nome Campanha"
-              className="h-10 flex-1 rounded-none"
-              value={campF}
-              onChange={(e) => setCampF(e.target.value)}
-            />
-            <Input
-              placeholder="Filtra Item"
-              className="h-10 flex-1 rounded-none"
-              value={itemF}
-              onChange={(e) => setItemF(e.target.value)}
-            />
-            <Input
-              placeholder="Filtra Código"
-              className="h-10 w-40 rounded-none"
-              value={codeF}
-              onChange={(e) => setCodeF(e.target.value)}
-            />
-            <Input
-              placeholder="Filtra Cliente"
-              className="h-10 flex-1 rounded-none"
-              value={clientF}
-              onChange={(e) => setClientF(e.target.value)}
-            />
+        <h1 className="text-2xl font-bold">Faturação</h1>
 
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={() => {
-                      setFoF('')
-                      setCampF('')
-                      setItemF('')
-                      setCodeF('')
-                      setClientF('')
-                    }}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Limpar Filtros</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon"
-                    variant="outline"
-                    onClick={async () => {
-                      setError(null)
-                      setJobs([])
-                      setAllItems([])
-                      setCurrentPage(0)
-                      setHasMoreJobs(true)
-                      await fetchJobs(0, true, {
-                        foF: debouncedFoF,
-                        campF: debouncedCampF,
-                        itemF: debouncedItemF,
-                        codeF: debouncedCodeF,
-                        clientF: debouncedClientF,
-                        showFatura,
-                      })
-                    }}
-                  >
-                    <RefreshCcw className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Atualizar</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          </div>
-        </div>
+        <Tabs defaultValue="invoicing" className="w-full">
+          <TabsList className="grid w-full grid-cols-2 rounded-none border-2">
+            <TabsTrigger value="invoicing">Gestão de Faturação</TabsTrigger>
+            <TabsTrigger value="analytics">Análises Financeiras</TabsTrigger>
+          </TabsList>
 
-        {/* Error handling */}
-        {error && <ErrorMessage message={error} onRetry={retryFetch} />}
+          <TabsContent value="invoicing" className="space-y-6">
+            {/* filter bar */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Input
+                  placeholder="Filtra FO"
+                  className="h-10 w-28 rounded-none"
+                  value={foF}
+                  onChange={(e) => setFoF(e.target.value)}
+                />
+                <Input
+                  placeholder="Filtra Nome Campanha"
+                  className="h-10 flex-1 rounded-none"
+                  value={campF}
+                  onChange={(e) => setCampF(e.target.value)}
+                />
+                <Input
+                  placeholder="Filtra Item"
+                  className="h-10 flex-1 rounded-none"
+                  value={itemF}
+                  onChange={(e) => setItemF(e.target.value)}
+                />
+                <Input
+                  placeholder="Filtra Código"
+                  className="h-10 w-40 rounded-none"
+                  value={codeF}
+                  onChange={(e) => setCodeF(e.target.value)}
+                />
+                <Input
+                  placeholder="Filtra Cliente"
+                  className="h-10 flex-1 rounded-none"
+                  value={clientF}
+                  onChange={(e) => setClientF(e.target.value)}
+                />
 
-        {/* jobs table */}
-        {loading.jobs && jobs.length === 0 ? (
-          <JobsTableSkeleton />
-        ) : (
-          <>
-            <div className="bg-background border-border w-full rounded-none border-2">
-              <div className="w-full rounded-none">
-                <Table className="w-full border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
-                  <TableHeader>
-                    <TableRow className="rounded-none">
-                      <TableHead
-                        onClick={() => toggleSort('numero_orc')}
-                        className="border-border sticky top-0 z-10 w-[90px] max-w-[90px] cursor-pointer overflow-hidden rounded-none border-b-2 bg-[var(--orange)] text-center font-bold text-ellipsis whitespace-nowrap text-black uppercase select-none"
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={() => {
+                          setFoF('')
+                          setCampF('')
+                          setItemF('')
+                          setCodeF('')
+                          setClientF('')
+                        }}
                       >
-                        ORC{' '}
-                        {sortCol === 'numero_orc' &&
-                          (sortDir === 'asc' ? (
-                            <ArrowUp className="ml-1 inline h-3 w-3" />
-                          ) : (
-                            <ArrowDown className="ml-1 inline h-3 w-3" />
-                          ))}
-                      </TableHead>
-                      <TableHead
-                        onClick={() => toggleSort('numero_fo')}
-                        className="border-border sticky top-0 z-10 w-[90px] max-w-[90px] cursor-pointer overflow-hidden rounded-none border-b-2 bg-[var(--orange)] text-center font-bold text-ellipsis whitespace-nowrap text-black uppercase select-none"
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Limpar Filtros</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="icon"
+                        variant="outline"
+                        onClick={async () => {
+                          setError(null)
+                          setJobs([])
+                          setAllItems([])
+                          setCurrentPage(0)
+                          setHasMoreJobs(true)
+                          await fetchJobs(0, true, {
+                            foF: debouncedFoF,
+                            campF: debouncedCampF,
+                            itemF: debouncedItemF,
+                            codeF: debouncedCodeF,
+                            clientF: debouncedClientF,
+                            showFatura,
+                          })
+                        }}
                       >
-                        FO{' '}
-                        {sortCol === 'numero_fo' &&
-                          (sortDir === 'asc' ? (
-                            <ArrowUp className="ml-1 inline h-3 w-3" />
-                          ) : (
-                            <ArrowDown className="ml-1 inline h-3 w-3" />
-                          ))}
-                      </TableHead>
-                      <TableHead
-                        onClick={() => toggleSort('cliente')}
-                        className="border-border sticky top-0 z-10 w-[200px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] font-bold text-black uppercase select-none"
-                      >
-                        Cliente{' '}
-                        {sortCol === 'cliente' &&
-                          (sortDir === 'asc' ? (
-                            <ArrowUp className="ml-1 inline h-3 w-3" />
-                          ) : (
-                            <ArrowDown className="ml-1 inline h-3 w-3" />
-                          ))}
-                      </TableHead>
-                      <TableHead
-                        onClick={() => toggleSort('nome_campanha')}
-                        className="border-border sticky top-0 z-10 flex-1 cursor-pointer rounded-none border-b-2 bg-[var(--orange)] font-bold text-black uppercase select-none"
-                      >
-                        Nome Campanha{' '}
-                        {sortCol === 'nome_campanha' &&
-                          (sortDir === 'asc' ? (
-                            <ArrowUp className="ml-1 inline h-3 w-3" />
-                          ) : (
-                            <ArrowDown className="ml-1 inline h-3 w-3" />
-                          ))}
-                      </TableHead>
-                      <TableHead className="border-border sticky top-0 z-10 w-[100px] rounded-none border-b-2 bg-[var(--orange)] text-center font-bold text-black uppercase">
-                        Data Saída
-                      </TableHead>
-                      <TableHead
-                        onClick={() => toggleSort('dias_trabalho')}
-                        className="border-border sticky top-0 z-10 w-[90px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] text-center font-bold text-black uppercase select-none"
-                      >
-                        Dias{' '}
-                        {sortCol === 'dias_trabalho' &&
-                          (sortDir === 'asc' ? (
-                            <ArrowUp className="ml-1 inline h-3 w-3" />
-                          ) : (
-                            <ArrowDown className="ml-1 inline h-3 w-3" />
-                          ))}
-                      </TableHead>
-                      <TableHead
-                        onClick={() => toggleSort('notas')}
-                        className="border-border sticky top-0 z-10 w-[50px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] font-bold text-black uppercase select-none"
-                      >
-                        Nota{' '}
-                        {sortCol === 'notas' &&
-                          (sortDir === 'asc' ? (
-                            <ArrowUp className="ml-1 inline h-3 w-3" />
-                          ) : (
-                            <ArrowDown className="ml-1 inline h-3 w-3" />
-                          ))}
-                      </TableHead>
-
-                      <TableHead
-                        onClick={() => toggleSort('logistica_concluido')}
-                        className="border-border sticky top-0 z-10 w-[36px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] p-0 text-center font-bold text-black uppercase select-none"
-                      >
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>
-                                C{' '}
-                                {sortCol === 'logistica_concluido' &&
-                                  (sortDir === 'asc' ? (
-                                    <ArrowUp className="ml-1 inline h-3 w-3" />
-                                  ) : (
-                                    <ArrowDown className="ml-1 inline h-3 w-3" />
-                                  ))}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              Concluído (Logística)
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-
-                      <TableHead
-                        onClick={() => toggleSort('fatura')}
-                        className="border-border sticky top-0 z-10 w-[36px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] p-0 text-center font-bold text-black uppercase select-none"
-                      >
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>
-                                F{' '}
-                                {sortCol === 'fatura' &&
-                                  (sortDir === 'asc' ? (
-                                    <ArrowUp className="ml-1 inline h-3 w-3" />
-                                  ) : (
-                                    <ArrowDown className="ml-1 inline h-3 w-3" />
-                                  ))}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>Faturado</TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableHead>
-
-                      <TableHead className="border-border sticky top-0 z-10 w-[100px] rounded-none border-b-2 bg-[var(--orange)] text-center font-bold text-black uppercase">
-                        Ações
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sorted.map((job) => (
-                      <TableRow key={job.id} className="hover:bg-[var(--main)]">
-                        <TableCell className="w-[90px] max-w-[90px]">
-                          <Input
-                            type="text"
-                            maxLength={6}
-                            value={job.numero_orc ?? ''}
-                            onChange={(e) => {
-                              const value =
-                                e.target.value === ''
-                                  ? null
-                                  : Number(e.target.value)
-                              setJobs((prevJobs) =>
-                                prevJobs.map((j) =>
-                                  j.id === job.id
-                                    ? { ...j, numero_orc: value }
-                                    : j,
-                                ),
-                              )
-                            }}
-                            onBlur={async (e) => {
-                              const value =
-                                e.target.value === ''
-                                  ? null
-                                  : Number(e.target.value)
-                              await supabase
-                                .from('folhas_obras')
-                                .update({ numero_orc: value })
-                                .eq('id', job.id)
-                            }}
-                            className="h-10 rounded-none border-0 text-right text-sm outline-0 focus:border-0 focus:ring-0"
-                            placeholder="ORC"
-                          />
-                        </TableCell>
-                        <TableCell className="w-[90px] max-w-[90px]">
-                          <Input
-                            maxLength={6}
-                            value={job.numero_fo}
-                            onChange={(e) => {
-                              const value = e.target.value
-                              setJobs((prevJobs) =>
-                                prevJobs.map((j) =>
-                                  j.id === job.id
-                                    ? { ...j, numero_fo: value }
-                                    : j,
-                                ),
-                              )
-                            }}
-                            onBlur={async (e) => {
-                              const value = e.target.value
-                              await supabase
-                                .from('folhas_obras')
-                                .update({ numero_fo: value })
-                                .eq('id', job.id)
-                            }}
-                            className="h-10 rounded-none border-0 text-right text-sm outline-0 focus:border-0 focus:ring-0"
-                            placeholder="FO"
-                          />
-                        </TableCell>
-                        <TableCell className="w-[200px]">
-                          <CreatableClienteCombobox
-                            value={job.id_cliente || ''}
-                            onChange={async (selectedId: string) => {
-                              const selected = clientes.find(
-                                (c) => c.value === selectedId,
-                              )
-                              setJobs((prevJobs) =>
-                                prevJobs.map((j) =>
-                                  j.id === job.id
-                                    ? {
-                                        ...j,
-                                        id_cliente: selectedId,
-                                        cliente: selected ? selected.label : '',
-                                      }
-                                    : j,
-                                ),
-                              )
-                              await supabase
-                                .from('folhas_obras')
-                                .update({
-                                  id_cliente: selectedId,
-                                  cliente: selected?.label || '',
-                                })
-                                .eq('id', job.id)
-                            }}
-                            options={clientes}
-                            onOptionsUpdate={(newClientes) => {
-                              setClientes(newClientes)
-                            }}
-                            placeholder="Cliente"
-                            disabled={loading.clientes}
-                            loading={loading.clientes}
-                          />
-                        </TableCell>
-                        <TableCell className="flex-1">
-                          <Input
-                            value={job.nome_campanha}
-                            onChange={(e) => {
-                              const value = e.target.value
-                              setJobs((prevJobs) =>
-                                prevJobs.map((j) =>
-                                  j.id === job.id
-                                    ? { ...j, nome_campanha: value }
-                                    : j,
-                                ),
-                              )
-                            }}
-                            onBlur={async (e) => {
-                              const value = e.target.value
-                              await supabase
-                                .from('folhas_obras')
-                                .update({ nome_campanha: value })
-                                .eq('id', job.id)
-                            }}
-                            className="h-10 w-full rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
-                            placeholder="Nome da Campanha"
-                          />
-                        </TableCell>
-                        <TableCell className="w-[100px] text-center text-xs">
-                          {job.logistica_data_saida
-                            ? format(
-                                new Date(job.logistica_data_saida),
-                                'dd/MM/yyyy',
-                              )
-                            : '-'}
-                        </TableCell>
-                        <TableCell className="w-[90px] text-right">
-                          {job.dias_trabalho ?? '-'}
-                        </TableCell>
-                        <TableCell className="w-[50px] text-center">
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div>
-                                  <SimpleNotasPopover
-                                    value={job.notas ?? ''}
-                                    onSave={async (newNotas) => {
-                                      await supabase
-                                        .from('folhas_obras')
-                                        .update({ notas: newNotas })
-                                        .eq('id', job.id)
-                                      setJobs((prev: Job[]) =>
-                                        prev.map((j: Job) =>
-                                          j.id === job.id
-                                            ? { ...j, notas: newNotas }
-                                            : j,
-                                        ),
-                                      )
-                                    }}
-                                    placeholder="Adicionar notas..."
-                                    label="Notas"
-                                    buttonSize="icon"
-                                    className="mx-auto aspect-square"
-                                    disabled={false}
-                                  />
-                                </div>
-                              </TooltipTrigger>
-                              {job.notas && job.notas.trim() !== '' && (
-                                <TooltipContent>{job.notas}</TooltipContent>
-                              )}
-                            </Tooltip>
-                          </TooltipProvider>
-                        </TableCell>
-                        <TableCell className="w-[36px] p-0 text-center">
-                          <Checkbox
-                            checked={!!job.logistica_concluido}
-                            disabled={true}
-                          />
-                        </TableCell>
-                        <TableCell className="w-[36px] p-0 text-center">
-                          <Checkbox
-                            checked={!!job.fatura}
-                            onCheckedChange={async (checked) => {
-                              const value =
-                                checked === 'indeterminate' ? false : checked
-                              setJobs((prevJobs) =>
-                                prevJobs.map((j) =>
-                                  j.id === job.id ? { ...j, fatura: value } : j,
-                                ),
-                              )
-                              await supabase
-                                .from('folhas_obras')
-                                .update({ fatura: value })
-                                .eq('id', job.id)
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell className="w-[100px] p-0 pr-2">
-                          <div className="flex justify-center gap-2">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="default"
-                                    onClick={() => setOpenId(job.id)}
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Items</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="destructive"
-                                    onClick={async () => {
-                                      if (
-                                        !confirm(
-                                          `Tem certeza que deseja eliminar a Folha de Obra ${job.numero_fo}? Esta ação irá eliminar todos os itens associados.`,
-                                        )
-                                      ) {
-                                        return
-                                      }
-
-                                      try {
-                                        // Delete items first
-                                        const { data: itemsData } =
-                                          await supabase
-                                            .from('items_base')
-                                            .select('id')
-                                            .eq('folha_obra_id', job.id)
-
-                                        if (itemsData && itemsData.length > 0) {
-                                          const itemIds = itemsData.map(
-                                            (item: any) => item.id,
-                                          )
-                                          await supabase
-                                            .from('items_base')
-                                            .delete()
-                                            .in('id', itemIds)
-                                        }
-
-                                        // Then delete the job
-                                        await supabase
-                                          .from('folhas_obras')
-                                          .delete()
-                                          .eq('id', job.id)
-
-                                        // Update local state
-                                        setJobs((prevJobs) =>
-                                          prevJobs.filter(
-                                            (j) => j.id !== job.id,
-                                          ),
-                                        )
-                                        setAllItems((prevItems) =>
-                                          prevItems.filter(
-                                            (item) =>
-                                              item.folha_obra_id !== job.id,
-                                          ),
-                                        )
-                                      } catch (error) {
-                                        console.error(
-                                          'Error deleting job:',
-                                          error,
-                                        )
-                                        alert(
-                                          'Erro ao eliminar a Folha de Obra. Tente novamente.',
-                                        )
-                                      }
-                                    }}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Eliminar</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    {sorted.length === 0 && (
-                      <TableRow>
-                        <TableCell colSpan={7} className="py-8 text-center">
-                          Nenhum trabalho encontrado.
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
+                        <RefreshCcw className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Atualizar</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               </div>
             </div>
 
-            {/* Load More Button */}
-            {hasMoreJobs && !loading.jobs && (
-              <div className="mt-4 flex justify-center">
-                <Button variant="outline" onClick={loadMoreJobs}>
-                  <Loader2
-                    className={`mr-2 h-4 w-4 ${loading.jobs ? 'animate-spin' : ''}`}
-                  />
-                  Load More Jobs ({JOBS_PER_PAGE} more)
-                </Button>
-              </div>
-            )}
+            {/* Error handling */}
+            {error && <ErrorMessage message={error} onRetry={retryFetch} />}
 
-            {/* Loading indicator for additional pages */}
-            {loading.jobs && jobs.length > 0 && (
-              <div className="mt-4 flex justify-center">
-                <div className="text-muted-foreground flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading more jobs...
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* drawer */}
-        <Drawer
-          open={!!openId}
-          onOpenChange={(o) => !o && setOpenId(null)}
-          shouldScaleBackground={false}
-        >
-          <DrawerContent className="!top-0 h-[98vh] max-h-[98vh] min-h-[98vh] !transform-none overflow-y-auto !filter-none !backdrop-filter-none will-change-auto">
-            <DrawerHeader className="sr-only">
-              <DrawerTitle>
-                {openId && jobs.find((j) => j.id === openId)
-                  ? `Trabalho (FO: ${jobs.find((j) => j.id === openId)?.numero_fo})`
-                  : 'Detalhes do Trabalho'}
-              </DrawerTitle>
-              <DrawerDescription>
-                Detalhes Produção Folha de Obra
-              </DrawerDescription>
-            </DrawerHeader>
-            {openId && (
-              <Suspense
-                fallback={
-                  <div className="flex h-full items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin" />
-                    <span className="ml-2">Loading...</span>
-                  </div>
-                }
-              >
-                <div className="relative space-y-6 p-6">
-                  {/* Header buttons */}
-                  <div className="absolute top-6 right-6 z-10 flex gap-2">
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            size="icon"
-                            variant="outline"
-                            onClick={() => {
-                              const items = allItems
-                                .filter((item) => item.folha_obra_id === openId)
-                                .map(
-                                  (item) =>
-                                    `${item.descricao.toUpperCase()} - ${item.codigo?.toUpperCase() || ''} - ${item.quantidade}`,
-                                )
-                                .join('\n')
-                              navigator.clipboard.writeText(items)
-                            }}
+            {/* jobs table */}
+            {loading.jobs && jobs.length === 0 ? (
+              <JobsTableSkeleton />
+            ) : (
+              <>
+                <div className="bg-background border-border w-full rounded-none border-2">
+                  <div className="w-full rounded-none">
+                    <Table className="w-full border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+                      <TableHeader>
+                        <TableRow className="rounded-none">
+                          <TableHead
+                            onClick={() => toggleSort('numero_orc')}
+                            className="border-border sticky top-0 z-10 w-[90px] max-w-[90px] cursor-pointer overflow-hidden rounded-none border-b-2 bg-[var(--orange)] text-center font-bold text-ellipsis whitespace-nowrap text-black uppercase select-none"
                           >
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Copiar items</TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
+                            ORC{' '}
+                            {sortCol === 'numero_orc' &&
+                              (sortDir === 'asc' ? (
+                                <ArrowUp className="ml-1 inline h-3 w-3" />
+                              ) : (
+                                <ArrowDown className="ml-1 inline h-3 w-3" />
+                              ))}
+                          </TableHead>
+                          <TableHead
+                            onClick={() => toggleSort('numero_fo')}
+                            className="border-border sticky top-0 z-10 w-[90px] max-w-[90px] cursor-pointer overflow-hidden rounded-none border-b-2 bg-[var(--orange)] text-center font-bold text-ellipsis whitespace-nowrap text-black uppercase select-none"
+                          >
+                            FO{' '}
+                            {sortCol === 'numero_fo' &&
+                              (sortDir === 'asc' ? (
+                                <ArrowUp className="ml-1 inline h-3 w-3" />
+                              ) : (
+                                <ArrowDown className="ml-1 inline h-3 w-3" />
+                              ))}
+                          </TableHead>
+                          <TableHead
+                            onClick={() => toggleSort('cliente')}
+                            className="border-border sticky top-0 z-10 w-[200px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] font-bold text-black uppercase select-none"
+                          >
+                            Cliente{' '}
+                            {sortCol === 'cliente' &&
+                              (sortDir === 'asc' ? (
+                                <ArrowUp className="ml-1 inline h-3 w-3" />
+                              ) : (
+                                <ArrowDown className="ml-1 inline h-3 w-3" />
+                              ))}
+                          </TableHead>
+                          <TableHead
+                            onClick={() => toggleSort('nome_campanha')}
+                            className="border-border sticky top-0 z-10 flex-1 cursor-pointer rounded-none border-b-2 bg-[var(--orange)] font-bold text-black uppercase select-none"
+                          >
+                            Nome Campanha{' '}
+                            {sortCol === 'nome_campanha' &&
+                              (sortDir === 'asc' ? (
+                                <ArrowUp className="ml-1 inline h-3 w-3" />
+                              ) : (
+                                <ArrowDown className="ml-1 inline h-3 w-3" />
+                              ))}
+                          </TableHead>
+                          <TableHead className="border-border sticky top-0 z-10 w-[100px] rounded-none border-b-2 bg-[var(--orange)] text-center font-bold text-black uppercase">
+                            Data Saída
+                          </TableHead>
+                          <TableHead
+                            onClick={() => toggleSort('dias_trabalho')}
+                            className="border-border sticky top-0 z-10 w-[90px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] text-center font-bold text-black uppercase select-none"
+                          >
+                            Dias{' '}
+                            {sortCol === 'dias_trabalho' &&
+                              (sortDir === 'asc' ? (
+                                <ArrowUp className="ml-1 inline h-3 w-3" />
+                              ) : (
+                                <ArrowDown className="ml-1 inline h-3 w-3" />
+                              ))}
+                          </TableHead>
+                          <TableHead
+                            onClick={() => toggleSort('notas')}
+                            className="border-border sticky top-0 z-10 w-[50px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] font-bold text-black uppercase select-none"
+                          >
+                            Nota{' '}
+                            {sortCol === 'notas' &&
+                              (sortDir === 'asc' ? (
+                                <ArrowUp className="ml-1 inline h-3 w-3" />
+                              ) : (
+                                <ArrowDown className="ml-1 inline h-3 w-3" />
+                              ))}
+                          </TableHead>
 
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      onClick={() => setOpenId(null)}
-                    >
-                      <X className="h-4 w-4" />
+                          <TableHead
+                            onClick={() => toggleSort('logistica_concluido')}
+                            className="border-border sticky top-0 z-10 w-[36px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] p-0 text-center font-bold text-black uppercase select-none"
+                          >
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    C{' '}
+                                    {sortCol === 'logistica_concluido' &&
+                                      (sortDir === 'asc' ? (
+                                        <ArrowUp className="ml-1 inline h-3 w-3" />
+                                      ) : (
+                                        <ArrowDown className="ml-1 inline h-3 w-3" />
+                                      ))}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  Concluído (Logística)
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableHead>
+
+                          <TableHead
+                            onClick={() => toggleSort('fatura')}
+                            className="border-border sticky top-0 z-10 w-[36px] cursor-pointer rounded-none border-b-2 bg-[var(--orange)] p-0 text-center font-bold text-black uppercase select-none"
+                          >
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    F{' '}
+                                    {sortCol === 'fatura' &&
+                                      (sortDir === 'asc' ? (
+                                        <ArrowUp className="ml-1 inline h-3 w-3" />
+                                      ) : (
+                                        <ArrowDown className="ml-1 inline h-3 w-3" />
+                                      ))}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>Faturado</TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </TableHead>
+
+                          <TableHead className="border-border sticky top-0 z-10 w-[100px] rounded-none border-b-2 bg-[var(--orange)] text-center font-bold text-black uppercase">
+                            Ações
+                          </TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {sorted.map((job) => (
+                          <TableRow
+                            key={job.id}
+                            className="hover:bg-[var(--main)]"
+                          >
+                            <TableCell className="w-[90px] max-w-[90px]">
+                              <Input
+                                type="text"
+                                maxLength={6}
+                                value={job.numero_orc ?? ''}
+                                onChange={(e) => {
+                                  const value =
+                                    e.target.value === ''
+                                      ? null
+                                      : Number(e.target.value)
+                                  setJobs((prevJobs) =>
+                                    prevJobs.map((j) =>
+                                      j.id === job.id
+                                        ? { ...j, numero_orc: value }
+                                        : j,
+                                    ),
+                                  )
+                                }}
+                                onBlur={async (e) => {
+                                  const value =
+                                    e.target.value === ''
+                                      ? null
+                                      : Number(e.target.value)
+                                  await supabase
+                                    .from('folhas_obras')
+                                    .update({ numero_orc: value })
+                                    .eq('id', job.id)
+                                }}
+                                className="h-10 rounded-none border-0 text-right text-sm outline-0 focus:border-0 focus:ring-0"
+                                placeholder="ORC"
+                              />
+                            </TableCell>
+                            <TableCell className="w-[90px] max-w-[90px]">
+                              <Input
+                                maxLength={6}
+                                value={job.numero_fo}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  setJobs((prevJobs) =>
+                                    prevJobs.map((j) =>
+                                      j.id === job.id
+                                        ? { ...j, numero_fo: value }
+                                        : j,
+                                    ),
+                                  )
+                                }}
+                                onBlur={async (e) => {
+                                  const value = e.target.value
+                                  await supabase
+                                    .from('folhas_obras')
+                                    .update({ numero_fo: value })
+                                    .eq('id', job.id)
+                                }}
+                                className="h-10 rounded-none border-0 text-right text-sm outline-0 focus:border-0 focus:ring-0"
+                                placeholder="FO"
+                              />
+                            </TableCell>
+                            <TableCell className="w-[200px]">
+                              <CreatableClienteCombobox
+                                value={job.id_cliente || ''}
+                                onChange={async (selectedId: string) => {
+                                  const selected = clientes.find(
+                                    (c) => c.value === selectedId,
+                                  )
+                                  setJobs((prevJobs) =>
+                                    prevJobs.map((j) =>
+                                      j.id === job.id
+                                        ? {
+                                            ...j,
+                                            id_cliente: selectedId,
+                                            cliente: selected
+                                              ? selected.label
+                                              : '',
+                                          }
+                                        : j,
+                                    ),
+                                  )
+                                  await supabase
+                                    .from('folhas_obras')
+                                    .update({
+                                      id_cliente: selectedId,
+                                      cliente: selected?.label || '',
+                                    })
+                                    .eq('id', job.id)
+                                }}
+                                options={clientes}
+                                onOptionsUpdate={(newClientes) => {
+                                  setClientes(newClientes)
+                                }}
+                                placeholder="Cliente"
+                                disabled={loading.clientes}
+                                loading={loading.clientes}
+                              />
+                            </TableCell>
+                            <TableCell className="flex-1">
+                              <Input
+                                value={job.nome_campanha}
+                                onChange={(e) => {
+                                  const value = e.target.value
+                                  setJobs((prevJobs) =>
+                                    prevJobs.map((j) =>
+                                      j.id === job.id
+                                        ? { ...j, nome_campanha: value }
+                                        : j,
+                                    ),
+                                  )
+                                }}
+                                onBlur={async (e) => {
+                                  const value = e.target.value
+                                  await supabase
+                                    .from('folhas_obras')
+                                    .update({ nome_campanha: value })
+                                    .eq('id', job.id)
+                                }}
+                                className="h-10 w-full rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                                placeholder="Nome da Campanha"
+                              />
+                            </TableCell>
+                            <TableCell className="w-[100px] text-center text-xs">
+                              {job.logistica_data_saida
+                                ? format(
+                                    new Date(job.logistica_data_saida),
+                                    'dd/MM/yyyy',
+                                  )
+                                : '-'}
+                            </TableCell>
+                            <TableCell className="w-[90px] text-right">
+                              {job.dias_trabalho ?? '-'}
+                            </TableCell>
+                            <TableCell className="w-[50px] text-center">
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <div>
+                                      <SimpleNotasPopover
+                                        value={job.notas ?? ''}
+                                        onSave={async (newNotas) => {
+                                          await supabase
+                                            .from('folhas_obras')
+                                            .update({ notas: newNotas })
+                                            .eq('id', job.id)
+                                          setJobs((prev: Job[]) =>
+                                            prev.map((j: Job) =>
+                                              j.id === job.id
+                                                ? { ...j, notas: newNotas }
+                                                : j,
+                                            ),
+                                          )
+                                        }}
+                                        placeholder="Adicionar notas..."
+                                        label="Notas"
+                                        buttonSize="icon"
+                                        className="mx-auto aspect-square"
+                                        disabled={false}
+                                      />
+                                    </div>
+                                  </TooltipTrigger>
+                                  {job.notas && job.notas.trim() !== '' && (
+                                    <TooltipContent>{job.notas}</TooltipContent>
+                                  )}
+                                </Tooltip>
+                              </TooltipProvider>
+                            </TableCell>
+                            <TableCell className="w-[36px] p-0 text-center">
+                              <Checkbox
+                                checked={!!job.logistica_concluido}
+                                disabled={true}
+                              />
+                            </TableCell>
+                            <TableCell className="w-[36px] p-0 text-center">
+                              <Checkbox
+                                checked={!!job.fatura}
+                                onCheckedChange={async (checked) => {
+                                  const value =
+                                    checked === 'indeterminate'
+                                      ? false
+                                      : checked
+                                  setJobs((prevJobs) =>
+                                    prevJobs.map((j) =>
+                                      j.id === job.id
+                                        ? { ...j, fatura: value }
+                                        : j,
+                                    ),
+                                  )
+                                  await supabase
+                                    .from('folhas_obras')
+                                    .update({ fatura: value })
+                                    .eq('id', job.id)
+                                }}
+                              />
+                            </TableCell>
+                            <TableCell className="w-[100px] p-0 pr-2">
+                              <div className="flex justify-center gap-2">
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="icon"
+                                        variant="default"
+                                        onClick={() => setOpenId(job.id)}
+                                      >
+                                        <Eye className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Items</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="icon"
+                                        variant="destructive"
+                                        onClick={async () => {
+                                          if (
+                                            !confirm(
+                                              `Tem certeza que deseja eliminar a Folha de Obra ${job.numero_fo}? Esta ação irá eliminar todos os itens associados.`,
+                                            )
+                                          ) {
+                                            return
+                                          }
+
+                                          try {
+                                            // Delete items first
+                                            const { data: itemsData } =
+                                              await supabase
+                                                .from('items_base')
+                                                .select('id')
+                                                .eq('folha_obra_id', job.id)
+
+                                            if (
+                                              itemsData &&
+                                              itemsData.length > 0
+                                            ) {
+                                              const itemIds = itemsData.map(
+                                                (item: any) => item.id,
+                                              )
+                                              await supabase
+                                                .from('items_base')
+                                                .delete()
+                                                .in('id', itemIds)
+                                            }
+
+                                            // Then delete the job
+                                            await supabase
+                                              .from('folhas_obras')
+                                              .delete()
+                                              .eq('id', job.id)
+
+                                            // Update local state
+                                            setJobs((prevJobs) =>
+                                              prevJobs.filter(
+                                                (j) => j.id !== job.id,
+                                              ),
+                                            )
+                                            setAllItems((prevItems) =>
+                                              prevItems.filter(
+                                                (item) =>
+                                                  item.folha_obra_id !== job.id,
+                                              ),
+                                            )
+                                          } catch (error) {
+                                            console.error(
+                                              'Error deleting job:',
+                                              error,
+                                            )
+                                            alert(
+                                              'Erro ao eliminar a Folha de Obra. Tente novamente.',
+                                            )
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Eliminar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                        {sorted.length === 0 && (
+                          <TableRow>
+                            <TableCell colSpan={7} className="py-8 text-center">
+                              Nenhum trabalho encontrado.
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+
+                {/* Load More Button */}
+                {hasMoreJobs && !loading.jobs && (
+                  <div className="mt-4 flex justify-center">
+                    <Button variant="outline" onClick={loadMoreJobs}>
+                      <Loader2
+                        className={`mr-2 h-4 w-4 ${loading.jobs ? 'animate-spin' : ''}`}
+                      />
+                      Load More Jobs ({JOBS_PER_PAGE} more)
                     </Button>
                   </div>
+                )}
 
-                  {/* Job Info Header */}
-                  <div className="mb-6 p-4 uppercase">
-                    <div className="mb-2 flex items-center gap-8">
-                      <div>
-                        <div className="text-xs font-bold">ORC</div>
-                        <div className="font-mono">
-                          {jobs.find((j) => j.id === openId)?.numero_orc ?? '-'}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold">FO</div>
-                        <div className="font-mono">
-                          {jobs.find((j) => j.id === openId)?.numero_fo}
-                        </div>
-                      </div>
-                      <div className="flex-1">
-                        <div className="text-xs font-bold">Nome Campanha</div>
-                        <div className="truncate font-mono">
-                          {jobs.find((j) => j.id === openId)?.nome_campanha}
-                        </div>
-                      </div>
+                {/* Loading indicator for additional pages */}
+                {loading.jobs && jobs.length > 0 && (
+                  <div className="mt-4 flex justify-center">
+                    <div className="text-muted-foreground flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading more jobs...
                     </div>
                   </div>
-
-                  {/* Items Table */}
-                  <div className="mt-6">
-                    <div className="bg-background border-border w-full rounded-none border-2">
-                      <div className="w-full rounded-none">
-                        <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead className="border-border sticky top-0 z-10 flex-1 border-b-2 bg-[var(--orange)] font-bold uppercase">
-                                Item
-                              </TableHead>
-                              <TableHead className="border-border sticky top-0 z-10 w-[140px] border-b-2 bg-[var(--orange)] font-bold uppercase">
-                                Código
-                              </TableHead>
-                              <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
-                                Quantidade
-                              </TableHead>
-                              <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
-                                Dias Conc.
-                              </TableHead>
-                              <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
-                                Dias Saída
-                              </TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {allItems
-                              .filter((item) => item.folha_obra_id === openId)
-                              .map((item) => (
-                                <TableRow
-                                  key={item.id}
-                                  className="hover:bg-[var(--main)]"
-                                >
-                                  <TableCell>
-                                    <Input
-                                      value={item.descricao}
-                                      onChange={(e) => {
-                                        const value = e.target.value
-                                        setAllItems((prevItems) =>
-                                          prevItems.map((i) =>
-                                            i.id === item.id
-                                              ? { ...i, descricao: value }
-                                              : i,
-                                          ),
-                                        )
-                                      }}
-                                      onBlur={async (e) => {
-                                        const value = e.target.value
-                                        await supabase
-                                          .from('items_base')
-                                          .update({ descricao: value })
-                                          .eq('id', item.id)
-                                      }}
-                                      className="h-10 w-full rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
-                                      placeholder="Item"
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Input
-                                      value={item.codigo || ''}
-                                      onChange={(e) => {
-                                        const value = e.target.value
-                                        setAllItems((prevItems) =>
-                                          prevItems.map((i) =>
-                                            i.id === item.id
-                                              ? { ...i, codigo: value }
-                                              : i,
-                                          ),
-                                        )
-                                      }}
-                                      onBlur={async (e) => {
-                                        const value = e.target.value
-                                        await supabase
-                                          .from('items_base')
-                                          .update({ codigo: value })
-                                          .eq('id', item.id)
-                                      }}
-                                      className="h-10 w-full rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
-                                      placeholder="Código"
-                                    />
-                                  </TableCell>
-                                  <TableCell>
-                                    <Input
-                                      type="number"
-                                      value={item.quantidade || ''}
-                                      onChange={(e) => {
-                                        const value =
-                                          e.target.value === ''
-                                            ? null
-                                            : Number(e.target.value)
-                                        setAllItems((prevItems) =>
-                                          prevItems.map((i) =>
-                                            i.id === item.id
-                                              ? { ...i, quantidade: value }
-                                              : i,
-                                          ),
-                                        )
-                                      }}
-                                      onBlur={async (e) => {
-                                        const value =
-                                          e.target.value === ''
-                                            ? null
-                                            : Number(e.target.value)
-                                        await supabase
-                                          .from('items_base')
-                                          .update({ quantidade: value })
-                                          .eq('id', item.id)
-                                      }}
-                                      className="h-10 w-full rounded-none border-0 text-right text-sm outline-0 focus:border-0 focus:ring-0"
-                                      placeholder="Quantidade"
-                                    />
-                                  </TableCell>
-                                  <TableCell className="w-[90px] text-center">
-                                    {item.dias_conclusao ?? '-'}
-                                  </TableCell>
-                                  <TableCell className="w-[90px] text-center">
-                                    {item.dias_saida ?? '-'}
-                                  </TableCell>
-                                </TableRow>
-                              ))}
-                            {allItems.filter(
-                              (item) => item.folha_obra_id === openId,
-                            ).length === 0 && (
-                              <TableRow>
-                                <TableCell
-                                  colSpan={3}
-                                  className="text-center text-gray-500"
-                                >
-                                  Nenhum item encontrado.
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </Suspense>
+                )}
+              </>
             )}
-          </DrawerContent>
-        </Drawer>
+
+            {/* drawer */}
+            <Drawer
+              open={!!openId}
+              onOpenChange={(o) => !o && setOpenId(null)}
+              shouldScaleBackground={false}
+            >
+              <DrawerContent className="!top-0 h-[98vh] max-h-[98vh] min-h-[98vh] !transform-none overflow-y-auto !filter-none !backdrop-filter-none will-change-auto">
+                <DrawerHeader className="sr-only">
+                  <DrawerTitle>
+                    {openId && jobs.find((j) => j.id === openId)
+                      ? `Trabalho (FO: ${jobs.find((j) => j.id === openId)?.numero_fo})`
+                      : 'Detalhes do Trabalho'}
+                  </DrawerTitle>
+                  <DrawerDescription>
+                    Detalhes Produção Folha de Obra
+                  </DrawerDescription>
+                </DrawerHeader>
+                {openId && (
+                  <Suspense
+                    fallback={
+                      <div className="flex h-full items-center justify-center">
+                        <Loader2 className="h-8 w-8 animate-spin" />
+                        <span className="ml-2">Loading...</span>
+                      </div>
+                    }
+                  >
+                    <div className="relative space-y-6 p-6">
+                      {/* Header buttons */}
+                      <div className="absolute top-6 right-6 z-10 flex gap-2">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="outline"
+                                onClick={() => {
+                                  const items = allItems
+                                    .filter(
+                                      (item) => item.folha_obra_id === openId,
+                                    )
+                                    .map(
+                                      (item) =>
+                                        `${item.descricao.toUpperCase()} - ${item.codigo?.toUpperCase() || ''} - ${item.quantidade}`,
+                                    )
+                                    .join('\n')
+                                  navigator.clipboard.writeText(items)
+                                }}
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Copiar items</TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+
+                        <Button
+                          size="icon"
+                          variant="outline"
+                          onClick={() => setOpenId(null)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      {/* Job Info Header */}
+                      <div className="mb-6 p-4 uppercase">
+                        <div className="mb-2 flex items-center gap-8">
+                          <div>
+                            <div className="text-xs font-bold">ORC</div>
+                            <div className="font-mono">
+                              {jobs.find((j) => j.id === openId)?.numero_orc ??
+                                '-'}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs font-bold">FO</div>
+                            <div className="font-mono">
+                              {jobs.find((j) => j.id === openId)?.numero_fo}
+                            </div>
+                          </div>
+                          <div className="flex-1">
+                            <div className="text-xs font-bold">
+                              Nome Campanha
+                            </div>
+                            <div className="truncate font-mono">
+                              {jobs.find((j) => j.id === openId)?.nome_campanha}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Items Table */}
+                      <div className="mt-6">
+                        <div className="bg-background border-border w-full rounded-none border-2">
+                          <div className="w-full rounded-none">
+                            <Table className="w-full rounded-none border-0 [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="border-border sticky top-0 z-10 flex-1 border-b-2 bg-[var(--orange)] font-bold uppercase">
+                                    Item
+                                  </TableHead>
+                                  <TableHead className="border-border sticky top-0 z-10 w-[140px] border-b-2 bg-[var(--orange)] font-bold uppercase">
+                                    Código
+                                  </TableHead>
+                                  <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
+                                    Quantidade
+                                  </TableHead>
+                                  <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
+                                    Dias Conc.
+                                  </TableHead>
+                                  <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
+                                    Dias Saída
+                                  </TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {allItems
+                                  .filter(
+                                    (item) => item.folha_obra_id === openId,
+                                  )
+                                  .map((item) => (
+                                    <TableRow
+                                      key={item.id}
+                                      className="hover:bg-[var(--main)]"
+                                    >
+                                      <TableCell>
+                                        <Input
+                                          value={item.descricao}
+                                          onChange={(e) => {
+                                            const value = e.target.value
+                                            setAllItems((prevItems) =>
+                                              prevItems.map((i) =>
+                                                i.id === item.id
+                                                  ? { ...i, descricao: value }
+                                                  : i,
+                                              ),
+                                            )
+                                          }}
+                                          onBlur={async (e) => {
+                                            const value = e.target.value
+                                            await supabase
+                                              .from('items_base')
+                                              .update({ descricao: value })
+                                              .eq('id', item.id)
+                                          }}
+                                          className="h-10 w-full rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                                          placeholder="Item"
+                                        />
+                                      </TableCell>
+                                      <TableCell>
+                                        <Input
+                                          value={item.codigo || ''}
+                                          onChange={(e) => {
+                                            const value = e.target.value
+                                            setAllItems((prevItems) =>
+                                              prevItems.map((i) =>
+                                                i.id === item.id
+                                                  ? { ...i, codigo: value }
+                                                  : i,
+                                              ),
+                                            )
+                                          }}
+                                          onBlur={async (e) => {
+                                            const value = e.target.value
+                                            await supabase
+                                              .from('items_base')
+                                              .update({ codigo: value })
+                                              .eq('id', item.id)
+                                          }}
+                                          className="h-10 w-full rounded-none border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                                          placeholder="Código"
+                                        />
+                                      </TableCell>
+                                      <TableCell>
+                                        <Input
+                                          type="number"
+                                          value={item.quantidade || ''}
+                                          onChange={(e) => {
+                                            const value =
+                                              e.target.value === ''
+                                                ? null
+                                                : Number(e.target.value)
+                                            setAllItems((prevItems) =>
+                                              prevItems.map((i) =>
+                                                i.id === item.id
+                                                  ? { ...i, quantidade: value }
+                                                  : i,
+                                              ),
+                                            )
+                                          }}
+                                          onBlur={async (e) => {
+                                            const value =
+                                              e.target.value === ''
+                                                ? null
+                                                : Number(e.target.value)
+                                            await supabase
+                                              .from('items_base')
+                                              .update({ quantidade: value })
+                                              .eq('id', item.id)
+                                          }}
+                                          className="h-10 w-full rounded-none border-0 text-right text-sm outline-0 focus:border-0 focus:ring-0"
+                                          placeholder="Quantidade"
+                                        />
+                                      </TableCell>
+                                      <TableCell className="w-[90px] text-center">
+                                        {item.dias_conclusao ?? '-'}
+                                      </TableCell>
+                                      <TableCell className="w-[90px] text-center">
+                                        {item.dias_saida ?? '-'}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                {allItems.filter(
+                                  (item) => item.folha_obra_id === openId,
+                                ).length === 0 && (
+                                  <TableRow>
+                                    <TableCell
+                                      colSpan={3}
+                                      className="text-center text-gray-500"
+                                    >
+                                      Nenhum item encontrado.
+                                    </TableCell>
+                                  </TableRow>
+                                )}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Suspense>
+                )}
+              </DrawerContent>
+            </Drawer>
+          </TabsContent>
+
+          <TabsContent value="analytics" className="space-y-6">
+            <FinancialAnalyticsCharts
+              supabase={supabase}
+              onRefresh={async () => {
+                // The analytics component will handle its own refresh
+                return Promise.resolve()
+              }}
+            />
+          </TabsContent>
+        </Tabs>
       </div>
     </PermissionGuard>
   )
