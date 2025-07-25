@@ -1,0 +1,135 @@
+WITH tables AS (
+    SELECT
+        t.table_name,
+        obj_description(('public.' || t.table_name)::regclass, 'pg_class') as table_description
+    FROM
+        information_schema.tables t
+    WHERE
+        t.table_schema = 'public'
+        AND t.table_type = 'BASE TABLE'
+),
+columns AS (
+    SELECT
+        c.table_name,
+        c.column_name,
+        c.data_type,
+        c.character_maximum_length,
+        c.column_default,
+        c.is_nullable,
+        pg_catalog.col_description(('public.' || c.table_name)::regclass::oid, c.ordinal_position) as column_description,
+        c.ordinal_position
+    FROM
+        information_schema.columns c
+    WHERE
+        c.table_schema = 'public'
+),
+primary_keys AS (
+    SELECT
+        tc.table_name,
+        kc.column_name
+    FROM
+        information_schema.table_constraints tc
+    JOIN
+        information_schema.key_column_usage kc ON tc.constraint_name = kc.constraint_name
+        AND tc.table_schema = kc.table_schema
+    WHERE
+        tc.constraint_type = 'PRIMARY KEY'
+        AND tc.table_schema = 'public'
+),
+foreign_keys AS (
+    SELECT
+        tc.table_name,
+        kcu.column_name,
+        ccu.table_name AS foreign_table_name,
+        ccu.column_name AS foreign_column_name
+    FROM
+        information_schema.table_constraints AS tc
+    JOIN
+        information_schema.key_column_usage AS kcu ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+    JOIN
+        information_schema.constraint_column_usage AS ccu ON ccu.constraint_name = tc.constraint_name
+        AND ccu.table_schema = tc.table_schema
+    WHERE
+        tc.constraint_type = 'FOREIGN KEY'
+        AND tc.table_schema = 'public'
+),
+rls_policies AS (
+    SELECT
+        c.relname AS table_name,
+        p.polname AS policy_name,
+        CASE WHEN p.polpermissive THEN 'PERMISSIVE' ELSE 'RESTRICTIVE' END AS policy_type,
+        CASE 
+            WHEN p.polroles = '{0}' THEN 'PUBLIC'
+            ELSE array_to_string(ARRAY(SELECT rolname FROM pg_roles WHERE oid = ANY(p.polroles)), ', ')
+        END AS roles,
+        CASE p.polcmd
+            WHEN 'r' THEN 'SELECT'
+            WHEN 'a' THEN 'INSERT'
+            WHEN 'w' THEN 'UPDATE'
+            WHEN 'd' THEN 'DELETE'
+            WHEN '*' THEN 'ALL'
+        END AS command,
+        pg_get_expr(p.polqual, p.polrelid) AS using_expression,
+        pg_get_expr(p.polwithcheck, p.polrelid) AS with_check_expression
+    FROM
+        pg_policy p
+    JOIN
+        pg_class c ON p.polrelid = c.oid
+    WHERE
+        c.relnamespace = (SELECT oid FROM pg_namespace WHERE nspname = 'public')
+)
+SELECT
+    json_build_object(
+        'database_structure', (
+            SELECT json_agg(
+                json_build_object(
+                    'table_name', t.table_name,
+                    'table_description', t.table_description,
+                    'columns', (
+                        SELECT json_agg(
+                            json_build_object(
+                                'column_name', c.column_name,
+                                'data_type', c.data_type,
+                                'max_length', c.character_maximum_length,
+                                'default_value', c.column_default,
+                                'is_nullable', c.is_nullable,
+                                'description', c.column_description,
+                                'is_primary_key', (
+                                    SELECT COUNT(*) > 0
+                                    FROM primary_keys pk
+                                    WHERE pk.table_name = t.table_name AND pk.column_name = c.column_name
+                                ),
+                                'foreign_key_reference', (
+                                    SELECT json_build_object(
+                                        'foreign_table', fk.foreign_table_name,
+                                        'foreign_column', fk.foreign_column_name
+                                    )
+                                    FROM foreign_keys fk
+                                    WHERE fk.table_name = t.table_name AND fk.column_name = c.column_name
+                                    LIMIT 1
+                                )
+                            ) ORDER BY c.ordinal_position
+                        )
+                        FROM columns c
+                        WHERE c.table_name = t.table_name
+                    ),
+                    'rls_policies', (
+                        SELECT json_agg(
+                            json_build_object(
+                                'policy_name', rls.policy_name,
+                                'policy_type', rls.policy_type,
+                                'roles', rls.roles,
+                                'command', rls.command,
+                                'using_expression', rls.using_expression,
+                                'with_check_expression', rls.with_check_expression
+                            )
+                        )
+                        FROM rls_policies rls
+                        WHERE rls.table_name = t.table_name
+                    )
+                ) ORDER BY t.table_name
+            )
+            FROM tables t
+        )
+    ) as db_structure;

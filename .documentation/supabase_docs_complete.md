@@ -1,7 +1,7 @@
 # Supabase Database Documentation
 
 ## Overview
-This documentation provides a comprehensive overview of the Supabase database structure for what appears to be a printing/manufacturing management system. The database contains 27 tables managing various aspects of the business including inventory, production, clients, suppliers, logistics, and financial data.
+This documentation provides a comprehensive overview of the Supabase database structure for a printing/manufacturing management system. The database contains 28 tables managing various aspects of the business including inventory, production, clients, suppliers, logistics, and financial data.
 
 ## Database Architecture
 
@@ -12,7 +12,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 - **Production Management**: `folhas_obras`, `items_base`, `producao_operacoes`, `producao_operacoes_audit`, `maquinas`, `maquinas_operacao`
 - **Design Workflow**: `designer_items`, `complexidade`
 - **Logistics**: `logistica_entregas`, `transportadora`
-- **Financial Data**: `ne_fornecedor`, `orcamentos_vendedor`, `vendas_vendedor`, `listagem_compras`, `faturas_vendedor`
+- **Financial Data**: `ne_fornecedor`, `orcamentos_vendedor`, `vendas_vendedor`, `listagem_compras`, `listagem_notas_credito`, `faturas_vendedor`
 - **User Management**: `profiles`, `roles`, `role_permissions`
 - **Configuration**: `feriados`
 
@@ -143,7 +143,28 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 7. feriados
+### 7. faturas_vendedor
+**Purpose**: Invoice data management for revenue tracking and financial reporting.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | uuid | NO | uuid_generate_v4() | Primary key |
+| numero_documento | text | NO | - | Document/invoice number |
+| nome_documento | text | NO | - | Document type (e.g., "Factura") |
+| data_documento | text | NO | - | Document/invoice date |
+| nome_cliente | text | NO | - | Client name |
+| euro_total | numeric | YES | 0 | Total amount in euros |
+| nome | text | YES | - | Seller name/initials |
+| department | text | YES | - | Department |
+| created_at | timestamptz | YES | now() | Creation timestamp |
+| updated_at | timestamptz | YES | now() | Last update timestamp |
+
+**RLS Policies:**
+- Allow authenticated users full access to faturas_vendedor (ALL operations)
+
+---
+
+### 8. feriados
 **Purpose**: Holiday calendar management.
 
 | Column | Type | Nullable | Default | Description |
@@ -159,7 +180,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 8. folhas_obras
+### 9. folhas_obras
 **Purpose**: Work orders/job sheets management.
 
 | Column | Type | Nullable | Default | Description |
@@ -194,7 +215,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 9. fornecedores
+### 10. fornecedores
 **Purpose**: Supplier management.
 
 | Column | Type | Nullable | Default | Description |
@@ -215,7 +236,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 10. items_base
+### 11. items_base
 **Purpose**: Base items/products within work orders.
 
 | Column | Type | Nullable | Default | Description |
@@ -247,7 +268,43 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 11. logistica_entregas
+### 12. listagem_compras
+**Purpose**: Purchase listing management for supplier transactions and financial tracking.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | uuid | NO | uuid_generate_v4() | Primary key |
+| nome_fornecedor | text | NO | - | Supplier name |
+| data_documento | text | NO | - | Document date |
+| nome_dossier | text | YES | - | Dossier name |
+| euro_total | numeric | YES | 0 | Total amount in euros |
+| created_at | timestamptz | YES | now() | Creation timestamp |
+| updated_at | timestamptz | YES | now() | Last update timestamp |
+
+**RLS Policies:**
+- Allow authenticated users full access to listagem_compras (ALL operations)
+
+---
+
+### 13. listagem_notas_credito
+**Purpose**: Credit notes listing management for financial tracking.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | uuid | NO | uuid_generate_v4() | Primary key |
+| numero_documento | text | NO | - | Document number |
+| nome_documento | text | NO | - | Document type |
+| data_documento | text | NO | - | Document date |
+| euro_total | numeric | YES | 0 | Total amount in euros (negative for credit notes) |
+| created_at | timestamptz | YES | now() | Creation timestamp |
+| updated_at | timestamptz | YES | now() | Last update timestamp |
+
+**RLS Policies:**
+- Allow authenticated users full access to listagem_notas_credito (ALL operations)
+
+---
+
+### 14. logistica_entregas
 **Purpose**: Logistics and delivery management.
 
 | Column | Type | Nullable | Default | Description |
@@ -281,16 +338,12 @@ This documentation provides a comprehensive overview of the Supabase database st
 **Relationships:**
 - `item_id` → `items_base.id` (Many-to-One, ON DELETE CASCADE)
 
-**Indexes:**
-- `idx_logistica_entregas_descricao` on `descricao` (btree)
-
 **RLS Policies:**
 - Allow authenticated full access (ALL operations)
-- Simple auth policy (ALL operations)
 
 ---
 
-### 12. maquinas
+### 15. maquinas
 **Purpose**: Legacy machine management (appears to be older table).
 
 | Column | Type | Nullable | Default | Description |
@@ -306,7 +359,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 13. maquinas_operacao
+### 16. maquinas_operacao
 **Purpose**: Operational machine management.
 
 | Column | Type | Nullable | Default | Description |
@@ -326,7 +379,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 14. materiais
+### 17. materiais
 **Purpose**: Materials catalog and specifications.
 
 | Column | Type | Nullable | Default | Description |
@@ -362,7 +415,53 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 15. paletes
+### 18. ne_fornecedor
+**Purpose**: Supplier order management for invoicing program import (NE_Fornecedor).
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | uuid | NO | uuid_generate_v4() | Primary key |
+| numero_documento | text | NO | - | Document/order number |
+| nome_dossier | text | YES | - | Dossier name |
+| data_documento | text | NO | - | Document date |
+| nome_fornecedor | text | NO | - | Supplier name |
+| nome_utilizador | text | YES | - | User name who created the order |
+| iniciais_utilizador | text | YES | - | User initials |
+| euro_total | numeric | YES | 0 | Total amount in euros |
+| created_at | timestamptz | YES | now() | Creation timestamp |
+| updated_at | timestamptz | YES | now() | Last update timestamp |
+| nome | text | YES | - | Additional name field |
+| department | text | YES | - | Department |
+
+**RLS Policies:**
+- Allow authenticated users full access to ne_fornecedor (ALL operations)
+
+---
+
+### 19. orcamentos_vendedor
+**Purpose**: Budget/quote management for sales tracking.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | uuid | NO | uuid_generate_v4() | Primary key |
+| numero_documento | text | NO | - | Document/quote number |
+| data_documento | text | NO | - | Document date |
+| nome_cliente | text | NO | - | Client name |
+| nome_utilizador | text | YES | - | User name who created the quote |
+| euro_total | numeric | YES | 0 | Total amount in euros |
+| iniciais_utilizador | text | YES | - | User initials |
+| nome_dossier | text | YES | - | Dossier name |
+| created_at | timestamptz | YES | now() | Creation timestamp |
+| updated_at | timestamptz | YES | now() | Last update timestamp |
+| nome | text | YES | - | Additional name field |
+| department | text | YES | - | Department |
+
+**RLS Policies:**
+- Allow authenticated users full access to orcamentos_vendedor (ALL operations)
+
+---
+
+### 20. paletes
 **Purpose**: Palette management table for tracking palettes with sequential numbering.
 
 | Column | Type | Nullable | Default | Description |
@@ -389,70 +488,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 16. producao_operacoes_audit
-**Purpose**: Enhanced audit trail for comprehensive tracking of production operations including creation, updates, and deletion. Provides complete visibility into WHO made changes, WHAT was changed, and WHEN changes occurred to prevent data manipulation and fraud.
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | uuid | NO | uuid_generate_v4() | Primary key |
-| operacao_id | uuid | YES | - | Foreign key to producao_operacoes table |
-| action_type | text | NO | - | Type of audit action: INSERT, UPDATE, DELETE |
-| field_name | text | YES | - | Name of the field that was changed (operador_id, num_placas_print, num_placas_corte, etc.) |
-| operador_antigo | uuid | YES | - | Previous operator assigned (references profiles.id) |
-| operador_novo | uuid | YES | - | New operator assigned (references profiles.id) |
-| quantidade_antiga | numeric | YES | - | Previous quantity value (for quantity changes) |
-| quantidade_nova | numeric | YES | - | New quantity value (for quantity changes) |
-| old_value | text | YES | - | Previous value as text (for other field changes) |
-| new_value | text | YES | - | New value as text (for other field changes) |
-| changed_by | uuid | NO | - | Foreign key to profiles table (WHO made the change - authenticated user's profile.id) |
-| changed_at | timestamptz | YES | now() | Timestamp when change occurred |
-| operation_details | jsonb | YES | - | Complete operation data snapshot (for INSERT/DELETE actions) |
-| notes | text | YES | - | Additional context or notes about the change |
-| created_at | timestamptz | YES | now() | Record creation timestamp |
-
-**Relationships:**
-- `operacao_id` → `producao_operacoes.id` (Many-to-One, ON DELETE CASCADE)
-- `changed_by` → `profiles.id` (Many-to-One, NOT NULL - tracks who made the change)
-- `operador_antigo` → `profiles.id` (Many-to-One, NULLABLE - previous operator assigned)
-- `operador_novo` → `profiles.id` (Many-to-One, NULLABLE - new operator assigned)
-
-**Constraints:**
-- `action_type` CHECK constraint: Only allows 'INSERT', 'UPDATE', 'DELETE'
-- `changed_by` NOT NULL constraint: Every change must be attributed to a user
-- Foreign key constraints ensure referential integrity
-
-**Indexes:**
-- `idx_producao_operacoes_audit_operacao_id` on `operacao_id` (btree)
-- `idx_producao_operacoes_audit_changed_at` on `changed_at` (btree) 
-- `idx_producao_operacoes_audit_changed_by` on `changed_by` (btree)
-- `idx_producao_operacoes_audit_action_type` on `action_type` (btree)
-- `idx_producao_operacoes_audit_operador_antigo` on `operador_antigo` (btree)
-- `idx_producao_operacoes_audit_operador_novo` on `operador_novo` (btree)
-
-**RLS Policies:**
-- Allow authenticated users to insert audit logs (INSERT)
-- Allow authenticated users to read audit logs (SELECT) 
-- Prevent updates on audit logs (UPDATE) - immutable audit trail
-- Prevent deletes on audit logs (DELETE) - immutable audit trail
-
-**Audit Tracking Features:**
-- **Operation Creation**: Logs when new operations are added with initial operator and quantity
-- **Operator Changes**: Tracks when operators are reassigned to different operations
-- **Quantity Changes**: Monitors increases/decreases in num_placas_print and num_placas_corte
-- **Field Updates**: Records changes to materials, machines, dates, notes, palettes, etc.
-- **Operation Deletion**: Captures complete operation data before deletion
-- **User Attribution**: Always tracks WHO (authenticated user) made each change
-- **Anti-Fraud Protection**: Separate tracking of operator assignments vs. who made the changes
-
-**Key Security Features:**
-- **Immutable Trail**: Records cannot be modified or deleted once created
-- **User Accountability**: Every change is attributed to the authenticated user making it
-- **Comprehensive Tracking**: Captures both the change details and full context
-- **Fraud Detection**: Easy to identify suspicious patterns like quantity inflation or unauthorized operator reassignments
-
----
-
-### 17. producao_operacoes
+### 21. producao_operacoes
 **Purpose**: Production operations tracking.
 
 | Column | Type | Nullable | Default | Description |
@@ -494,7 +530,42 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 18. profiles
+### 22. producao_operacoes_audit
+**Purpose**: Enhanced audit trail for comprehensive tracking of production operations including creation, updates, and deletion.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | uuid | NO | uuid_generate_v4() | Primary key |
+| operacao_id | uuid | YES | - | Foreign key to producao_operacoes table |
+| action_type | text | NO | - | Type of audit action: INSERT, UPDATE, DELETE |
+| field_name | text | YES | - | Name of the field that was changed |
+| operador_antigo | uuid | YES | - | Previous operator assigned (references profiles.id) |
+| operador_novo | uuid | YES | - | New operator assigned (references profiles.id) |
+| quantidade_antiga | numeric | YES | - | Previous quantity value |
+| quantidade_nova | numeric | YES | - | New quantity value |
+| old_value | text | YES | - | Previous value as text |
+| new_value | text | YES | - | New value as text |
+| changed_by | uuid | NO | - | Foreign key to profiles table (WHO made the change) |
+| changed_at | timestamptz | YES | now() | Timestamp when change occurred |
+| operation_details | jsonb | YES | - | Complete operation data snapshot |
+| notes | text | YES | - | Additional context or notes about the change |
+| created_at | timestamptz | YES | now() | Record creation timestamp |
+
+**Relationships:**
+- `operacao_id` → `producao_operacoes.id` (Many-to-One, ON DELETE CASCADE)
+- `changed_by` → `profiles.id` (Many-to-One, NOT NULL)
+- `operador_antigo` → `profiles.id` (Many-to-One, NULLABLE)
+- `operador_novo` → `profiles.id` (Many-to-One, NULLABLE)
+
+**RLS Policies:**
+- Allow authenticated users to insert audit logs (INSERT)
+- Allow authenticated users to read audit logs (SELECT)
+- Prevent updates on audit logs (UPDATE) - immutable audit trail
+- Prevent deletes on audit logs (DELETE) - immutable audit trail
+
+---
+
+### 23. profiles
 **Purpose**: User profiles and role management.
 
 | Column | Type | Nullable | Default | Description |
@@ -517,7 +588,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 19. role_permissions
+### 24. role_permissions
 **Purpose**: Role-based permissions for different system areas.
 
 | Column | Type | Nullable | Default | Description |
@@ -537,7 +608,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 20. roles
+### 25. roles
 **Purpose**: User role definitions.
 
 | Column | Type | Nullable | Default | Description |
@@ -553,7 +624,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
-### 21. stocks
+### 26. stocks
 **Purpose**: Inventory stock management.
 
 | Column | Type | Nullable | Default | Description |
@@ -579,158 +650,6 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 **RLS Policies:**
 - Authenticated users can manage stocks (ALL operations)
-
----
-
-### 22. ne_fornecedor
-**Purpose**: Supplier order management for invoicing program import (NE_Fornecedor).
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | uuid | NO | uuid_generate_v4() | Primary key |
-| numero_documento | text | NO | - | Document/order number |
-| nome_dossier | text | YES | - | Dossier name |
-| data_documento | date | NO | - | Document date |
-| nome_fornecedor | text | NO | - | Supplier name |
-| nome_utilizador | text | YES | - | User name who created the order |
-| iniciais_utilizador | text | YES | - | User initials |
-| euro_total | numeric(10,2) | YES | 0 | Total amount in euros |
-| created_at | timestamptz | YES | now() | Creation timestamp |
-| updated_at | timestamptz | YES | now() | Last update timestamp |
-
-**Indexes:**
-- `idx_ne_fornecedor_numero_documento` on `numero_documento` (btree)
-- `idx_ne_fornecedor_data_documento` on `data_documento` (btree)
-- `idx_ne_fornecedor_nome_fornecedor` on `nome_fornecedor` (btree)
-- `idx_ne_fornecedor_nome_utilizador` on `nome_utilizador` (btree)
-
-**Triggers:**
-- `update_ne_fornecedor_updated_at` - Auto-updates `updated_at` on row changes
-
-**RLS Policies:**
-- Allow authenticated users full access (ALL operations)
-
----
-
-### 23. orcamentos_vendedor
-**Purpose**: Budget/quote management for sales tracking.
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | uuid | NO | uuid_generate_v4() | Primary key |
-| numero_documento | text | NO | - | Document/quote number |
-| data_documento | date | NO | - | Document date |
-| nome_cliente | text | NO | - | Client name |
-| nome_utilizador | text | YES | - | User name who created the quote |
-| euro_total | numeric(10,2) | YES | 0 | Total amount in euros |
-| iniciais_utilizador | text | YES | - | User initials |
-| nome_dossier | text | YES | - | Dossier name |
-| created_at | timestamptz | YES | now() | Creation timestamp |
-| updated_at | timestamptz | YES | now() | Last update timestamp |
-
-**Indexes:**
-- `idx_orcamentos_vendedor_numero_documento` on `numero_documento` (btree)
-- `idx_orcamentos_vendedor_data_documento` on `data_documento` (btree)
-- `idx_orcamentos_vendedor_nome_cliente` on `nome_cliente` (btree)
-- `idx_orcamentos_vendedor_nome_utilizador` on `nome_utilizador` (btree)
-
-**Triggers:**
-- `update_orcamentos_vendedor_updated_at` - Auto-updates `updated_at` on row changes
-
-**RLS Policies:**
-- Allow authenticated users full access (ALL operations)
-
----
-
-### 24. vendas_vendedor
-**Purpose**: Sales data management for revenue tracking and invoicing program import.
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | uuid | NO | uuid_generate_v4() | Primary key |
-| numero_documento | text | NO | - | Document/invoice number |
-| nome_documento | text | NO | - | Document type (e.g., "Factura") |
-| data_documento | date | NO | - | Document date |
-| nome_cliente | text | NO | - | Client name |
-| euro_total | numeric(10,2) | YES | 0 | Total amount in euros |
-| nome_vendedor | text | YES | - | Seller name/initials (e.g., "RB", "IMACX") |
-| created_at | timestamptz | YES | now() | Creation timestamp |
-| updated_at | timestamptz | YES | now() | Last update timestamp |
-
-**Indexes:**
-- `idx_vendas_vendedor_numero_documento` on `numero_documento` (btree)
-- `idx_vendas_vendedor_data_documento` on `data_documento` (btree)
-- `idx_vendas_vendedor_nome_cliente` on `nome_cliente` (btree)
-- `idx_vendas_vendedor_nome_vendedor` on `nome_vendedor` (btree)
-- `idx_vendas_vendedor_nome_documento` on `nome_documento` (btree)
-
-**Triggers:**
-- `update_vendas_vendedor_updated_at` - Auto-updates `updated_at` on row changes
-
-**RLS Policies:**
-- Allow authenticated users full access (ALL operations)
-
----
-
-### 25. listagem_compras
-**Purpose**: Purchase listing management for supplier transactions and financial tracking.
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | uuid | NO | uuid_generate_v4() | Primary key |
-| nome_fornecedor | text | NO | - | Supplier name |
-| data_documento | date | NO | - | Document date |
-| nome_dossier | text | YES | - | Dossier name |
-| euro_total | numeric(10,2) | YES | 0 | Total amount in euros |
-| created_at | timestamptz | YES | now() | Creation timestamp |
-| updated_at | timestamptz | YES | now() | Last update timestamp |
-
-**Indexes:**
-- `idx_listagem_compras_nome_fornecedor` on `nome_fornecedor` (btree)
-- `idx_listagem_compras_data_documento` on `data_documento` (btree)
-- `idx_listagem_compras_nome_dossier` on `nome_dossier` (btree)
-- `idx_listagem_compras_euro_total` on `euro_total` (btree)
-
-**Triggers:**
-- `update_listagem_compras_updated_at` - Auto-updates `updated_at` on row changes
-
-**RLS Policies:**
-- Inherits default authentication requirements (authenticated users access)
-
----
-
-### 26. faturas_vendedor
-**Purpose**: Invoice data management for revenue tracking and financial reporting. Contains invoice records from the invoicing program import.
-
-| Column | Type | Nullable | Default | Description |
-|--------|------|----------|---------|-------------|
-| id | uuid | NO | uuid_generate_v4() | Primary key - UUID |
-| numero_documento | text | NO | - | Document/invoice number - unique identifier for each invoice |
-| nome_documento | text | NO | - | Document type (e.g., "Factura") - type of invoice document |
-| data_documento | date | NO | - | Document/invoice date - when the invoice was issued |
-| nome_cliente | text | NO | - | Client name - customer who received the invoice |
-| euro_total | numeric(10,2) | YES | 0 | Total amount in euros - invoice total value |
-| nome_vendedor | text | YES | - | Seller name/initials (e.g., "IMACX", "RB") - who made the sale |
-| created_at | timestamptz | YES | now() | Record creation timestamp |
-| updated_at | timestamptz | YES | now() | Last update timestamp - auto-updated on changes |
-
-**Indexes:**
-- `idx_faturas_vendedor_numero_documento` on `numero_documento` (btree)
-- `idx_faturas_vendedor_data_documento` on `data_documento` (btree)
-- `idx_faturas_vendedor_nome_cliente` on `nome_cliente` (btree)
-- `idx_faturas_vendedor_nome_vendedor` on `nome_vendedor` (btree)
-- `idx_faturas_vendedor_nome_documento` on `nome_documento` (btree)
-- `idx_faturas_vendedor_euro_total` on `euro_total` (btree)
-
-**Triggers:**
-- `update_faturas_vendedor_updated_at` - Auto-updates `updated_at` on row changes using dedicated trigger function
-
-**RLS Policies:**
-- Allow authenticated users full access to faturas_vendedor (ALL operations)
-
-**Comments:**
-- Table: "Invoice data management for revenue tracking and financial reporting. Contains invoice records from the invoicing program import."
-- Comprehensive column comments for all fields documenting purpose and usage
 
 ---
 
@@ -777,6 +696,7 @@ profiles (User Profiles)
 ├── roles (User Roles)
 ├── folhas_obras (Work Orders)
 ├── producao_operacoes (Production Operations)
+├── producao_operacoes_audit (Audit Trail)
 └── paletes (Palette Creation)
 ```
 
@@ -792,61 +712,114 @@ profiles (User Profiles)
 - **Role-Based Access**: Paletes table has specific role-based access (admin, administrativo, producao)
 - **User-Specific**: Profiles table has policies for users to manage their own data
 - **Public Read**: Some tables (like clientes) allow anonymous read access
+- **Immutable Audit**: producao_operacoes_audit prevents updates/deletes to maintain integrity
 
-## Recent Updates
+### Detailed RLS Policy Analysis
 
-### New Paletes Table
-- **Palette Management**: New table for tracking material palettes with sequential numbering
-- **Supplier Integration**: Direct relationship with fornecedores table
-- **Author Tracking**: Records who created each palette entry
-- **Role-Based Access**: Multiple RLS policies for different user roles
+#### Tables with Anonymous Access
+- **clientes**: Full access for anonymous users
+- **folhas_obras**: Full access for anonymous users
 
-### Enhanced Machine Management
-- **Dual Machine Tables**: Both legacy `maquinas` and operational `maquinas_operacao` tables
-- **Cost Tracking**: Added `valor_m2_custo` to both machine tables for better cost management
+#### Tables with Role-Based Access
+- **paletes**: Specific policies for admin, administrativo, and producao roles
 
-### Updated Designer Workflow
-- **Enhanced Notes**: Added `notas` field to `designer_items` for better communication
-- **Improved Tracking**: Better date tracking for design workflow stages
+#### Tables with Restricted Operations
+- **producao_operacoes_audit**: 
+  - INSERT: Allowed for authenticated users
+  - SELECT: Allowed for authenticated users
+  - UPDATE: Prevented (returns false)
+  - DELETE: Prevented (returns false)
 
-### Production Enhancements
-- **Additional Fields**: Added `QT_print` to `producao_operacoes` for quantity tracking
-- **Enhanced Notes**: Multiple note fields (`notas` and `notas_imp`) for different note types
+#### Tables with Standard Authenticated Access
+Most tables follow the standard pattern of allowing full CRUD operations for authenticated users:
+- alertas_stock, armazens, cliente_contacts, complexidade, designer_items
+- feriados, fornecedores, items_base, listagem_compras, listagem_notas_credito
+- logistica_entregas, maquinas, maquinas_operacao, materiais, ne_fornecedor
+- orcamentos_vendedor, producao_operacoes, role_permissions, roles
+- stocks, transportadora, faturas_vendedor
 
-### Role-Based Permissions
-- **New Table**: `role_permissions` for granular access control
-- **Path-Based Access**: Control access to specific application routes/pages
+## Data Integration and Financial Tracking
 
-## Best Practices
+### Financial Data Flow
+The system includes comprehensive financial tracking through multiple tables:
 
-### Database Design Observations
-1. **Consistent Naming**: Portuguese naming convention throughout
-2. **UUID Primary Keys**: All tables use UUID for primary keys
-3. **Audit Trails**: Most tables have created_at/updated_at timestamps
-4. **Soft Deletes**: No explicit soft delete columns observed
-5. **Referential Integrity**: Foreign key relationships properly defined
+1. **Sales Pipeline**: orcamentos_vendedor → vendas_vendedor → faturas_vendedor
+2. **Purchase Pipeline**: ne_fornecedor → listagem_compras
+3. **Credit Management**: listagem_notas_credito
 
-### Performance Considerations
-1. **Indexing**: Consider adding indexes on frequently queried foreign keys
-2. **Materialized Views**: Complex reporting queries might benefit from materialized views
-3. **Partitioning**: Large tables like producao_operacoes and stocks could benefit from date partitioning
+### Import/Export Data Tables
+Several tables are designed for importing data from external financial systems:
+- **ne_fornecedor**: Supplier orders for invoicing program import
+- **orcamentos_vendedor**: Budget/quote management for sales tracking
+- **faturas_vendedor**: Invoice data from invoicing program
+- **listagem_compras**: Purchase listings for financial tracking
+- **listagem_notas_credito**: Credit notes management
 
-### Data Integrity
-1. **Constraints**: Consider adding check constraints for business rules
-2. **Triggers**: Implement triggers for automatic timestamp updates
-3. **Validation**: Add validation for critical fields like email formats, phone numbers
+## Advanced Features
+
+### Audit Trail System
+The `producao_operacoes_audit` table provides comprehensive tracking:
+- **WHO**: Changed by field tracks the authenticated user making changes
+- **WHAT**: Detailed field-level change tracking with old/new values
+- **WHEN**: Timestamp of all changes
+- **WHY**: Notes field for additional context
+- **Anti-Fraud**: Separate tracking of operator assignments vs. who made changes
+
+### Stock Management
+Advanced stock tracking with multiple alert levels:
+- **stock_minimo**: Yellow alert threshold (default: 10)
+- **stock_critico**: Red alert threshold (default: 5)
+- **stock_correct**: Corrected stock amounts with timestamps
+- **alertas_stock**: Configurable alert system with user notifications
+
+### Material Palette Integration
+Sophisticated palette management system:
+- **Sequential Numbering**: Auto-generated P1, P2, P3... format
+- **Material References**: Links to materiais.referencia for auto-fill
+- **Supplier Integration**: Direct connection to supplier information
+- **Author Tracking**: Records who created each palette
+
+## Performance Considerations
+
+### Indexing Strategy
+Based on the table structure, consider adding indexes on:
+- Foreign key columns for faster joins
+- Date columns for time-based queries
+- Frequently filtered columns (status, tipo, etc.)
+
+### Query Optimization
+- Use appropriate joins for related data fetching
+- Consider materialized views for complex reporting queries
+- Implement pagination for large datasets
+
+## Data Integrity Guidelines
+
+### Referential Integrity
+All foreign key relationships are properly defined:
+- Cascade deletes where appropriate (e.g., logistica_entregas → items_base)
+- Nullable foreign keys for optional relationships
+- Non-nullable foreign keys for required relationships
+
+### Data Validation
+Consider implementing:
+- Check constraints for enum-like fields
+- Triggers for automatic timestamp updates
+- Validation functions for business rules
 
 ## Usage Examples
 
 ### Common Query Patterns
+
+#### Work Orders with Items and Client Information
 ```sql
--- Get work orders with items and client information
 SELECT fo.*, ib.descricao, c.nome_cl
 FROM folhas_obras fo
 JOIN items_base ib ON fo.id = ib.folha_obra_id
 LEFT JOIN clientes c ON fo.id_cliente = c.id;
+```
 
--- Check materials with low stock using built-in thresholds
+#### Materials with Stock Status
+```sql
 SELECT m.material, 
        SUM(s.quantidade_disponivel) as total_stock,
        m.stock_minimo,
@@ -859,8 +832,10 @@ SELECT m.material,
 FROM materiais m
 LEFT JOIN stocks s ON m.id = s.material_id
 GROUP BY m.id, m.material, m.stock_minimo, m.stock_critico;
+```
 
--- Production operations with full context
+#### Production Operations with Full Context
+```sql
 SELECT po.data_operacao, 
        mo.nome_maquina, 
        p.first_name || ' ' || p.last_name as operador,
@@ -871,8 +846,10 @@ JOIN maquinas_operacao mo ON po.maquina = mo.id
 JOIN profiles p ON po.operador_id = p.id
 JOIN folhas_obras fo ON po.folha_obra_id = fo.id
 LEFT JOIN materiais m ON po.material_id = m.id;
+```
 
--- Palette tracking with supplier information
+#### Palette Tracking with Supplier Information
+```sql
 SELECT p.no_palete,
        f.nome_forn,
        p.ref_cartao,
@@ -885,6 +862,81 @@ LEFT JOIN profiles pr ON p.author_id = pr.id
 ORDER BY p.created_at DESC;
 ```
 
+#### Audit Trail Analysis
+```sql
+SELECT 
+  audit.action_type,
+  audit.field_name,
+  audit.old_value,
+  audit.new_value,
+  changer.first_name || ' ' || changer.last_name as changed_by,
+  audit.changed_at,
+  po.no_interno
+FROM producao_operacoes_audit audit
+LEFT JOIN profiles changer ON audit.changed_by = changer.id
+LEFT JOIN producao_operacoes po ON audit.operacao_id = po.id
+ORDER BY audit.changed_at DESC;
+```
+
+#### Financial Summary Queries
+```sql
+-- Sales Summary
+SELECT 
+  DATE_TRUNC('month', data_documento::date) as month,
+  SUM(euro_total) as total_sales
+FROM faturas_vendedor
+WHERE data_documento::date >= CURRENT_DATE - INTERVAL '12 months'
+GROUP BY month
+ORDER BY month;
+
+-- Purchase Summary
+SELECT 
+  nome_fornecedor,
+  SUM(euro_total) as total_purchases
+FROM listagem_compras
+WHERE data_documento::text ~ '^\d{4}-\d{2}-\d{2}'
+  AND data_documento::date >= CURRENT_DATE - INTERVAL '12 months'
+GROUP BY nome_fornecedor
+ORDER BY total_purchases DESC;
+```
+
+## Migration and Maintenance
+
+### Schema Updates
+When updating the schema:
+1. Always backup data before migrations
+2. Test migrations on a copy first
+3. Update RLS policies as needed
+4. Verify foreign key constraints remain valid
+
+### Data Cleanup
+Regular maintenance tasks:
+1. Archive old audit records if needed
+2. Clean up orphaned records
+3. Update stock calculations
+4. Verify data integrity constraints
+
+## Best Practices
+
+### Database Design Observations
+1. **Consistent Naming**: Portuguese naming convention throughout
+2. **UUID Primary Keys**: All tables use UUID for primary keys
+3. **Audit Trails**: Comprehensive audit system for critical operations
+4. **Flexible Architecture**: Supports both legacy and new operational workflows
+5. **Financial Integration**: Complete integration with external financial systems
+
+### Security Best Practices
+1. **Principle of Least Privilege**: RLS policies enforce minimal necessary access
+2. **Audit Everything**: Critical operations are fully audited
+3. **Immutable Logs**: Audit trails cannot be modified or deleted
+4. **Role-Based Access**: Granular permissions based on user roles
+
+### Performance Best Practices
+1. **Efficient Queries**: Use appropriate indexes and joins
+2. **Pagination**: Implement for large datasets
+3. **Caching**: Consider for frequently accessed reference data
+4. **Monitoring**: Track query performance and optimize as needed
+
 ---
 
-*This documentation represents the current database schema and should be updated as the system evolves.*
+*This comprehensive documentation covers all 28 tables in the Supabase database, their relationships, RLS policies, and usage patterns. The system demonstrates a mature, well-architected solution for manufacturing/printing business management with strong audit capabilities and financial integration.*

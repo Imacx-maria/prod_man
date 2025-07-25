@@ -20,8 +20,189 @@ export const formatDateToYYYYMMDD = (
 }
 
 /**
+ * Simplified utilities for working with MM/YYYY format data
+ * Since data is already aggregated by month, no complex aggregation needed
+ */
+
+export interface MonthYearData {
+  data_documento: string // Date in format MM/YYYY (e.g., "07/2025")
+  [key: string]: any // Any other properties
+}
+
+export interface SimpleGroupedData {
+  period: string // YYYY-MM format for consistency with charts
+  displayPeriod: string // MM/YYYY format for display
+  data: any[] // Array of original data items for this period
+  [key: string]: any // Aggregated values
+}
+
+/**
+ * Converts MM/YYYY format to YYYY-MM format for chart compatibility
+ */
+export function convertToStandardPeriod(mmyyyyDate: string): string {
+  const [month, year] = mmyyyyDate.split('/')
+  return `${year}-${month.padStart(2, '0')}`
+}
+
+/**
+ * Converts YYYY-MM format back to MM/YYYY format for display
+ */
+export function convertToDisplayPeriod(yyyymmDate: string): string {
+  const [year, month] = yyyymmDate.split('-')
+  return `${month}/${year}`
+}
+
+/**
+ * Groups MM/YYYY format data by month (converts to YYYY-MM internally for sorting)
+ * No complex aggregation needed since data is already monthly
+ */
+export function groupMonthYearData(
+  data: MonthYearData[],
+  aggregationFields: string[] = [],
+): SimpleGroupedData[] {
+  const grouped = data.reduce(
+    (acc, item) => {
+      const standardPeriod = convertToStandardPeriod(item.data_documento)
+
+      if (!acc[standardPeriod]) {
+        acc[standardPeriod] = {
+          period: standardPeriod,
+          displayPeriod: item.data_documento,
+          data: [],
+          ...aggregationFields.reduce(
+            (fieldAcc, field) => {
+              fieldAcc[field] = 0
+              return fieldAcc
+            },
+            {} as Record<string, number>,
+          ),
+        }
+      }
+
+      acc[standardPeriod].data.push(item)
+
+      // Aggregate numeric fields
+      aggregationFields.forEach((field) => {
+        const value = Number(item[field]) || 0
+        acc[standardPeriod][field] += value
+      })
+
+      return acc
+    },
+    {} as Record<string, SimpleGroupedData>,
+  )
+
+  const result = Object.values(grouped).sort((a, b) =>
+    a.period.localeCompare(b.period),
+  )
+
+  return result
+}
+
+/**
+ * Groups MM/YYYY format data by year
+ */
+export function groupMonthYearDataByYear(
+  data: MonthYearData[],
+  aggregationFields: string[] = [],
+): SimpleGroupedData[] {
+  const grouped = data.reduce(
+    (acc, item) => {
+      const [month, year] = item.data_documento.split('/')
+      const yearKey = year
+
+      if (!acc[yearKey]) {
+        acc[yearKey] = {
+          period: yearKey,
+          displayPeriod: yearKey,
+          data: [],
+          ...aggregationFields.reduce(
+            (fieldAcc, field) => {
+              fieldAcc[field] = 0
+              return fieldAcc
+            },
+            {} as Record<string, number>,
+          ),
+        }
+      }
+
+      acc[yearKey].data.push(item)
+
+      // Aggregate numeric fields
+      aggregationFields.forEach((field) => {
+        const value = Number(item[field]) || 0
+        acc[yearKey][field] += value
+      })
+
+      return acc
+    },
+    {} as Record<string, SimpleGroupedData>,
+  )
+
+  const result = Object.values(grouped).sort((a, b) =>
+    a.period.localeCompare(b.period),
+  )
+
+  return result
+}
+
+/**
+ * Format period for display - simplified for MM/YYYY data
+ */
+export function formatSimplePeriodDisplay(
+  period: string,
+  groupBy: 'month' | 'year',
+): string {
+  if (groupBy === 'year') {
+    return period
+  }
+
+  // For month format YYYY-MM, convert to Portuguese month name
+  const [year, month] = period.split('-')
+  const monthNames = [
+    'Jan',
+    'Fev',
+    'Mar',
+    'Abr',
+    'Mai',
+    'Jun',
+    'Jul',
+    'Ago',
+    'Set',
+    'Out',
+    'Nov',
+    'Dez',
+  ]
+
+  return `${monthNames[parseInt(month) - 1]} ${year}`
+}
+
+/**
+ * Get available periods from MM/YYYY data for filtering
+ */
+export function getAvailablePeriodsFromMonthYear(
+  data: MonthYearData[],
+  groupBy: 'month' | 'year',
+): string[] {
+  const periods = new Set<string>()
+
+  data.forEach((item) => {
+    const [month, year] = item.data_documento.split('/')
+    if (groupBy === 'year') {
+      periods.add(year)
+    } else {
+      periods.add(`${year}-${month.padStart(2, '0')}`)
+    }
+  })
+
+  return Array.from(periods).sort()
+}
+
+// Legacy functions kept for backward compatibility during transition
+/**
  * Groups financial data by month or year
  * Used for aggregating daily data from tables like faturas_vendedor, vendas_vendedor, etc.
+ * DEPRECATED: Use groupMonthYearData for MM/YYYY format data
  */
 
 export interface DateGroupableData {
@@ -37,17 +218,12 @@ export interface GroupedData {
 
 /**
  * Groups data by month (YYYY-MM format)
+ * DEPRECATED: Use groupMonthYearData for MM/YYYY format data
  */
 export function groupDataByMonth(
   data: DateGroupableData[],
   aggregationFields: string[] = [],
 ): GroupedData[] {
-  console.log('🗓️ Grouping data by month:', {
-    totalRecords: data.length,
-    sampleData: data.slice(0, 3),
-    aggregationFields,
-  })
-
   const grouped = data.reduce(
     (acc, item) => {
       const date = new Date(item.data)
@@ -84,38 +260,17 @@ export function groupDataByMonth(
     a.period.localeCompare(b.period),
   )
 
-  console.log('📊 Month grouping result:', {
-    periods: result.map((r) => r.period),
-    totalPeriods: result.length,
-    sampleAggregation: result.slice(0, 3).map((r) => ({
-      period: r.period,
-      itemCount: r.data.length,
-      aggregated: aggregationFields.reduce(
-        (acc, field) => {
-          acc[field] = r[field]
-          return acc
-        },
-        {} as Record<string, number>,
-      ),
-    })),
-  })
-
   return result
 }
 
 /**
  * Groups data by year (YYYY format)
+ * DEPRECATED: Use groupMonthYearDataByYear for MM/YYYY format data
  */
 export function groupDataByYear(
   data: DateGroupableData[],
   aggregationFields: string[] = [],
 ): GroupedData[] {
-  console.log('🗓️ Grouping data by year:', {
-    totalRecords: data.length,
-    sampleData: data.slice(0, 3),
-    aggregationFields,
-  })
-
   const grouped = data.reduce(
     (acc, item) => {
       const date = new Date(item.data)
@@ -152,27 +307,12 @@ export function groupDataByYear(
     a.period.localeCompare(b.period),
   )
 
-  console.log('📊 Year grouping result:', {
-    periods: result.map((r) => r.period),
-    totalPeriods: result.length,
-    sampleAggregation: result.slice(0, 3).map((r) => ({
-      period: r.period,
-      itemCount: r.data.length,
-      aggregated: aggregationFields.reduce(
-        (acc, field) => {
-          acc[field] = r[field]
-          return acc
-        },
-        {} as Record<string, number>,
-      ),
-    })),
-  })
-
   return result
 }
 
 /**
  * Format period for display
+ * DEPRECATED: Use formatSimplePeriodDisplay for MM/YYYY format data
  */
 export function formatPeriodDisplay(
   period: string,
@@ -204,6 +344,7 @@ export function formatPeriodDisplay(
 
 /**
  * Get available periods from data for filtering
+ * DEPRECATED: Use getAvailablePeriodsFromMonthYear for MM/YYYY format data
  */
 export function getAvailablePeriods(
   data: DateGroupableData[],

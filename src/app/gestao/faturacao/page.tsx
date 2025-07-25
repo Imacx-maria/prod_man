@@ -66,10 +66,13 @@ import { Loader2 } from 'lucide-react'
 import { Suspense } from 'react'
 import FinancialAnalyticsCharts from '@/components/FinancialAnalyticsCharts'
 import {
-  groupDataByMonth,
-  groupDataByYear,
-  formatPeriodDisplay,
-  type DateGroupableData,
+  groupMonthYearData,
+  groupMonthYearDataByYear,
+  formatSimplePeriodDisplay,
+  type MonthYearData,
+  type SimpleGroupedData,
+  convertToStandardPeriod,
+  convertToDisplayPeriod,
 } from '@/utils/date'
 
 /* ---------- constants ---------- */

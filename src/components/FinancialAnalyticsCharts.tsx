@@ -29,6 +29,14 @@ import {
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { pt } from 'date-fns/locale'
 import {
+  groupMonthYearData,
+  groupMonthYearDataByYear,
+  formatSimplePeriodDisplay,
+  type MonthYearData,
+  type SimpleGroupedData,
+  convertToStandardPeriod,
+  convertToDisplayPeriod,
+  // Legacy functions for backward compatibility during transition
   groupDataByMonth,
   groupDataByYear,
   formatPeriodDisplay,
@@ -37,22 +45,14 @@ import {
 } from '@/utils/date'
 
 // Types for financial data
-interface VendasVendedor {
-  id: string
-  numero_documento: string
-  data_documento: string // Renamed from data to match actual field name
-  nome_cliente: string
-  euro_total: number
-  nome_vendedor: string
-}
-
 interface FaturasVendedor {
   id: string
   numero_documento: string
   data_documento: string // Renamed from data to match actual field name
   nome_cliente: string
   euro_total: number
-  nome_vendedor: string
+  nome: string // Updated to use nome column for salesman name
+  department: string
 }
 
 interface OrcamentosVendedor {
@@ -63,6 +63,7 @@ interface OrcamentosVendedor {
   euro_total: number
   nome_utilizador: string
   iniciais_utilizador: string
+  department: string
 }
 
 interface ListagemCompras {
@@ -83,7 +84,6 @@ interface NeFornecedor {
 }
 
 interface FinancialData {
-  vendasVendedor: VendasVendedor[]
   faturasVendedor: FaturasVendedor[]
   orcamentosVendedor: OrcamentosVendedor[]
   listagemCompras: ListagemCompras[]
@@ -109,7 +109,6 @@ export default function FinancialAnalyticsCharts({
   onRefresh,
 }: FinancialAnalyticsChartsProps) {
   const [financialData, setFinancialData] = useState<FinancialData>({
-    vendasVendedor: [],
     faturasVendedor: [],
     orcamentosVendedor: [],
     listagemCompras: [],
@@ -127,17 +126,10 @@ export default function FinancialAnalyticsCharts({
       const startYear = currentYear - 4
       const endYear = currentYear + 1
 
-      console.log('🔍 Fetching multi-year data from', startYear, 'to', endYear)
-
       // Fetch data for each year separately with pagination to get ALL records
       const allYearlyData: FaturasVendedor[] = []
 
       for (let year = startYear; year <= endYear; year++) {
-        const yearStart = `${year}-01-01`
-        const yearEnd = `${year}-12-31`
-
-        console.log(`📅 Fetching data for year ${year} with pagination...`)
-
         let allYearData: FaturasVendedor[] = []
         let hasMoreData = true
         let page = 0
@@ -147,15 +139,9 @@ export default function FinancialAnalyticsCharts({
           const startRange = page * 1000
           const endRange = startRange + 999
 
-          console.log(
-            `📄 Fetching page ${page + 1} (range ${startRange}-${endRange}) for year ${year}`,
-          )
-
           const { data, error, count } = await supabase
             .from('faturas_vendedor')
             .select('*', { count: 'exact' })
-            .gte('data_documento', yearStart)
-            .lte('data_documento', yearEnd)
             .order('data_documento', { ascending: true })
             .range(startRange, endRange)
 
@@ -163,19 +149,22 @@ export default function FinancialAnalyticsCharts({
             throw new Error(`Multi-year faturas for ${year}: ${error.message}`)
           }
 
-          // Add this batch to our year data
+          // Filter data to only include our target year in MM/YYYY format
           if (data && data.length > 0) {
-            allYearData = [...allYearData, ...data]
-            console.log(
-              `✅ Fetched ${data.length} records for year ${year}, page ${page + 1}`,
-            )
+            const filteredData = data.filter((item: FaturasVendedor) => {
+              const dataParts = item.data_documento.split('/')
+              if (dataParts.length === 2) {
+                const itemYear = parseInt(dataParts[1])
+                return itemYear === year
+              }
+              return false
+            })
+
+            allYearData = [...allYearData, ...filteredData]
 
             // If we got fewer than 1000 records, we've reached the end
             if (data.length < 1000) {
               hasMoreData = false
-              console.log(
-                `🏁 Reached end of data for year ${year} with ${allYearData.length} total records`,
-              )
             } else {
               // Move to next page
               page++
@@ -183,29 +172,12 @@ export default function FinancialAnalyticsCharts({
           } else {
             // No data returned, end pagination
             hasMoreData = false
-            console.log(`🏁 No more data for year ${year}`)
           }
         }
 
         // Add this year's data to the overall collection
         allYearlyData.push(...allYearData)
-        console.log(`📊 Year ${year} complete: ${allYearData.length} records`)
       }
-
-      console.log('📊 Fetched data by year:', {
-        totalRecords: allYearlyData.length,
-        yearCounts: Array.from({ length: endYear - startYear + 1 }, (_, i) => {
-          const year = startYear + i
-          const yearData = allYearlyData.filter((item) => {
-            const dateParts = item.data_documento.split('-')
-            return parseInt(dateParts[0]) === year
-          })
-          return {
-            year,
-            count: yearData.length,
-          }
-        }),
-      })
 
       setMultiYearData(allYearlyData)
     } catch (err: any) {
@@ -220,22 +192,27 @@ export default function FinancialAnalyticsCharts({
     setError(null)
 
     try {
-      // Dynamic date range: current year and next year
+      // Dynamic year range: current year and next year
       const currentYear = new Date().getFullYear()
-      const startDate = `${currentYear}-01-01`
-      const endDate = `${currentYear + 1}-12-31`
+      const targetYears = [currentYear, currentYear + 1]
 
-      console.log('🔍 Fetching financial data for', startDate, 'to', endDate)
+      // Helper function to generate MM/YYYY patterns for a given year
+      const generateMonthYearPatterns = (year: number): string[] => {
+        return Array.from({ length: 12 }, (_, i) => {
+          const month = String(i + 1).padStart(2, '0')
+          return `${month}/${year}`
+        })
+      }
 
-      // Helper function to fetch all data with pagination
+      // Helper function to fetch all data with pagination for MM/YYYY format
       const fetchAllWithPagination = async <
         T extends { data_documento: string; id: string },
       >(
         table: string,
-        startDate: string,
-        endDate: string,
+        years: number[],
       ): Promise<T[]> => {
-        console.log(`📊 Fetching all ${table} data with pagination...`)
+        // Generate all MM/YYYY patterns for target years
+        const patterns = years.flatMap(generateMonthYearPatterns)
 
         let allData: T[] = []
         let hasMoreData = true
@@ -245,15 +222,11 @@ export default function FinancialAnalyticsCharts({
           const startRange = page * 1000
           const endRange = startRange + 999
 
-          console.log(
-            `📄 Fetching ${table} page ${page + 1} (range ${startRange}-${endRange})`,
-          )
-
+          // Use 'in' operator to match any of the MM/YYYY patterns, or fetch all and filter
+          // Since 'in' might not work well with many patterns, let's use a broader approach
           const { data, error } = await supabase
             .from(table)
             .select('*')
-            .gte('data_documento', startDate)
-            .lte('data_documento', endDate)
             .order('data_documento', { ascending: true })
             .range(startRange, endRange)
 
@@ -261,19 +234,22 @@ export default function FinancialAnalyticsCharts({
             throw new Error(`${table}: ${error.message}`)
           }
 
-          // Add this batch to our data
+          // Filter data to only include our target years in MM/YYYY format
           if (data && data.length > 0) {
-            allData = [...allData, ...data]
-            console.log(
-              `✅ Fetched ${data.length} ${table} records, page ${page + 1}`,
-            )
+            const filteredData = data.filter((item: T) => {
+              const dataParts = item.data_documento.split('/')
+              if (dataParts.length === 2) {
+                const year = parseInt(dataParts[1])
+                return years.includes(year)
+              }
+              return false
+            })
+
+            allData = [...allData, ...filteredData]
 
             // If we got fewer than 1000 records, we've reached the end
             if (data.length < 1000) {
               hasMoreData = false
-              console.log(
-                `🏁 Reached end of ${table} data with ${allData.length} total records`,
-              )
             } else {
               // Move to next page
               page++
@@ -281,7 +257,6 @@ export default function FinancialAnalyticsCharts({
           } else {
             // No data returned, end pagination
             hasMoreData = false
-            console.log(`🏁 No more ${table} data`)
           }
         }
 
@@ -289,43 +264,24 @@ export default function FinancialAnalyticsCharts({
       }
 
       // Fetch all financial tables with pagination
-      console.log('🔄 Starting to fetch all financial data with pagination...')
-
-      const vendasData = await fetchAllWithPagination<VendasVendedor>(
-        'vendas_vendedor',
-        startDate,
-        endDate,
-      )
       const faturasData = await fetchAllWithPagination<FaturasVendedor>(
         'faturas_vendedor',
-        startDate,
-        endDate,
+        targetYears,
       )
       const orcamentosData = await fetchAllWithPagination<OrcamentosVendedor>(
         'orcamentos_vendedor',
-        startDate,
-        endDate,
+        targetYears,
       )
       const listagemData = await fetchAllWithPagination<ListagemCompras>(
         'listagem_compras',
-        startDate,
-        endDate,
+        targetYears,
       )
       const neData = await fetchAllWithPagination<NeFornecedor>(
         'ne_fornecedor',
-        startDate,
-        endDate,
+        targetYears,
       )
 
-      console.log('✅ All financial data fetched successfully:')
-      console.log(`- Vendas: ${vendasData.length} records`)
-      console.log(`- Faturas: ${faturasData.length} records`)
-      console.log(`- Orçamentos: ${orcamentosData.length} records`)
-      console.log(`- Listagem Compras: ${listagemData.length} records`)
-      console.log(`- NE Fornecedor: ${neData.length} records`)
-
       setFinancialData({
-        vendasVendedor: vendasData,
         faturasVendedor: faturasData,
         orcamentosVendedor: orcamentosData,
         listagemCompras: listagemData,
@@ -361,31 +317,13 @@ export default function FinancialAnalyticsCharts({
     const currentYear = currentDate.getFullYear()
     const currentMonth = currentDate.getMonth() + 1 // JavaScript months are 0-indexed
 
-    console.log('Current date:', currentDate.toISOString())
-    console.log('Current year/month:', currentYear, currentMonth)
-
-    // Log some sample data to verify date formats
-    if (financialData.faturasVendedor.length > 0) {
-      console.log(
-        'Sample fatura data_documento:',
-        financialData.faturasVendedor[0].data_documento,
-      )
-    }
-    if (financialData.listagemCompras.length > 0) {
-      console.log(
-        'Sample compra data_documento:',
-        financialData.listagemCompras[0].data_documento,
-      )
-    }
-
     // Debug: Log euro_total values by month for faturas_vendedor
-    console.log('--- FATURAS VENDEDOR BY MONTH ---')
     const faturasMonthlyTotals = new Map<string, number>()
 
     financialData.faturasVendedor.forEach((fatura) => {
-      const dateParts = fatura.data_documento.split('-')
-      const year = parseInt(dateParts[0])
-      const month = parseInt(dateParts[1])
+      const dateParts = fatura.data_documento.split('/')
+      const month = parseInt(dateParts[0])
+      const year = parseInt(dateParts[1])
 
       if (year === currentYear) {
         const monthKey = `${year}-${String(month).padStart(2, '0')}`
@@ -397,27 +335,13 @@ export default function FinancialAnalyticsCharts({
       }
     })
 
-    // Sort by month and log
-    const sortedMonths = Array.from(faturasMonthlyTotals.keys()).sort()
-    sortedMonths.forEach((month) => {
-      console.log(
-        `Month ${month}: ${faturasMonthlyTotals
-          .get(month)
-          ?.toLocaleString('pt-PT', {
-            style: 'currency',
-            currency: 'EUR',
-          })}`,
-      )
-    })
-
     // Debug: Log euro_total values by month for listagem_compras
-    console.log('--- LISTAGEM COMPRAS BY MONTH ---')
     const comprasMonthlyTotals = new Map<string, number>()
 
     financialData.listagemCompras.forEach((compra) => {
-      const dateParts = compra.data_documento.split('-')
-      const year = parseInt(dateParts[0])
-      const month = parseInt(dateParts[1])
+      const dateParts = compra.data_documento.split('/')
+      const month = parseInt(dateParts[0])
+      const year = parseInt(dateParts[1])
 
       if (year === currentYear) {
         const monthKey = `${year}-${String(month).padStart(2, '0')}`
@@ -429,38 +353,20 @@ export default function FinancialAnalyticsCharts({
       }
     })
 
-    // Sort by month and log
-    const sortedComprasMonths = Array.from(comprasMonthlyTotals.keys()).sort()
-    sortedComprasMonths.forEach((month) => {
-      console.log(
-        `Month ${month}: ${comprasMonthlyTotals
-          .get(month)
-          ?.toLocaleString('pt-PT', {
-            style: 'currency',
-            currency: 'EUR',
-          })}`,
-      )
-    })
-
     // Current year data for year-to-date cards
     const currentYearStart = new Date(currentYear, 0, 1) // January 1st of current year
 
     // Year-to-date data for second row of cards
     const yearToDateFaturas = financialData.faturasVendedor.filter((f) => {
-      const dateParts = f.data_documento.split('-')
-      const year = parseInt(dateParts[0])
+      const dateParts = f.data_documento.split('/')
+      const year = parseInt(dateParts[1])
       return year === currentYear
     })
 
     const yearToDateCompras = financialData.listagemCompras.filter((c) => {
-      const dateParts = c.data_documento.split('-')
-      const year = parseInt(dateParts[0])
+      const dateParts = c.data_documento.split('/')
+      const year = parseInt(dateParts[1])
       return year === currentYear
-    })
-
-    console.log('Year-to-date data counts:', {
-      faturas: yearToDateFaturas.length,
-      compras: yearToDateCompras.length,
     })
 
     // Group data by month
@@ -468,9 +374,9 @@ export default function FinancialAnalyticsCharts({
     const comprasGroupedByMonth = new Map<string, ListagemCompras[]>()
 
     financialData.faturasVendedor.forEach((fatura) => {
-      const dateParts = fatura.data_documento.split('-')
-      const year = parseInt(dateParts[0])
-      const month = parseInt(dateParts[1])
+      const dateParts = fatura.data_documento.split('/')
+      const month = parseInt(dateParts[0])
+      const year = parseInt(dateParts[1])
       const monthKey = `${year}-${String(month).padStart(2, '0')}`
 
       if (!faturasGroupedByMonth.has(monthKey)) {
@@ -481,9 +387,9 @@ export default function FinancialAnalyticsCharts({
     })
 
     financialData.listagemCompras.forEach((compra) => {
-      const dateParts = compra.data_documento.split('-')
-      const year = parseInt(dateParts[0])
-      const month = parseInt(dateParts[1])
+      const dateParts = compra.data_documento.split('/')
+      const month = parseInt(dateParts[0])
+      const year = parseInt(dateParts[1])
       const monthKey = `${year}-${String(month).padStart(2, '0')}`
 
       if (!comprasGroupedByMonth.has(monthKey)) {
@@ -503,11 +409,8 @@ export default function FinancialAnalyticsCharts({
       .sort()
       .reverse()
 
-    console.log('Available months with data:', allMonthKeys)
-
     // Current month key
     const currentMonthKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`
-    console.log('Current month key:', currentMonthKey)
 
     // Use current month if it has data, otherwise use the most recent month with data
     const monthToUse = allMonthKeys.includes(currentMonthKey)
@@ -515,16 +418,10 @@ export default function FinancialAnalyticsCharts({
       : allMonthKeys.length > 0
         ? allMonthKeys[0]
         : currentMonthKey
-    console.log('Month being used for monthly data:', monthToUse)
 
     // Get the data for the selected month
     const selectedMonthFaturas = faturasGroupedByMonth.get(monthToUse) || []
     const selectedMonthCompras = comprasGroupedByMonth.get(monthToUse) || []
-
-    console.log('Selected month data counts:', {
-      faturas: selectedMonthFaturas.length,
-      compras: selectedMonthCompras.length,
-    })
 
     // Check if we're using fallback data (not current month)
     const usingFallbackData = monthToUse !== currentMonthKey
@@ -563,34 +460,36 @@ export default function FinancialAnalyticsCharts({
         ? ((totalVendasAno - totalComprasAno) / totalVendasAno) * 100
         : 0
 
-    // Use new grouping utility for monthly aggregation
+    // Use new simplified grouping utility for MM/YYYY monthly data
 
     // Create monthly evolution data for charts
-    // Convert financial data to DateGroupableData format and group by month
-    const faturasGroupableData: DateGroupableData[] =
+    // Convert financial data to MonthYearData format and group by month
+    const faturasMonthYearData: MonthYearData[] =
       financialData.faturasVendedor.map((fatura) => ({
-        data: fatura.data_documento,
+        data_documento: fatura.data_documento, // Already in MM/YYYY format
         euro_total: fatura.euro_total,
         id: fatura.id,
-        nome_vendedor: fatura.nome_vendedor,
+        nome_vendedor: fatura.nome, // Updated to use nome field
         nome_cliente: fatura.nome_cliente,
       }))
 
-    const comprasGroupableData: DateGroupableData[] =
+    const comprasMonthYearData: MonthYearData[] =
       financialData.listagemCompras.map((compra) => ({
-        data: compra.data_documento,
+        data_documento: compra.data_documento, // Already in MM/YYYY format
         euro_total: compra.euro_total,
         id: compra.id,
         nome_fornecedor: compra.nome_fornecedor,
       }))
 
-    // Group by month with euro_total aggregation
-    const chartFaturasGroupedByMonth = groupDataByMonth(faturasGroupableData, [
-      'euro_total',
-    ])
-    const chartComprasGroupedByMonth = groupDataByMonth(comprasGroupableData, [
-      'euro_total',
-    ])
+    // Group by month with euro_total aggregation - much simpler now!
+    const chartFaturasGroupedByMonth = groupMonthYearData(
+      faturasMonthYearData,
+      ['euro_total'],
+    )
+    const chartComprasGroupedByMonth = groupMonthYearData(
+      comprasMonthYearData,
+      ['euro_total'],
+    )
 
     // Create combined monthly data
     const monthlyDataMap = new Map<
@@ -606,7 +505,7 @@ export default function FinancialAnalyticsCharts({
 
     // Add vendas data
     chartFaturasGroupedByMonth.forEach((group) => {
-      const monthLabel = formatPeriodDisplay(group.period, 'month')
+      const monthLabel = formatSimplePeriodDisplay(group.period, 'month')
       monthlyDataMap.set(group.period, {
         monthKey: group.period,
         month: monthLabel,
@@ -618,7 +517,7 @@ export default function FinancialAnalyticsCharts({
 
     // Add compras data
     chartComprasGroupedByMonth.forEach((group) => {
-      const monthLabel = formatPeriodDisplay(group.period, 'month')
+      const monthLabel = formatSimplePeriodDisplay(group.period, 'month')
       const existing = monthlyDataMap.get(group.period)
       if (existing) {
         existing.compras = group.euro_total || 0
@@ -670,35 +569,46 @@ export default function FinancialAnalyticsCharts({
       return { data: [], availableYears: [] }
     }
 
-    console.log(
-      '🔍 Processing multi-year data:',
-      multiYearData.length,
-      'records',
-    )
-
     // Build data structure: year -> month -> total
     const yearlyData: { [year: string]: { [month: string]: number } } = {}
     const allYears = new Set<string>()
     const allMonths = new Set<string>()
 
-    // Process each fatura to aggregate by year and month
+    // Process each fatura to aggregate by year and month - MM/YYYY format
     multiYearData.forEach((fatura) => {
-      // Use a more reliable date parsing approach
       const dateStr = fatura.data_documento
 
-      // Parse date using split for more reliable extraction of year
-      const dateParts = dateStr.split('-')
-      if (dateParts.length !== 3) {
-        console.warn('⚠️ Invalid date format:', dateStr)
+      // Parse MM/YYYY format
+      const dateParts = dateStr.split('/')
+      if (dateParts.length !== 2) {
+        console.warn('⚠️ Invalid MM/YYYY date format:', dateStr)
         return
       }
 
-      const year = dateParts[0]
-      const monthNum = parseInt(dateParts[1])
+      const monthNum = parseInt(dateParts[0])
+      const year = dateParts[1]
 
-      // Create a date object for month label formatting
-      const date = new Date(parseInt(year), monthNum - 1, 1)
-      const monthLabel = format(date, 'MMM', { locale: pt })
+      // Create month label using Portuguese abbreviations
+      const monthNames = [
+        'jan',
+        'fev',
+        'mar',
+        'abr',
+        'mai',
+        'jun',
+        'jul',
+        'ago',
+        'set',
+        'out',
+        'nov',
+        'dez',
+      ]
+      const monthLabel = monthNames[monthNum - 1]
+
+      if (!monthLabel) {
+        console.warn('⚠️ Invalid month number:', monthNum, 'in', dateStr)
+        return
+      }
 
       allYears.add(year)
       allMonths.add(monthLabel)
@@ -713,9 +623,6 @@ export default function FinancialAnalyticsCharts({
     })
 
     const availableYears = Array.from(allYears).sort()
-
-    console.log('📊 Available years:', availableYears)
-    console.log('📊 Available months:', Array.from(allMonths))
 
     // Create chart data: each entry = one month with all years as properties
     // Using lowercase month names to match what's coming from the date formatter
@@ -749,29 +656,40 @@ export default function FinancialAnalyticsCharts({
         return monthData
       })
 
-    // Temporary debug: log final chart data structure
-    if (chartData.length > 0) {
-      console.log('🎯 CHART DATA READY:', {
-        months: chartData.length,
-        years: availableYears,
-        sample: chartData[0],
-      })
-    } else {
-      console.log('⚠️ CHART DATA EMPTY:', {
-        multiYearDataLength: multiYearData?.length || 0,
-        availableYears: availableYears.length,
-      })
-    }
-
     return { data: chartData, availableYears }
   }, [multiYearData])
 
   // Process data for sales performance
   const salesPerformanceData = useMemo(() => {
-    // Vendas por vendedor (pie chart data)
+    const currentYear = new Date().getFullYear()
+
+    // Filter data to current year only for the first chart
+    const currentYearFaturas = financialData.faturasVendedor.filter(
+      (fatura) => {
+        const dataParts = fatura.data_documento.split('/')
+        if (dataParts.length === 2) {
+          const year = parseInt(dataParts[1])
+          return year === currentYear
+        }
+        return false
+      },
+    )
+
+    const currentYearOrcamentos = financialData.orcamentosVendedor.filter(
+      (orcamento) => {
+        const dataParts = orcamento.data_documento.split('/')
+        if (dataParts.length === 2) {
+          const year = parseInt(dataParts[1])
+          return year === currentYear
+        }
+        return false
+      },
+    )
+
+    // Vendas por vendedor (pie chart data) - current year only
     const vendasPorVendedor: { [key: string]: number } = {}
-    financialData.faturasVendedor.forEach((fatura) => {
-      const vendedor = fatura.nome_vendedor || 'Sem Vendedor'
+    currentYearFaturas.forEach((fatura) => {
+      const vendedor = fatura.nome || 'Sem Vendedor'
       vendasPorVendedor[vendedor] =
         (vendasPorVendedor[vendedor] || 0) + (fatura.euro_total || 0)
     })
@@ -795,9 +713,9 @@ export default function FinancialAnalyticsCharts({
           : 0
     })
 
-    // Top 10 clientes (horizontal bar chart data)
+    // Top 10 clientes (horizontal bar chart data) - current year only
     const vendasPorCliente: { [key: string]: number } = {}
-    financialData.faturasVendedor.forEach((fatura) => {
+    currentYearFaturas.forEach((fatura) => {
       const cliente = fatura.nome_cliente || 'Cliente Desconhecido'
       vendasPorCliente[cliente] =
         (vendasPorCliente[cliente] || 0) + (fatura.euro_total || 0)
@@ -812,52 +730,96 @@ export default function FinancialAnalyticsCharts({
       .sort((a, b) => b.value - a.value)
       .slice(0, 10)
 
-    // Taxa de conversão por vendedor (bar chart data)
-    const orcamentosPorVendedor: { [key: string]: number } = {}
-    const faturasPorVendedor: { [key: string]: number } = {}
+    // Taxa de conversão por department (bar chart data) - current year only with counts
+    const orcamentosCountPorDepartment: { [key: string]: number } = {}
+    const faturasCountPorDepartment: { [key: string]: number } = {}
 
-    // Aggregate orcamentos by user initials
-    financialData.orcamentosVendedor.forEach((orcamento) => {
-      const vendedor =
-        orcamento.iniciais_utilizador ||
-        orcamento.nome_utilizador ||
-        'Sem Vendedor'
-      orcamentosPorVendedor[vendedor] =
-        (orcamentosPorVendedor[vendedor] || 0) + (orcamento.euro_total || 0)
+    // Count orcamentos by department (current year only)
+    currentYearOrcamentos.forEach((orcamento) => {
+      const department = orcamento.department || 'Sem Department'
+      orcamentosCountPorDepartment[department] =
+        (orcamentosCountPorDepartment[department] || 0) + 1
     })
 
-    // Aggregate faturas by vendedor
-    financialData.faturasVendedor.forEach((fatura) => {
-      const vendedor = fatura.nome_vendedor || 'Sem Vendedor'
-      faturasPorVendedor[vendedor] =
-        (faturasPorVendedor[vendedor] || 0) + (fatura.euro_total || 0)
+    // Count faturas by department (current year only)
+    currentYearFaturas.forEach((fatura) => {
+      const department = fatura.department || 'Sem Department'
+      faturasCountPorDepartment[department] =
+        (faturasCountPorDepartment[department] || 0) + 1
     })
 
-    // Create conversion rate data
+    // Create conversion rate data based on counts
     const conversaoData = Object.keys({
-      ...orcamentosPorVendedor,
-      ...faturasPorVendedor,
+      ...orcamentosCountPorDepartment,
+      ...faturasCountPorDepartment,
     })
-      .map((vendedor) => {
-        const orcamentos = orcamentosPorVendedor[vendedor] || 0
-        const faturas = faturasPorVendedor[vendedor] || 0
+      .map((department) => {
+        const orcamentos = orcamentosCountPorDepartment[department] || 0
+        const faturas = faturasCountPorDepartment[department] || 0
         const conversao = orcamentos > 0 ? (faturas / orcamentos) * 100 : 0
 
         return {
-          name: vendedor,
-          orcamentos: Math.round(orcamentos),
-          faturas: Math.round(faturas),
+          name: department,
+          orcamentos: orcamentos,
+          faturas: faturas,
           conversao: Math.round(conversao * 10) / 10, // Round to 1 decimal
         }
       })
-      .filter((item) => item.orcamentos > 0 || item.faturas > 0) // Only include vendedores with activity
+      .filter((item) => item.orcamentos > 0 || item.faturas > 0) // Only include departments with activity
       .sort((a, b) => b.conversao - a.conversao)
-      .slice(0, 8) // Top 8 vendedores
+      .slice(0, 8) // Top 8 departments
+
+    // Quotes by month by department (new third chart) - current year only
+    const quotesMonthlyData: { [key: string]: { [key: string]: number } } = {}
+    const allDepartments = new Set<string>()
+    const monthsInYear: string[] = []
+
+    // Generate all months for current year
+    for (let month = 1; month <= 12; month++) {
+      const monthStr = String(month).padStart(2, '0')
+      monthsInYear.push(`${monthStr}/${currentYear}`)
+    }
+
+    // Count quotes by department and month
+    currentYearOrcamentos.forEach((orcamento) => {
+      const department = orcamento.department || 'Sem Department'
+      const month = orcamento.data_documento
+
+      allDepartments.add(department)
+
+      if (!quotesMonthlyData[month]) {
+        quotesMonthlyData[month] = {}
+      }
+
+      quotesMonthlyData[month][department] =
+        (quotesMonthlyData[month][department] || 0) + 1
+    })
+
+    // Create chart data structure with all months and all departments
+    const quotesChartData = monthsInYear.map((month) => {
+      const dateParts = month.split('/')
+      const monthName = new Date(
+        parseInt(dateParts[1]),
+        parseInt(dateParts[0]) - 1,
+      ).toLocaleDateString('pt-PT', {
+        month: 'short',
+      })
+
+      const monthData: any = { month: monthName }
+
+      Array.from(allDepartments).forEach((department) => {
+        monthData[department] = quotesMonthlyData[month]?.[department] || 0
+      })
+
+      return monthData
+    })
 
     return {
       vendasVendedorData: vendasVendedorData.slice(0, 8), // Top 8 for pie chart
       top10Clientes,
       conversaoData,
+      quotesChartData,
+      allDepartments: Array.from(allDepartments),
     }
   }, [financialData])
 
@@ -919,27 +881,38 @@ export default function FinancialAnalyticsCharts({
 
     // Custos operacionais vs vendas using new grouping utilities (last 12 months)
 
-    // Get last 12 months data
-    const twelveMonthsAgo = subMonths(new Date(), 12)
+    // Get last 12 months data - simplified for MM/YYYY format
+    const currentDate = new Date()
+    const currentYear = currentDate.getFullYear()
+    const currentMonth = currentDate.getMonth() + 1 // 1-12
 
-    // Filter data for last 12 months and convert to groupable format
-    const recentVendas: DateGroupableData[] = financialData.faturasVendedor
-      .filter((f) => new Date(f.data_documento) >= twelveMonthsAgo)
+    // Generate last 12 months in MM/YYYY format
+    const last12Months: string[] = []
+    for (let i = 11; i >= 0; i--) {
+      const targetDate = subMonths(currentDate, i)
+      const month = String(targetDate.getMonth() + 1).padStart(2, '0')
+      const year = targetDate.getFullYear()
+      last12Months.push(`${month}/${year}`)
+    }
+
+    // Filter data for last 12 months and convert to MonthYearData format
+    const recentVendas: MonthYearData[] = financialData.faturasVendedor
+      .filter((f) => last12Months.includes(f.data_documento))
       .map((f) => ({
-        data: f.data_documento,
+        data_documento: f.data_documento,
         euro_total: f.euro_total,
       }))
 
-    const recentNe: DateGroupableData[] = financialData.neFornecedor
-      .filter((n) => new Date(n.data_documento) >= twelveMonthsAgo)
+    const recentNe: MonthYearData[] = financialData.neFornecedor
+      .filter((n) => last12Months.includes(n.data_documento))
       .map((n) => ({
-        data: n.data_documento,
+        data_documento: n.data_documento,
         euro_total: n.euro_total,
       }))
 
-    // Group by month
-    const vendasGrouped = groupDataByMonth(recentVendas, ['euro_total'])
-    const neGrouped = groupDataByMonth(recentNe, ['euro_total'])
+    // Group by month - much simpler now since data is already monthly
+    const vendasGrouped = groupMonthYearData(recentVendas, ['euro_total'])
+    const neGrouped = groupMonthYearData(recentNe, ['euro_total'])
 
     // Create combined data map
     const monthlyComparison = new Map<
@@ -952,19 +925,18 @@ export default function FinancialAnalyticsCharts({
       }
     >()
 
-    // Initialize last 12 months
-    for (let i = 11; i >= 0; i--) {
-      const monthDate = subMonths(new Date(), i)
-      const monthKey = format(monthDate, 'yyyy-MM')
-      const monthLabel = format(monthDate, 'MMM', { locale: pt })
+    // Initialize last 12 months - use the same periods we generated above
+    last12Months.forEach((mmyyyy) => {
+      const standardPeriod = convertToStandardPeriod(mmyyyy)
+      const monthLabel = formatSimplePeriodDisplay(standardPeriod, 'month')
 
-      monthlyComparison.set(monthKey, {
+      monthlyComparison.set(standardPeriod, {
         month: monthLabel,
         vendas: 0,
         custosOperacionais: 0,
         percentagem: 0,
       })
-    }
+    })
 
     // Add vendas data
     vendasGrouped.forEach((group) => {
@@ -997,72 +969,69 @@ export default function FinancialAnalyticsCharts({
     }
   }, [financialData])
 
-  // Process data for temporal analysis using new grouping utilities
+  // Process data for temporal analysis using simplified MM/YYYY grouping
   const temporalAnalysisData = useMemo(() => {
-    // Get current year data and convert to groupable format
+    // Get current year data - simplified for MM/YYYY format
     const currentYear = new Date().getFullYear()
-    const currentYearStart = new Date(currentYear, 0, 1)
-    const currentYearEnd = new Date(currentYear, 11, 31)
 
-    // Filter current year data
-    const currentYearOrcamentos: DateGroupableData[] =
+    // Generate current year months in MM/YYYY format
+    const currentYearMonths: string[] = []
+    for (let month = 1; month <= 12; month++) {
+      currentYearMonths.push(`${String(month).padStart(2, '0')}/${currentYear}`)
+    }
+
+    // Filter current year data - much simpler now!
+    const currentYearOrcamentos: MonthYearData[] =
       financialData.orcamentosVendedor
-        .filter((o) => {
-          const date = new Date(o.data_documento)
-          return date >= currentYearStart && date <= currentYearEnd
-        })
+        .filter((o) => currentYearMonths.includes(o.data_documento))
         .map((o) => ({
-          data: o.data_documento,
+          data_documento: o.data_documento,
           euro_total: o.euro_total,
         }))
 
-    const currentYearVendas: DateGroupableData[] = financialData.vendasVendedor
-      .filter((v) => {
-        const date = new Date(v.data_documento)
-        return date >= currentYearStart && date <= currentYearEnd
-      })
+    // Note: Since vendas_vendedor no longer exists, we'll use faturasVendedor for sales data
+    const currentYearVendas: MonthYearData[] = financialData.faturasVendedor
+      .filter((v) => currentYearMonths.includes(v.data_documento))
       .map((v) => ({
-        data: v.data_documento,
+        data_documento: v.data_documento,
         euro_total: v.euro_total,
       }))
 
-    const currentYearFaturas: DateGroupableData[] =
-      financialData.faturasVendedor
-        .filter((f) => {
-          const date = new Date(f.data_documento)
-          return date >= currentYearStart && date <= currentYearEnd
-        })
-        .map((f) => ({
-          data: f.data_documento,
-          euro_total: f.euro_total,
-        }))
+    const currentYearFaturas: MonthYearData[] = financialData.faturasVendedor
+      .filter((f) => currentYearMonths.includes(f.data_documento))
+      .map((f) => ({
+        data_documento: f.data_documento,
+        euro_total: f.euro_total,
+      }))
 
-    // Group by month
-    const orcamentosGrouped = groupDataByMonth(currentYearOrcamentos, [
+    // Group by month - no complex aggregation needed since data is already monthly
+    const orcamentosGrouped = groupMonthYearData(currentYearOrcamentos, [
       'euro_total',
     ])
-    const vendasGrouped = groupDataByMonth(currentYearVendas, ['euro_total'])
-    const faturasGrouped = groupDataByMonth(currentYearFaturas, ['euro_total'])
+    const vendasGrouped = groupMonthYearData(currentYearVendas, ['euro_total'])
+    const faturasGrouped = groupMonthYearData(currentYearFaturas, [
+      'euro_total',
+    ])
 
     // Create pipeline data map
+    // Note: Since vendas_vendedor no longer exists, vendas and faturas will show the same data from faturas_vendedor
     const pipelineData = new Map<
       string,
       { month: string; orcamentos: number; vendas: number; faturas: number }
     >()
 
-    // Initialize current year months
-    for (let i = 0; i < 12; i++) {
-      const monthDate = new Date(currentYear, i)
-      const monthKey = format(monthDate, 'yyyy-MM')
-      const monthLabel = format(monthDate, 'MMM', { locale: pt })
+    // Initialize current year months - use the same periods we generated above
+    currentYearMonths.forEach((mmyyyy) => {
+      const standardPeriod = convertToStandardPeriod(mmyyyy)
+      const monthLabel = formatSimplePeriodDisplay(standardPeriod, 'month')
 
-      pipelineData.set(monthKey, {
+      pipelineData.set(standardPeriod, {
         month: monthLabel,
         orcamentos: 0,
         vendas: 0,
         faturas: 0,
       })
-    }
+    })
 
     // Add grouped data
     orcamentosGrouped.forEach((group) => {
@@ -1088,63 +1057,41 @@ export default function FinancialAnalyticsCharts({
 
     const pipelineArray = Array.from(pipelineData.values())
 
-    // Crescimento month-over-month (current vs previous month)
-    const currentMonth = new Date()
-    const previousMonth = subMonths(currentMonth, 1)
+    // Crescimento month-over-month (current vs previous month) - simplified for MM/YYYY
+    const currentDate = new Date()
+    const currentMonthMM = String(currentDate.getMonth() + 1).padStart(2, '0')
+    const currentMonthYYYY = currentDate.getFullYear()
+    const currentMonthKey = `${currentMonthMM}/${currentMonthYYYY}`
 
-    const currentMonthStart = startOfMonth(currentMonth)
-    const currentMonthEnd = endOfMonth(currentMonth)
-    const previousMonthStart = startOfMonth(previousMonth)
-    const previousMonthEnd = endOfMonth(previousMonth)
+    const previousDate = subMonths(currentDate, 1)
+    const previousMonthMM = String(previousDate.getMonth() + 1).padStart(2, '0')
+    const previousMonthYYYY = previousDate.getFullYear()
+    const previousMonthKey = `${previousMonthMM}/${previousMonthYYYY}`
 
-    // Current month data
+    // Current month data - direct filtering by MM/YYYY key
     const currentMonthVendas = financialData.faturasVendedor
-      .filter(
-        (f) =>
-          new Date(f.data_documento) >= currentMonthStart &&
-          new Date(f.data_documento) <= currentMonthEnd,
-      )
+      .filter((f) => f.data_documento === currentMonthKey)
       .reduce((sum, f) => sum + (f.euro_total || 0), 0)
 
     const currentMonthCompras = financialData.listagemCompras
-      .filter(
-        (c) =>
-          new Date(c.data_documento) >= currentMonthStart &&
-          new Date(c.data_documento) <= currentMonthEnd,
-      )
+      .filter((c) => c.data_documento === currentMonthKey)
       .reduce((sum, c) => sum + (c.euro_total || 0), 0)
 
     const currentMonthNe = financialData.neFornecedor
-      .filter(
-        (n) =>
-          new Date(n.data_documento) >= currentMonthStart &&
-          new Date(n.data_documento) <= currentMonthEnd,
-      )
+      .filter((n) => n.data_documento === currentMonthKey)
       .reduce((sum, n) => sum + (n.euro_total || 0), 0)
 
-    // Previous month data
+    // Previous month data - direct filtering by MM/YYYY key
     const previousMonthVendas = financialData.faturasVendedor
-      .filter(
-        (f) =>
-          new Date(f.data_documento) >= previousMonthStart &&
-          new Date(f.data_documento) <= previousMonthEnd,
-      )
+      .filter((f) => f.data_documento === previousMonthKey)
       .reduce((sum, f) => sum + (f.euro_total || 0), 0)
 
     const previousMonthCompras = financialData.listagemCompras
-      .filter(
-        (c) =>
-          new Date(c.data_documento) >= previousMonthStart &&
-          new Date(c.data_documento) <= previousMonthEnd,
-      )
+      .filter((c) => c.data_documento === previousMonthKey)
       .reduce((sum, c) => sum + (c.euro_total || 0), 0)
 
     const previousMonthNe = financialData.neFornecedor
-      .filter(
-        (n) =>
-          new Date(n.data_documento) >= previousMonthStart &&
-          new Date(n.data_documento) <= previousMonthEnd,
-      )
+      .filter((n) => n.data_documento === previousMonthKey)
       .reduce((sum, n) => sum + (n.euro_total || 0), 0)
 
     // Calculate growth percentages
@@ -1229,7 +1176,10 @@ export default function FinancialAnalyticsCharts({
     <div className="space-y-6 pb-8">
       {/* Header with refresh button */}
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold">Análises Financeiras 2024-2025</h2>
+        <h2 className="text-xl font-bold">
+          Análises Financeiras {new Date().getFullYear() - 1}-
+          {new Date().getFullYear()}
+        </h2>
         <Button
           variant="outline"
           size="icon"
@@ -1429,7 +1379,7 @@ export default function FinancialAnalyticsCharts({
                   Evolução Mensal - Vendas vs Compras
                 </h3>
                 <p className="text-muted-foreground text-sm leading-tight">
-                  2024 e 2025
+                  {new Date().getFullYear()}
                 </p>
               </div>
               <ResponsiveContainer width="100%" height={400}>
@@ -1603,10 +1553,11 @@ export default function FinancialAnalyticsCharts({
             <Card className="rounded-none border-2 p-4">
               <div className="mb-4">
                 <h3 className="text-lg leading-tight font-semibold">
-                  Vendas por Vendedor
+                  Vendas por Vendedor (ano atual)
                 </h3>
                 <p className="text-muted-foreground text-sm leading-tight">
-                  Distribuição percentual de vendas por vendedor
+                  Distribuição percentual de vendas por vendedor -{' '}
+                  {new Date().getFullYear()}
                 </p>
               </div>
               <ResponsiveContainer width="100%" height={400}>
@@ -1661,10 +1612,11 @@ export default function FinancialAnalyticsCharts({
             <Card className="rounded-none border-2 p-4">
               <div className="mb-4">
                 <h3 className="text-lg leading-tight font-semibold">
-                  Taxa de Conversão por Vendedor
+                  Taxa de Conversão por Departamento (ano atual)
                 </h3>
                 <p className="text-muted-foreground text-sm leading-tight">
-                  Percentagem de orçamentos convertidos em vendas
+                  Número de orçamentos vs número de faturas por departamento -{' '}
+                  {new Date().getFullYear()}
                 </p>
               </div>
               <ResponsiveContainer width="100%" height={400}>
@@ -1690,11 +1642,10 @@ export default function FinancialAnalyticsCharts({
                         return [`${value}%`, 'Taxa de Conversão']
                       }
                       return [
-                        value.toLocaleString('pt-PT', {
-                          style: 'currency',
-                          currency: 'EUR',
-                        }),
-                        name === 'orcamentos' ? 'Orçamentos' : 'Faturas',
+                        value.toString(),
+                        name === 'orcamentos'
+                          ? 'Número de Orçamentos'
+                          : 'Número de Faturas',
                       ]
                     }}
                     labelStyle={{ color: '#333' }}
@@ -1710,14 +1661,79 @@ export default function FinancialAnalyticsCharts({
             </Card>
           </div>
 
+          {/* Orçamentos por Vendedor por Mês - New Third Chart */}
+          <Card className="rounded-none border-2 p-4">
+            <div className="mb-4">
+              <h3 className="text-lg leading-tight font-semibold">
+                Orçamentos por Departamento por Mês (ano atual)
+              </h3>
+              <p className="text-muted-foreground text-sm leading-tight">
+                Número de orçamentos por departamento ao longo do ano -{' '}
+                {new Date().getFullYear()}
+              </p>
+            </div>
+            <ResponsiveContainer width="100%" height={400}>
+              <BarChart
+                data={salesPerformanceData.quotesChartData}
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) => value.toString()}
+                />
+                <Tooltip
+                  formatter={(value: number, name: string) => [
+                    value.toString(),
+                    `Orçamentos - Dept. ${name}`,
+                  ]}
+                  labelStyle={{ color: '#333' }}
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #ccc',
+                    borderRadius: '0px',
+                  }}
+                />
+                {salesPerformanceData.allDepartments.map(
+                  (department: string, index: number) => {
+                    // Cycle through different colors for each department
+                    const colors = [
+                      CHART_COLORS.vendas,
+                      CHART_COLORS.orcamentos,
+                      CHART_COLORS.margem,
+                      CHART_COLORS.neutral,
+                      '#f97316', // Orange
+                      '#06b6d4', // Cyan
+                      '#8b5cf6', // Violet
+                      '#f59e0b', // Amber
+                      '#10b981', // Emerald
+                      '#f43f5e', // Rose
+                    ]
+                    const fillColor = colors[index % colors.length]
+
+                    return (
+                      <Bar
+                        key={department}
+                        dataKey={department}
+                        fill={fillColor}
+                        name={department}
+                      />
+                    )
+                  },
+                )}
+              </BarChart>
+            </ResponsiveContainer>
+          </Card>
+
           {/* Top 10 Clientes - Horizontal Bar Chart */}
           <Card className="rounded-none border-2 p-4">
             <div className="mb-4">
               <h3 className="text-lg leading-tight font-semibold">
-                Top 10 Clientes
+                Top 10 Clientes (ano atual)
               </h3>
               <p className="text-muted-foreground text-sm leading-tight">
-                Clientes com maior volume de vendas
+                Clientes com maior volume de vendas - {new Date().getFullYear()}
               </p>
             </div>
             <ResponsiveContainer width="100%" height={450}>
