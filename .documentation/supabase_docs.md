@@ -1,19 +1,19 @@
 # Supabase Database Documentation
 
 ## Overview
-This documentation provides a comprehensive overview of the Supabase database structure for a printing/manufacturing management system. The database contains 28 tables managing various aspects of the business including inventory, production, clients, suppliers, logistics, and financial data.
+This documentation provides a comprehensive overview of the Supabase database structure for a printing/manufacturing management system. The database contains 29 tables managing various aspects of the business including inventory, production, clients, suppliers, logistics, and financial data.
 
 ## Database Architecture
 
 ### Core Business Entities
-- **Clients Management**: `clientes`, `cliente_contacts`
-- **Suppliers Management**: `fornecedores`
+- **Client Management**: `clientes`, `cliente_contacts`
+- **Supplier Management**: `fornecedores`
 - **Inventory Management**: `materiais`, `stocks`, `alertas_stock`, `armazens`, `paletes`
 - **Production Management**: `folhas_obras`, `items_base`, `producao_operacoes`, `producao_operacoes_audit`, `maquinas`, `maquinas_operacao`
 - **Design Workflow**: `designer_items`, `complexidade`
 - **Logistics**: `logistica_entregas`, `transportadora`
-- **Financial Data**: `ne_fornecedor`, `orcamentos_vendedor`, `vendas_vendedor`, `listagem_compras`, `listagem_notas_credito`, `faturas_vendedor`
-- **User Management**: `profiles`, `roles`, `role_permissions`
+- **Financial Data**: `ne_fornecedor`, `orcamentos_vendedor`, `faturas_vendedor`, `listagem_compras`, `listagem_notas_credito`
+- **User Management**: `profiles`, `roles`, `role_permissions`, `user_name_mapping`
 - **Configuration**: `feriados`
 
 ---
@@ -151,11 +151,12 @@ This documentation provides a comprehensive overview of the Supabase database st
 | id | uuid | NO | uuid_generate_v4() | Primary key |
 | numero_documento | text | NO | - | Document/invoice number |
 | nome_documento | text | NO | - | Document type (e.g., "Factura") |
-| data_documento | text | NO | - | Document/invoice date |
+| data_documento | date | NO | - | Document/invoice date |
 | nome_cliente | text | NO | - | Client name |
 | euro_total | numeric | YES | 0 | Total amount in euros |
-| nome | text | YES | - | Seller name/initials |
-| department | text | YES | - | Department |
+| nome_vendedor | text | YES | - | Seller name/identifier |
+| nome | text | YES | - | Standardized seller name |
+| department | text | YES | - | Seller department |
 | created_at | timestamptz | YES | now() | Creation timestamp |
 | updated_at | timestamptz | YES | now() | Last update timestamp |
 
@@ -275,7 +276,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 |--------|------|----------|---------|-------------|
 | id | uuid | NO | uuid_generate_v4() | Primary key |
 | nome_fornecedor | text | NO | - | Supplier name |
-| data_documento | text | NO | - | Document date |
+| data_documento | date | NO | - | Document date |
 | nome_dossier | text | YES | - | Dossier name |
 | euro_total | numeric | YES | 0 | Total amount in euros |
 | created_at | timestamptz | YES | now() | Creation timestamp |
@@ -292,9 +293,9 @@ This documentation provides a comprehensive overview of the Supabase database st
 | Column | Type | Nullable | Default | Description |
 |--------|------|----------|---------|-------------|
 | id | uuid | NO | uuid_generate_v4() | Primary key |
-| numero_documento | text | NO | - | Document number |
+| numero_documento | text | YES | - | Document number |
 | nome_documento | text | NO | - | Document type |
-| data_documento | text | NO | - | Document date |
+| data_documento | date | NO | - | Document date |
 | euro_total | numeric | YES | 0 | Total amount in euros (negative for credit notes) |
 | created_at | timestamptz | YES | now() | Creation timestamp |
 | updated_at | timestamptz | YES | now() | Last update timestamp |
@@ -423,7 +424,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 | id | uuid | NO | uuid_generate_v4() | Primary key |
 | numero_documento | text | NO | - | Document/order number |
 | nome_dossier | text | YES | - | Dossier name |
-| data_documento | text | NO | - | Document date |
+| data_documento | date | NO | - | Document date |
 | nome_fornecedor | text | NO | - | Supplier name |
 | nome_utilizador | text | YES | - | User name who created the order |
 | iniciais_utilizador | text | YES | - | User initials |
@@ -445,7 +446,7 @@ This documentation provides a comprehensive overview of the Supabase database st
 |--------|------|----------|---------|-------------|
 | id | uuid | NO | uuid_generate_v4() | Primary key |
 | numero_documento | text | NO | - | Document/quote number |
-| data_documento | text | NO | - | Document date |
+| data_documento | date | NO | - | Document date |
 | nome_cliente | text | NO | - | Client name |
 | nome_utilizador | text | YES | - | User name who created the quote |
 | euro_total | numeric | YES | 0 | Total amount in euros |
@@ -453,11 +454,9 @@ This documentation provides a comprehensive overview of the Supabase database st
 | nome_dossier | text | YES | - | Dossier name |
 | created_at | timestamptz | YES | now() | Creation timestamp |
 | updated_at | timestamptz | YES | now() | Last update timestamp |
-| nome | text | YES | - | Additional name field |
-| department | text | YES | - | Department |
 
 **RLS Policies:**
-- Allow authenticated users full access to orcamentos_vendedor (ALL operations)
+- None specified (relies on default authenticated access)
 
 ---
 
@@ -668,6 +667,46 @@ This documentation provides a comprehensive overview of the Supabase database st
 
 ---
 
+### 28. user_name_mapping
+**Purpose**: User name mapping table - Single source of truth for standardizing seller names. Replaces hardcoded mappings in Python and other systems.
+
+| Column | Type | Nullable | Default | Description |
+|--------|------|----------|---------|-------------|
+| id | uuid | NO | uuid_generate_v4() | Primary key |
+| initials | text | YES | - | Original initials from imports/external systems (CG, SAN, RUI, etc.) |
+| full_name | text | YES | - | Full name from external systems ("Carla Guerreiro", "Sandra Pereira") |
+| short_name | text | YES | - | Alternative short names |
+| standardized_name | text | NO | - | Standardized name (SINGLE SOURCE OF TRUTH) - CARLA, SANDRA, RUI |
+| department | text | NO | - | Department - BRINDES, DIGITAL, IMACX, PRODUCAO, ADMIN |
+| active | boolean | YES | true | Whether this mapping is active |
+| sales | boolean | YES | false | Whether this person is in sales/can appear in sales analytics |
+| created_at | timestamptz | YES | now() | Creation timestamp |
+| updated_at | timestamptz | YES | now() | Last update timestamp |
+
+**Pre-populated Data:**
+The table includes mappings for all known users:
+- **BRINDES Department**: Sandra (SAN), Carla (CAR, CG 25, CG 70)
+- **DIGITAL Department**: Rui (RUI, RB), Raphael (RAP, RG)
+- **IMACX Department**: Manuel (MAN), IMACX (IMA, IMACX), Nuno (NUN), Maria (MARIA)
+- **PRODUCAO Department**: Paulo (PAU, PROD), Márcia (MÁR, MAR)
+- **ADMIN Department**: Estela (EST)
+
+**Indexes:**
+- `idx_user_mapping_initials` on `initials` column
+- `idx_user_mapping_full_name` on `full_name` column
+- `idx_user_mapping_standardized` on `standardized_name` column
+
+**RLS Policies:**
+- Full CRUD access for authenticated users (SELECT, INSERT, UPDATE, DELETE)
+
+**Usage Notes:**
+- Used by financial analytics to standardize seller names across different data sources
+- The `sales` flag determines which users appear in sales performance analytics
+- Replaces hardcoded mappings previously used in Python data processing scripts
+- Enables consistent reporting across faturas_vendedor, orcamentos_vendedor, and ne_fornecedor tables
+
+---
+
 ## Key Relationships
 
 ### Primary Entity Relationships
@@ -698,7 +737,47 @@ profiles (User Profiles)
 ├── producao_operacoes (Production Operations)
 ├── producao_operacoes_audit (Audit Trail)
 └── paletes (Palette Creation)
+
+user_name_mapping (User Name Standardization)
+├── Financial Data Standardization
+├── Sales Analytics User Mapping
+└── Department Classification
 ```
+
+## Views and Aggregated Tables
+
+Based on the system architecture, the following monthly aggregated views are likely implemented for financial analytics:
+
+### Financial Monthly Views
+These views aggregate financial data by month for performance analysis:
+
+1. **faturas_vendedor_monthly**
+   - Aggregates `faturas_vendedor` data by MM/YYYY format
+   - Groups by seller, client, and month
+   - Includes standardized seller names and departments
+
+2. **orcamentos_vendedor_monthly**
+   - Aggregates `orcamentos_vendedor` data by MM/YYYY format
+   - Groups by user, client, and month
+   - Includes standardized user names and departments
+
+3. **listagem_compras_monthly**
+   - Aggregates `listagem_compras` data by MM/YYYY format
+   - Groups by supplier and month
+
+4. **ne_fornecedor_monthly**
+   - Aggregates `ne_fornecedor` data by MM/YYYY format
+   - Groups by supplier, user, and month
+
+5. **listagem_notas_credito_monthly**
+   - Aggregates `listagem_notas_credito` data by MM/YYYY format
+   - Groups by month
+
+### Enhanced Views
+1. **folhas_obras_with_dias**
+   - Extends `folhas_obras` with calculated working days
+   - Includes business day calculations excluding weekends and holidays
+   - Used for production time analysis
 
 ## Security Model (RLS Policies)
 
@@ -736,14 +815,14 @@ Most tables follow the standard pattern of allowing full CRUD operations for aut
 - feriados, fornecedores, items_base, listagem_compras, listagem_notas_credito
 - logistica_entregas, maquinas, maquinas_operacao, materiais, ne_fornecedor
 - orcamentos_vendedor, producao_operacoes, role_permissions, roles
-- stocks, transportadora, faturas_vendedor
+- stocks, transportadora, faturas_vendedor, user_name_mapping
 
 ## Data Integration and Financial Tracking
 
 ### Financial Data Flow
 The system includes comprehensive financial tracking through multiple tables:
 
-1. **Sales Pipeline**: orcamentos_vendedor → vendas_vendedor → faturas_vendedor
+1. **Sales Pipeline**: orcamentos_vendedor → faturas_vendedor
 2. **Purchase Pipeline**: ne_fornecedor → listagem_compras
 3. **Credit Management**: listagem_notas_credito
 
@@ -754,6 +833,7 @@ Several tables are designed for importing data from external financial systems:
 - **faturas_vendedor**: Invoice data from invoicing program
 - **listagem_compras**: Purchase listings for financial tracking
 - **listagem_notas_credito**: Credit notes management
+- **user_name_mapping**: Standardization mapping for seller names across systems
 
 ## Advanced Features
 
@@ -806,115 +886,31 @@ Consider implementing:
 - Triggers for automatic timestamp updates
 - Validation functions for business rules
 
-## Usage Examples
+## Business Logic Implementation
 
-### Common Query Patterns
+### Working Days Calculation
+The system implements business day calculations that:
+- Exclude weekends (Saturday and Sunday)
+- Exclude holidays from the `feriados` table
+- Calculate production time between dates
+- Used in `folhas_obras_with_dias` view
 
-#### Work Orders with Items and Client Information
-```sql
-SELECT fo.*, ib.descricao, c.nome_cl
-FROM folhas_obras fo
-JOIN items_base ib ON fo.id = ib.folha_obra_id
-LEFT JOIN clientes c ON fo.id_cliente = c.id;
-```
+### Financial Analytics
+Monthly aggregation views provide:
+- Performance tracking by seller/department
+- Revenue vs. cost analysis
+- Client performance metrics
+- Operational cost tracking
+- Standardized user name mapping via `user_name_mapping` table
 
-#### Materials with Stock Status
-```sql
-SELECT m.material, 
-       SUM(s.quantidade_disponivel) as total_stock,
-       m.stock_minimo,
-       m.stock_critico,
-       CASE 
-         WHEN SUM(s.quantidade_disponivel) <= m.stock_critico THEN 'CRÍTICO'
-         WHEN SUM(s.quantidade_disponivel) <= m.stock_minimo THEN 'BAIXO'
-         ELSE 'OK'
-       END as status_stock
-FROM materiais m
-LEFT JOIN stocks s ON m.id = s.material_id
-GROUP BY m.id, m.material, m.stock_minimo, m.stock_critico;
-```
-
-#### Production Operations with Full Context
-```sql
-SELECT po.data_operacao, 
-       mo.nome_maquina, 
-       p.first_name || ' ' || p.last_name as operador,
-       fo.numero_fo,
-       m.material
-FROM producao_operacoes po
-JOIN maquinas_operacao mo ON po.maquina = mo.id
-JOIN profiles p ON po.operador_id = p.id
-JOIN folhas_obras fo ON po.folha_obra_id = fo.id
-LEFT JOIN materiais m ON po.material_id = m.id;
-```
-
-#### Palette Tracking with Supplier Information
-```sql
-SELECT p.no_palete,
-       f.nome_forn,
-       p.ref_cartao,
-       p.qt_palete,
-       p.data,
-       pr.first_name || ' ' || pr.last_name as author
-FROM paletes p
-LEFT JOIN fornecedores f ON p.fornecedor_id = f.id
-LEFT JOIN profiles pr ON p.author_id = pr.id
-ORDER BY p.created_at DESC;
-```
-
-#### Audit Trail Analysis
-```sql
-SELECT 
-  audit.action_type,
-  audit.field_name,
-  audit.old_value,
-  audit.new_value,
-  changer.first_name || ' ' || changer.last_name as changed_by,
-  audit.changed_at,
-  po.no_interno
-FROM producao_operacoes_audit audit
-LEFT JOIN profiles changer ON audit.changed_by = changer.id
-LEFT JOIN producao_operacoes po ON audit.operacao_id = po.id
-ORDER BY audit.changed_at DESC;
-```
-
-#### Financial Summary Queries
-```sql
--- Sales Summary
-SELECT 
-  DATE_TRUNC('month', data_documento::date) as month,
-  SUM(euro_total) as total_sales
-FROM faturas_vendedor
-WHERE data_documento::date >= CURRENT_DATE - INTERVAL '12 months'
-GROUP BY month
-ORDER BY month;
-
--- Purchase Summary
-SELECT 
-  nome_fornecedor,
-  SUM(euro_total) as total_purchases
-FROM listagem_compras
-WHERE data_documento::text ~ '^\d{4}-\d{2}-\d{2}'
-  AND data_documento::date >= CURRENT_DATE - INTERVAL '12 months'
-GROUP BY nome_fornecedor
-ORDER BY total_purchases DESC;
-```
-
-## Migration and Maintenance
-
-### Schema Updates
-When updating the schema:
-1. Always backup data before migrations
-2. Test migrations on a copy first
-3. Update RLS policies as needed
-4. Verify foreign key constraints remain valid
-
-### Data Cleanup
-Regular maintenance tasks:
-1. Archive old audit records if needed
-2. Clean up orphaned records
-3. Update stock calculations
-4. Verify data integrity constraints
+### Production Workflow
+The system supports complete production workflow:
+1. **Work Order Creation** (`folhas_obras`)
+2. **Item Definition** (`items_base`)
+3. **Design Phase** (`designer_items`)
+4. **Production Operations** (`producao_operacoes`)
+5. **Logistics/Delivery** (`logistica_entregas`)
+6. **Financial Tracking** (various financial tables)
 
 ## Best Practices
 

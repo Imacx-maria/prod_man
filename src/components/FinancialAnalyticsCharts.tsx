@@ -43,51 +43,78 @@ import {
   type DateGroupableData,
   type GroupedData,
 } from '@/utils/date'
+import SalesPerformanceCharts from '@/components/SalesPerformanceCharts'
 
-// Types for financial data
-interface FaturasVendedor {
+// Types for financial data (monthly aggregated views)
+interface FaturasVendedorMonthly {
   id: string
   numero_documento: string
-  data_documento: string // Renamed from data to match actual field name
+  data_documento: string // MM/YYYY format from monthly view
   nome_cliente: string
   euro_total: number
-  nome: string // Updated to use nome column for salesman name
-  department: string
+  nome: string // Standardized seller name from view
+  department: string // Standardized department from view
+  transaction_count: number // Count of original transactions
+  created_at: string // View timestamp
+  updated_at: string // View timestamp
 }
 
-interface OrcamentosVendedor {
+interface OrcamentosVendedorMonthly {
   id: string
   numero_documento: string
-  data_documento: string // Renamed from data to match actual field name
+  data_documento: string // MM/YYYY format from monthly view
   nome_cliente: string
   euro_total: number
   nome_utilizador: string
   iniciais_utilizador: string
-  department: string
+  nome: string // Standardized seller name from view
+  department: string // Standardized department from view
+  transaction_count: number // Count of original transactions
+  created_at: string // View timestamp
+  updated_at: string // View timestamp
 }
 
-interface ListagemCompras {
+interface ListagemComprasMonthly {
   id: string
   nome_fornecedor: string
-  data_documento: string // Renamed from data to match actual field name
+  data_documento: string // MM/YYYY format from monthly view
   nome_dossier: string
   euro_total: number
+  transaction_count: number // Count of original transactions
+  created_at: string // View timestamp
+  updated_at: string // View timestamp
 }
 
-interface NeFornecedor {
+interface NeFornecedorMonthly {
   id: string
   numero_documento: string
-  data_documento: string // Renamed from data to match actual field name
+  data_documento: string // MM/YYYY format from monthly view
   nome_fornecedor: string
   euro_total: number
   nome_utilizador: string
+  transaction_count: number // Count of original transactions
+  created_at: string // View timestamp
+  updated_at: string // View timestamp
+}
+
+interface ListagemNotasCreditoMonthly {
+  id: string
+  numero_documento: string
+  data_documento: string // MM/YYYY format from monthly view
+  nome_fornecedor: string
+  euro_total: number
+  nome_utilizador: string
+  transaction_count: number // Count of original transactions
+  created_at: string // View timestamp
+  updated_at: string // View timestamp
 }
 
 interface FinancialData {
-  faturasVendedor: FaturasVendedor[]
-  orcamentosVendedor: OrcamentosVendedor[]
-  listagemCompras: ListagemCompras[]
-  neFornecedor: NeFornecedor[]
+  faturasVendedor: FaturasVendedorMonthly[]
+  orcamentosVendedor: OrcamentosVendedorMonthly[]
+  listagemCompras: ListagemComprasMonthly[]
+  neFornecedor: NeFornecedorMonthly[]
+  listagemNotasCredito: ListagemNotasCreditoMonthly[]
 }
 
 interface FinancialAnalyticsChartsProps {
@@ -113,8 +140,11 @@ export default function FinancialAnalyticsCharts({
     orcamentosVendedor: [],
     listagemCompras: [],
     neFornecedor: [],
+    listagemNotasCredito: [],
   })
-  const [multiYearData, setMultiYearData] = useState<FaturasVendedor[]>([])
+  const [multiYearData, setMultiYearData] = useState<FaturasVendedorMonthly[]>(
+    [],
+  )
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -127,10 +157,10 @@ export default function FinancialAnalyticsCharts({
       const endYear = currentYear + 1
 
       // Fetch data for each year separately with pagination to get ALL records
-      const allYearlyData: FaturasVendedor[] = []
+      const allYearlyData: FaturasVendedorMonthly[] = []
 
       for (let year = startYear; year <= endYear; year++) {
-        let allYearData: FaturasVendedor[] = []
+        let allYearData: FaturasVendedorMonthly[] = []
         let hasMoreData = true
         let page = 0
 
@@ -140,7 +170,7 @@ export default function FinancialAnalyticsCharts({
           const endRange = startRange + 999
 
           const { data, error, count } = await supabase
-            .from('faturas_vendedor')
+            .from('faturas_vendedor_monthly')
             .select('*', { count: 'exact' })
             .order('data_documento', { ascending: true })
             .range(startRange, endRange)
@@ -151,7 +181,7 @@ export default function FinancialAnalyticsCharts({
 
           // Filter data to only include our target year in MM/YYYY format
           if (data && data.length > 0) {
-            const filteredData = data.filter((item: FaturasVendedor) => {
+            const filteredData = data.filter((item: FaturasVendedorMonthly) => {
               const dataParts = item.data_documento.split('/')
               if (dataParts.length === 2) {
                 const itemYear = parseInt(dataParts[1])
@@ -264,28 +294,35 @@ export default function FinancialAnalyticsCharts({
       }
 
       // Fetch all financial tables with pagination
-      const faturasData = await fetchAllWithPagination<FaturasVendedor>(
-        'faturas_vendedor',
+      const faturasData = await fetchAllWithPagination<FaturasVendedorMonthly>(
+        'faturas_vendedor_monthly',
         targetYears,
       )
-      const orcamentosData = await fetchAllWithPagination<OrcamentosVendedor>(
-        'orcamentos_vendedor',
+      const orcamentosData =
+        await fetchAllWithPagination<OrcamentosVendedorMonthly>(
+          'orcamentos_vendedor_monthly',
+          targetYears,
+        )
+      const listagemData = await fetchAllWithPagination<ListagemComprasMonthly>(
+        'listagem_compras_monthly',
         targetYears,
       )
-      const listagemData = await fetchAllWithPagination<ListagemCompras>(
-        'listagem_compras',
+      const neData = await fetchAllWithPagination<NeFornecedorMonthly>(
+        'ne_fornecedor_monthly',
         targetYears,
       )
-      const neData = await fetchAllWithPagination<NeFornecedor>(
-        'ne_fornecedor',
-        targetYears,
-      )
+      const notasCreditoData =
+        await fetchAllWithPagination<ListagemNotasCreditoMonthly>(
+          'listagem_notas_credito_monthly',
+          targetYears,
+        )
 
       setFinancialData({
-        faturasVendedor: faturasData,
-        orcamentosVendedor: orcamentosData,
-        listagemCompras: listagemData,
-        neFornecedor: neData,
+        faturasVendedor: faturasData || [],
+        orcamentosVendedor: orcamentosData || [],
+        listagemCompras: listagemData || [],
+        neFornecedor: neData || [],
+        listagemNotasCredito: notasCreditoData || [],
       })
 
       // Also fetch multi-year data
@@ -370,8 +407,8 @@ export default function FinancialAnalyticsCharts({
     })
 
     // Group data by month
-    const faturasGroupedByMonth = new Map<string, FaturasVendedor[]>()
-    const comprasGroupedByMonth = new Map<string, ListagemCompras[]>()
+    const faturasGroupedByMonth = new Map<string, FaturasVendedorMonthly[]>()
+    const comprasGroupedByMonth = new Map<string, ListagemComprasMonthly[]>()
 
     financialData.faturasVendedor.forEach((fatura) => {
       const dateParts = fatura.data_documento.split('/')
@@ -660,168 +697,6 @@ export default function FinancialAnalyticsCharts({
   }, [multiYearData])
 
   // Process data for sales performance
-  const salesPerformanceData = useMemo(() => {
-    const currentYear = new Date().getFullYear()
-
-    // Filter data to current year only for the first chart
-    const currentYearFaturas = financialData.faturasVendedor.filter(
-      (fatura) => {
-        const dataParts = fatura.data_documento.split('/')
-        if (dataParts.length === 2) {
-          const year = parseInt(dataParts[1])
-          return year === currentYear
-        }
-        return false
-      },
-    )
-
-    const currentYearOrcamentos = financialData.orcamentosVendedor.filter(
-      (orcamento) => {
-        const dataParts = orcamento.data_documento.split('/')
-        if (dataParts.length === 2) {
-          const year = parseInt(dataParts[1])
-          return year === currentYear
-        }
-        return false
-      },
-    )
-
-    // Vendas por vendedor (pie chart data) - current year only
-    const vendasPorVendedor: { [key: string]: number } = {}
-    currentYearFaturas.forEach((fatura) => {
-      const vendedor = fatura.nome || 'Sem Vendedor'
-      vendasPorVendedor[vendedor] =
-        (vendasPorVendedor[vendedor] || 0) + (fatura.euro_total || 0)
-    })
-
-    const vendasVendedorData = Object.entries(vendasPorVendedor)
-      .map(([vendedor, total]) => ({
-        name: vendedor,
-        value: Math.round(total),
-        percentage: 0, // Will be calculated below
-      }))
-      .sort((a, b) => b.value - a.value)
-
-    const totalVendasVendedores = vendasVendedorData.reduce(
-      (sum, item) => sum + item.value,
-      0,
-    )
-    vendasVendedorData.forEach((item) => {
-      item.percentage =
-        totalVendasVendedores > 0
-          ? (item.value / totalVendasVendedores) * 100
-          : 0
-    })
-
-    // Top 10 clientes (horizontal bar chart data) - current year only
-    const vendasPorCliente: { [key: string]: number } = {}
-    currentYearFaturas.forEach((fatura) => {
-      const cliente = fatura.nome_cliente || 'Cliente Desconhecido'
-      vendasPorCliente[cliente] =
-        (vendasPorCliente[cliente] || 0) + (fatura.euro_total || 0)
-    })
-
-    const top10Clientes = Object.entries(vendasPorCliente)
-      .map(([cliente, total]) => ({
-        name: cliente.length > 30 ? cliente.substring(0, 30) + '...' : cliente,
-        fullName: cliente,
-        value: Math.round(total),
-      }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 10)
-
-    // Taxa de conversão por department (bar chart data) - current year only with counts
-    const orcamentosCountPorDepartment: { [key: string]: number } = {}
-    const faturasCountPorDepartment: { [key: string]: number } = {}
-
-    // Count orcamentos by department (current year only)
-    currentYearOrcamentos.forEach((orcamento) => {
-      const department = orcamento.department || 'Sem Department'
-      orcamentosCountPorDepartment[department] =
-        (orcamentosCountPorDepartment[department] || 0) + 1
-    })
-
-    // Count faturas by department (current year only)
-    currentYearFaturas.forEach((fatura) => {
-      const department = fatura.department || 'Sem Department'
-      faturasCountPorDepartment[department] =
-        (faturasCountPorDepartment[department] || 0) + 1
-    })
-
-    // Create conversion rate data based on counts
-    const conversaoData = Object.keys({
-      ...orcamentosCountPorDepartment,
-      ...faturasCountPorDepartment,
-    })
-      .map((department) => {
-        const orcamentos = orcamentosCountPorDepartment[department] || 0
-        const faturas = faturasCountPorDepartment[department] || 0
-        const conversao = orcamentos > 0 ? (faturas / orcamentos) * 100 : 0
-
-        return {
-          name: department,
-          orcamentos: orcamentos,
-          faturas: faturas,
-          conversao: Math.round(conversao * 10) / 10, // Round to 1 decimal
-        }
-      })
-      .filter((item) => item.orcamentos > 0 || item.faturas > 0) // Only include departments with activity
-      .sort((a, b) => b.conversao - a.conversao)
-      .slice(0, 8) // Top 8 departments
-
-    // Quotes by month by department (new third chart) - current year only
-    const quotesMonthlyData: { [key: string]: { [key: string]: number } } = {}
-    const allDepartments = new Set<string>()
-    const monthsInYear: string[] = []
-
-    // Generate all months for current year
-    for (let month = 1; month <= 12; month++) {
-      const monthStr = String(month).padStart(2, '0')
-      monthsInYear.push(`${monthStr}/${currentYear}`)
-    }
-
-    // Count quotes by department and month
-    currentYearOrcamentos.forEach((orcamento) => {
-      const department = orcamento.department || 'Sem Department'
-      const month = orcamento.data_documento
-
-      allDepartments.add(department)
-
-      if (!quotesMonthlyData[month]) {
-        quotesMonthlyData[month] = {}
-      }
-
-      quotesMonthlyData[month][department] =
-        (quotesMonthlyData[month][department] || 0) + 1
-    })
-
-    // Create chart data structure with all months and all departments
-    const quotesChartData = monthsInYear.map((month) => {
-      const dateParts = month.split('/')
-      const monthName = new Date(
-        parseInt(dateParts[1]),
-        parseInt(dateParts[0]) - 1,
-      ).toLocaleDateString('pt-PT', {
-        month: 'short',
-      })
-
-      const monthData: any = { month: monthName }
-
-      Array.from(allDepartments).forEach((department) => {
-        monthData[department] = quotesMonthlyData[month]?.[department] || 0
-      })
-
-      return monthData
-    })
-
-    return {
-      vendasVendedorData: vendasVendedorData.slice(0, 8), // Top 8 for pie chart
-      top10Clientes,
-      conversaoData,
-      quotesChartData,
-      allDepartments: Array.from(allDepartments),
-    }
-  }, [financialData])
 
   // Process data for operational costs using new grouping utilities
   const operationalCostsData = useMemo(() => {
@@ -1374,13 +1249,23 @@ export default function FinancialAnalyticsCharts({
           <div className="space-y-6">
             {/* Monthly Evolution Line Chart */}
             <Card className="rounded-none border-2 p-4">
-              <div className="mb-4">
-                <h3 className="text-lg leading-tight font-semibold">
-                  Evolução Mensal - Vendas vs Compras
-                </h3>
-                <p className="text-muted-foreground text-sm leading-tight">
-                  {new Date().getFullYear()}
-                </p>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg leading-tight font-semibold">
+                    Evolução Mensal - Vendas vs Compras
+                  </h3>
+                  <p className="text-muted-foreground text-sm leading-tight">
+                    {new Date().getFullYear()}
+                  </p>
+                </div>
+                <Button
+                  onClick={handleRefresh}
+                  variant="outline"
+                  size="icon"
+                  className="h-10"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
               </div>
               <ResponsiveContainer width="100%" height={400}>
                 <LineChart
@@ -1428,14 +1313,24 @@ export default function FinancialAnalyticsCharts({
 
             {/* Cash Flow Bar Chart */}
             <Card className="rounded-none border-2 p-4">
-              <div className="mb-4">
-                <h3 className="text-lg leading-tight font-semibold">
-                  Cash Flow Mensal
-                </h3>
-                <p className="text-muted-foreground text-sm leading-tight">
-                  Diferença entre vendas e compras (verde: positivo, vermelho:
-                  negativo)
-                </p>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg leading-tight font-semibold">
+                    Cash Flow Mensal
+                  </h3>
+                  <p className="text-muted-foreground text-sm leading-tight">
+                    Diferença entre vendas e compras (verde: positivo, vermelho:
+                    negativo)
+                  </p>
+                </div>
+                <Button
+                  onClick={handleRefresh}
+                  variant="outline"
+                  size="icon"
+                  className="h-10"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
               </div>
               <ResponsiveContainer width="100%" height={350}>
                 <BarChart
@@ -1481,18 +1376,28 @@ export default function FinancialAnalyticsCharts({
 
             {/* Yearly Comparison Bar Chart - SIDE BY SIDE BY MONTH */}
             <Card className="rounded-none border-2 p-4">
-              <div className="mb-4">
-                <h3 className="text-lg leading-tight font-semibold">
-                  Comparação Anual de Vendas
-                </h3>
-                <p className="text-muted-foreground text-sm leading-tight">
-                  Valor Vendas por mês
-                </p>
-                <div className="text-muted-foreground mt-1 text-xs">
-                  Anos disponíveis:{' '}
-                  {yearlyComparisonData.availableYears.join(', ')} | Dados:{' '}
-                  {yearlyComparisonData.data.length} meses
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg leading-tight font-semibold">
+                    Comparação Anual de Vendas
+                  </h3>
+                  <p className="text-muted-foreground text-sm leading-tight">
+                    Valor Vendas por mês
+                  </p>
+                  <div className="text-muted-foreground mt-1 text-xs">
+                    Anos disponíveis:{' '}
+                    {yearlyComparisonData.availableYears.join(', ')} | Dados:{' '}
+                    {yearlyComparisonData.data.length} meses
+                  </div>
                 </div>
+                <Button
+                  onClick={handleRefresh}
+                  variant="outline"
+                  size="icon"
+                  className="h-10"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
               </div>
               <ResponsiveContainer width="100%" height={400}>
                 <BarChart
@@ -1548,248 +1453,30 @@ export default function FinancialAnalyticsCharts({
         </TabsContent>
 
         <TabsContent value="vendas" className="space-y-4">
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            {/* Vendas por Vendedor - Pie Chart */}
-            <Card className="rounded-none border-2 p-4">
-              <div className="mb-4">
-                <h3 className="text-lg leading-tight font-semibold">
-                  Vendas por Vendedor (ano atual)
-                </h3>
-                <p className="text-muted-foreground text-sm leading-tight">
-                  Distribuição percentual de vendas por vendedor -{' '}
-                  {new Date().getFullYear()}
-                </p>
-              </div>
-              <ResponsiveContainer width="100%" height={400}>
-                <PieChart>
-                  <Pie
-                    data={salesPerformanceData.vendasVendedorData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    label={({ name, percentage }) =>
-                      percentage > 5 ? `${name}: ${percentage.toFixed(1)}%` : ''
-                    }
-                    outerRadius={150}
-                    fill="#8884d8"
-                    dataKey="value"
-                  >
-                    {salesPerformanceData.vendasVendedorData.map(
-                      (entry, index) => {
-                        const colors = [
-                          CHART_COLORS.vendas,
-                          CHART_COLORS.orcamentos,
-                          CHART_COLORS.margem,
-                          CHART_COLORS.neutral,
-                          '#f97316', // Orange
-                          '#06b6d4', // Cyan
-                          '#8b5cf6', // Violet
-                          '#f59e0b', // Amber
-                        ]
-                        return (
-                          <Cell
-                            key={`cell-${index}`}
-                            fill={colors[index % colors.length]}
-                          />
-                        )
-                      },
-                    )}
-                  </Pie>
-                  <Tooltip
-                    formatter={(value: number, name) => [
-                      value.toLocaleString('pt-PT', {
-                        style: 'currency',
-                        currency: 'EUR',
-                      }),
-                      'Vendas',
-                    ]}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </Card>
-
-            {/* Taxa de Conversão por Vendedor */}
-            <Card className="rounded-none border-2 p-4">
-              <div className="mb-4">
-                <h3 className="text-lg leading-tight font-semibold">
-                  Taxa de Conversão por Departamento (ano atual)
-                </h3>
-                <p className="text-muted-foreground text-sm leading-tight">
-                  Número de orçamentos vs número de faturas por departamento -{' '}
-                  {new Date().getFullYear()}
-                </p>
-              </div>
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart
-                  data={salesPerformanceData.conversaoData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fontSize: 12 }}
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                  />
-                  <YAxis
-                    tick={{ fontSize: 12 }}
-                    tickFormatter={(value) => `${value}%`}
-                  />
-                  <Tooltip
-                    formatter={(value: number, name: string) => {
-                      if (name === 'conversao') {
-                        return [`${value}%`, 'Taxa de Conversão']
-                      }
-                      return [
-                        value.toString(),
-                        name === 'orcamentos'
-                          ? 'Número de Orçamentos'
-                          : 'Número de Faturas',
-                      ]
-                    }}
-                    labelStyle={{ color: '#333' }}
-                    contentStyle={{
-                      backgroundColor: '#fff',
-                      border: '1px solid #ccc',
-                      borderRadius: '0px',
-                    }}
-                  />
-                  <Bar dataKey="conversao" fill={CHART_COLORS.orcamentos} />
-                </BarChart>
-              </ResponsiveContainer>
-            </Card>
-          </div>
-
-          {/* Orçamentos por Vendedor por Mês - New Third Chart */}
-          <Card className="rounded-none border-2 p-4">
-            <div className="mb-4">
-              <h3 className="text-lg leading-tight font-semibold">
-                Orçamentos por Departamento por Mês (ano atual)
-              </h3>
-              <p className="text-muted-foreground text-sm leading-tight">
-                Número de orçamentos por departamento ao longo do ano -{' '}
-                {new Date().getFullYear()}
-              </p>
-            </div>
-            <ResponsiveContainer width="100%" height={400}>
-              <BarChart
-                data={salesPerformanceData.quotesChartData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                <YAxis
-                  tick={{ fontSize: 12 }}
-                  tickFormatter={(value) => value.toString()}
-                />
-                <Tooltip
-                  formatter={(value: number, name: string) => [
-                    value.toString(),
-                    `Orçamentos - Dept. ${name}`,
-                  ]}
-                  labelStyle={{ color: '#333' }}
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #ccc',
-                    borderRadius: '0px',
-                  }}
-                />
-                {salesPerformanceData.allDepartments.map(
-                  (department: string, index: number) => {
-                    // Cycle through different colors for each department
-                    const colors = [
-                      CHART_COLORS.vendas,
-                      CHART_COLORS.orcamentos,
-                      CHART_COLORS.margem,
-                      CHART_COLORS.neutral,
-                      '#f97316', // Orange
-                      '#06b6d4', // Cyan
-                      '#8b5cf6', // Violet
-                      '#f59e0b', // Amber
-                      '#10b981', // Emerald
-                      '#f43f5e', // Rose
-                    ]
-                    const fillColor = colors[index % colors.length]
-
-                    return (
-                      <Bar
-                        key={department}
-                        dataKey={department}
-                        fill={fillColor}
-                        name={department}
-                      />
-                    )
-                  },
-                )}
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
-
-          {/* Top 10 Clientes - Horizontal Bar Chart */}
-          <Card className="rounded-none border-2 p-4">
-            <div className="mb-4">
-              <h3 className="text-lg leading-tight font-semibold">
-                Top 10 Clientes (ano atual)
-              </h3>
-              <p className="text-muted-foreground text-sm leading-tight">
-                Clientes com maior volume de vendas - {new Date().getFullYear()}
-              </p>
-            </div>
-            <ResponsiveContainer width="100%" height={450}>
-              <BarChart
-                layout="horizontal"
-                data={salesPerformanceData.top10Clientes}
-                margin={{ top: 20, right: 30, left: 150, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 12 }}
-                  tickFormatter={(value) => `${(value / 1000).toFixed(0)}k€`}
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  tick={{ fontSize: 12 }}
-                  width={140}
-                />
-                <Tooltip
-                  formatter={(value: number, name, props: any) => [
-                    value.toLocaleString('pt-PT', {
-                      style: 'currency',
-                      currency: 'EUR',
-                    }),
-                    'Vendas',
-                  ]}
-                  labelFormatter={(label, payload) =>
-                    payload && payload[0]
-                      ? `Cliente: ${payload[0].payload.fullName}`
-                      : `Cliente: ${label}`
-                  }
-                  contentStyle={{
-                    backgroundColor: '#fff',
-                    border: '1px solid #ccc',
-                    borderRadius: '0px',
-                  }}
-                />
-                <Bar dataKey="value" fill={CHART_COLORS.vendas} />
-              </BarChart>
-            </ResponsiveContainer>
-          </Card>
+          <SalesPerformanceCharts supabase={supabase} onRefresh={onRefresh} />
         </TabsContent>
 
         <TabsContent value="custos" className="space-y-4">
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Distribuição de Compras - Pie Chart */}
             <Card className="rounded-none border-2 p-4">
-              <div className="mb-4">
-                <h3 className="text-lg leading-tight font-semibold">
-                  Distribuição de Compras
-                </h3>
-                <p className="text-muted-foreground text-sm leading-tight">
-                  Operacionais vs Outras compras
-                </p>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg leading-tight font-semibold">
+                    Distribuição de Compras
+                  </h3>
+                  <p className="text-muted-foreground text-sm leading-tight">
+                    Operacionais vs Outras compras
+                  </p>
+                </div>
+                <Button
+                  onClick={handleRefresh}
+                  variant="outline"
+                  size="icon"
+                  className="h-10"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
               </div>
               <ResponsiveContainer width="100%" height={400}>
                 <PieChart>
@@ -1823,13 +1510,23 @@ export default function FinancialAnalyticsCharts({
 
             {/* Custos Operacionais vs Vendas - Line Chart */}
             <Card className="rounded-none border-2 p-4">
-              <div className="mb-4">
-                <h3 className="text-lg leading-tight font-semibold">
-                  Custos Operacionais vs Vendas
-                </h3>
-                <p className="text-muted-foreground text-sm leading-tight">
-                  Percentagem de custos operacionais sobre vendas
-                </p>
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg leading-tight font-semibold">
+                    Custos Operacionais vs Vendas
+                  </h3>
+                  <p className="text-muted-foreground text-sm leading-tight">
+                    Percentagem de custos operacionais sobre vendas
+                  </p>
+                </div>
+                <Button
+                  onClick={handleRefresh}
+                  variant="outline"
+                  size="icon"
+                  className="h-10"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
               </div>
               <ResponsiveContainer width="100%" height={400}>
                 <LineChart
@@ -1876,13 +1573,24 @@ export default function FinancialAnalyticsCharts({
 
           {/* Top 10 Fornecedores - Bar Chart */}
           <Card className="rounded-none border-2 p-4">
-            <div className="mb-4">
-              <h3 className="text-lg leading-tight font-semibold">
-                Top 10 Fornecedores
-              </h3>
-              <p className="text-muted-foreground text-sm leading-tight">
-                Fornecedores com maior volume de compras (operacionais + outras)
-              </p>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg leading-tight font-semibold">
+                  Top 10 Fornecedores
+                </h3>
+                <p className="text-muted-foreground text-sm leading-tight">
+                  Fornecedores com maior volume de compras (operacionais +
+                  outras)
+                </p>
+              </div>
+              <Button
+                onClick={handleRefresh}
+                variant="outline"
+                size="icon"
+                className="h-10"
+              >
+                <RotateCw className="h-4 w-4" />
+              </Button>
             </div>
             <ResponsiveContainer width="100%" height={450}>
               <BarChart
@@ -1929,14 +1637,24 @@ export default function FinancialAnalyticsCharts({
         <TabsContent value="analise" className="space-y-4">
           {/* Pipeline de Vendas - Multi-line Chart */}
           <Card className="rounded-none border-2 p-4">
-            <div className="mb-4">
-              <h3 className="text-lg leading-tight font-semibold">
-                Pipeline de Vendas
-              </h3>
-              <p className="text-muted-foreground text-sm leading-tight">
-                Orçamentos criados, vendas concretizadas e faturas emitidas (
-                {new Date().getFullYear()})
-              </p>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg leading-tight font-semibold">
+                  Pipeline de Vendas
+                </h3>
+                <p className="text-muted-foreground text-sm leading-tight">
+                  Orçamentos criados, vendas concretizadas e faturas emitidas (
+                  {new Date().getFullYear()})
+                </p>
+              </div>
+              <Button
+                onClick={handleRefresh}
+                variant="outline"
+                size="icon"
+                className="h-10"
+              >
+                <RotateCw className="h-4 w-4" />
+              </Button>
             </div>
             <ResponsiveContainer width="100%" height={450}>
               <LineChart
@@ -1995,15 +1713,25 @@ export default function FinancialAnalyticsCharts({
 
           {/* Crescimento Month-over-Month */}
           <Card className="rounded-none border-2 p-4">
-            <div className="mb-4">
-              <h3 className="text-lg leading-tight font-semibold">
-                Crescimento Month-over-Month
-              </h3>
-              <p className="text-muted-foreground text-sm leading-tight">
-                Comparação entre{' '}
-                {format(subMonths(new Date(), 1), 'MMMM', { locale: pt })} e{' '}
-                {format(new Date(), 'MMMM', { locale: pt })}
-              </p>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg leading-tight font-semibold">
+                  Crescimento Month-over-Month
+                </h3>
+                <p className="text-muted-foreground text-sm leading-tight">
+                  Comparação entre{' '}
+                  {format(subMonths(new Date(), 1), 'MMMM', { locale: pt })} e{' '}
+                  {format(new Date(), 'MMMM', { locale: pt })}
+                </p>
+              </div>
+              <Button
+                onClick={handleRefresh}
+                variant="outline"
+                size="icon"
+                className="h-10"
+              >
+                <RotateCw className="h-4 w-4" />
+              </Button>
             </div>
             <ResponsiveContainer width="100%" height={350}>
               <BarChart

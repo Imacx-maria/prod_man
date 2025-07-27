@@ -16,6 +16,19 @@
         "--headless=",
         "--viewport-size="
       ]
+    },
+    "ref": {
+      "type": "http",
+      "url": "https://api.ref.tools/mcp?apiKey=ref-9964831680a940bf15b5"
+    },
+    "sequential-thinking": {
+      "command": "cmd",
+      "args": [
+        "/c",
+        "npx",
+        "-y",
+        "@modelcontextprotocol/server-sequential-thinking"
+      ]
     }
   }
 }
