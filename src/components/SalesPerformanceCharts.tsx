@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { getFinancialYearRange } from '@/utils/date'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Tabs, TabsList, TabsContent, TabsTrigger } from '@/components/ui/tabs'
@@ -19,14 +20,7 @@ import {
   Cell,
   Legend,
 } from 'recharts'
-import {
-  RotateCw,
-  TrendingUp,
-  Users,
-  Euro,
-  ArrowLeft,
-  Loader2,
-} from 'lucide-react'
+import { RotateCw, TrendingUp, Euro, ArrowLeft, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
 import { pt } from 'date-fns/locale'
 
@@ -87,12 +81,41 @@ interface FaturasVendedorMonthlyCount {
   updated_at: string
 }
 
+// User mapping interface
+interface UserMapping {
+  id: string
+  initials?: string
+  full_name?: string
+  short_name?: string
+  standardized_name: string
+  department: string
+  active: boolean
+  sales: boolean
+  created_at: string
+  updated_at: string
+}
+
 interface SalesData {
   faturasVendedor: FaturasVendedorMonthly[]
   orcamentosVendedor: OrcamentosVendedorMonthly[]
+  vendasLiquidas: VendasLiquidasMonthly[]
   // Add count data
   faturasVendedorCount: FaturasVendedorMonthlyCount[]
   orcamentosVendedorCount: OrcamentosVendedorMonthlyCount[]
+}
+
+interface VendasLiquidasMonthly {
+  id: string
+  numero_documento: string
+  nome_documento: string
+  data_documento: string // MM/YYYY format from monthly view
+  nome_cliente: string
+  euro_total: number
+  nome: string // Standardized seller name from view
+  department: string // Standardized department from view
+  transaction_count: number // Count of original transactions
+  created_at: string // View timestamp
+  updated_at: string // View timestamp
 }
 
 interface SalesPerformanceChartsProps {
@@ -124,9 +147,6 @@ const PIE_COLORS = [
   '#8b5cf6',
 ]
 
-// Filter to only show specific departments
-const ALLOWED_DEPARTMENTS = ['BRINDES', 'DIGITAL', 'IMACX']
-
 export default function SalesPerformanceCharts({
   supabase,
   onRefresh,
@@ -134,11 +154,45 @@ export default function SalesPerformanceCharts({
   const [salesData, setSalesData] = useState<SalesData>({
     faturasVendedor: [],
     orcamentosVendedor: [],
+    vendasLiquidas: [],
     faturasVendedorCount: [],
     orcamentosVendedorCount: [],
   })
+  const [userMappings, setUserMappings] = useState<UserMapping[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Get departments where sales = true from user_name_mapping
+  const allowedDepartments = useMemo(() => {
+    // Filter departments based on sales=true in user_name_mapping
+    const salesDepartments = userMappings
+      .filter((mapping) => mapping.sales === true)
+      .map((mapping) => mapping.department)
+
+    // Remove duplicates and return unique departments
+    return Array.from(new Set(salesDepartments))
+  }, [userMappings])
+
+  // Fetch user mapping data
+  const fetchUserMappings = useCallback(async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_name_mapping')
+        .select('*')
+        .eq('active', true)
+        .order('department', { ascending: true })
+
+      if (error) {
+        throw new Error(`user_name_mapping: ${error.message}`)
+      }
+
+      setUserMappings(data || [])
+    } catch (err: any) {
+      console.error('Error fetching user mappings:', err)
+      // Don't set main error for this, just log it and use empty array
+      setUserMappings([])
+    }
+  }, [supabase])
 
   // Fetch sales data for current year and 2 previous years
   const fetchSalesData = useCallback(async () => {
@@ -146,8 +200,8 @@ export default function SalesPerformanceCharts({
     setError(null)
 
     try {
-      const currentYear = new Date().getFullYear()
-      const targetYears = [currentYear - 2, currentYear - 1, currentYear]
+      // Use standardized financial year range
+      const targetYears = getFinancialYearRange()
 
       // Simplified data fetching - monthly views are pre-aggregated so no pagination needed
       // Filter for target years using direct string matching since data is already in MM/YYYY format
@@ -163,52 +217,180 @@ export default function SalesPerformanceCharts({
         throw new Error(`faturas_vendedor_monthly: ${faturasError.message}`)
       }
 
-      const { data: orcamentosData, error: orcamentosError } = await supabase
-        .from('orcamentos_vendedor_monthly')
-        .select('*')
-        .or(`data_documento.like.${yearFilters.join(',data_documento.like.')}`)
-        .order('data_documento', { ascending: true })
+      // Use pagination for orcamentos_vendedor_monthly to get ALL records
+      const fetchAllOrcamentos = async () => {
+        let allData: OrcamentosVendedorMonthly[] = []
+        let hasMoreData = true
+        let page = 0
+        const pageSize = 1000
 
-      if (orcamentosError) {
-        throw new Error(
-          `orcamentos_vendedor_monthly: ${orcamentosError.message}`,
-        )
+        while (hasMoreData) {
+          const startRange = page * pageSize
+          const endRange = startRange + pageSize - 1
+
+          const { data, error, count } = await supabase
+            .from('orcamentos_vendedor_monthly')
+            .select('*', { count: 'exact' })
+            .or(
+              `data_documento.like.${yearFilters.join(',data_documento.like.')}`,
+            )
+            .order('data_documento', { ascending: true })
+            .range(startRange, endRange)
+
+          if (error) {
+            throw new Error(`orcamentos_vendedor_monthly: ${error.message}`)
+          }
+
+          if (data && data.length > 0) {
+            allData = [...allData, ...data]
+
+            // If we got fewer records than the page size, we've reached the end
+            if (data.length < pageSize) {
+              hasMoreData = false
+            } else {
+              page++
+            }
+          } else {
+            hasMoreData = false
+          }
+        }
+
+        return allData
       }
 
-      // Add queries for count views
-      const { data: faturasCountData, error: faturasCountError } =
-        await supabase
-          .from('faturas_vendedor_monthly_count')
-          .select('*')
-          .or(
-            `data_documento.like.${yearFilters.join(',data_documento.like.')}`,
-          )
-          .order('data_documento', { ascending: true })
+      const orcamentosData = await fetchAllOrcamentos()
 
-      if (faturasCountError) {
-        throw new Error(
-          `faturas_vendedor_monthly_count: ${faturasCountError.message}`,
-        )
+      // Add queries for count views with pagination
+      const fetchAllFaturasCount = async () => {
+        let allData: FaturasVendedorMonthlyCount[] = []
+        let hasMoreData = true
+        let page = 0
+        const pageSize = 1000
+
+        while (hasMoreData) {
+          const startRange = page * pageSize
+          const endRange = startRange + pageSize - 1
+
+          const { data, error, count } = await supabase
+            .from('faturas_vendedor_monthly_count')
+            .select('*', { count: 'exact' })
+            .or(
+              `data_documento.like.${yearFilters.join(',data_documento.like.')}`,
+            )
+            .order('data_documento', { ascending: true })
+            .range(startRange, endRange)
+
+          if (error) {
+            throw new Error(`faturas_vendedor_monthly_count: ${error.message}`)
+          }
+
+          if (data && data.length > 0) {
+            allData = [...allData, ...data]
+
+            if (data.length < pageSize) {
+              hasMoreData = false
+            } else {
+              page++
+            }
+          } else {
+            hasMoreData = false
+          }
+        }
+
+        return allData
       }
 
-      const { data: orcamentosCountData, error: orcamentosCountError } =
-        await supabase
-          .from('orcamentos_vendedor_monthly_count')
-          .select('*')
-          .or(
-            `data_documento.like.${yearFilters.join(',data_documento.like.')}`,
-          )
-          .order('data_documento', { ascending: true })
+      const fetchAllOrcamentosCount = async () => {
+        let allData: OrcamentosVendedorMonthlyCount[] = []
+        let hasMoreData = true
+        let page = 0
+        const pageSize = 1000
 
-      if (orcamentosCountError) {
-        throw new Error(
-          `orcamentos_vendedor_monthly_count: ${orcamentosCountError.message}`,
-        )
+        while (hasMoreData) {
+          const startRange = page * pageSize
+          const endRange = startRange + pageSize - 1
+
+          const { data, error, count } = await supabase
+            .from('orcamentos_vendedor_monthly_count')
+            .select('*', { count: 'exact' })
+            .or(
+              `data_documento.like.${yearFilters.join(',data_documento.like.')}`,
+            )
+            .order('data_documento', { ascending: true })
+            .range(startRange, endRange)
+
+          if (error) {
+            throw new Error(
+              `orcamentos_vendedor_monthly_count: ${error.message}`,
+            )
+          }
+
+          if (data && data.length > 0) {
+            allData = [...allData, ...data]
+
+            if (data.length < pageSize) {
+              hasMoreData = false
+            } else {
+              page++
+            }
+          } else {
+            hasMoreData = false
+          }
+        }
+
+        return allData
       }
+
+      const faturasCountData = await fetchAllFaturasCount()
+      const orcamentosCountData = await fetchAllOrcamentosCount()
+
+      // Use pagination for vendas_liquidas_monthly to get ALL records (like FinancialAnalyticsCharts)
+      const fetchAllVendasLiquidas = async () => {
+        let allData: VendasLiquidasMonthly[] = []
+        let hasMoreData = true
+        let page = 0
+        const pageSize = 1000
+
+        while (hasMoreData) {
+          const startRange = page * pageSize
+          const endRange = startRange + pageSize - 1
+
+          const { data, error, count } = await supabase
+            .from('vendas_liquidas_monthly')
+            .select('*', { count: 'exact' })
+            .or(
+              `data_documento.like.${yearFilters.join(',data_documento.like.')}`,
+            )
+            .order('data_documento', { ascending: true })
+            .range(startRange, endRange)
+
+          if (error) {
+            throw new Error(`vendas_liquidas_monthly: ${error.message}`)
+          }
+
+          if (data && data.length > 0) {
+            allData = [...allData, ...data]
+
+            // If we got fewer records than the page size, we've reached the end
+            if (data.length < pageSize) {
+              hasMoreData = false
+            } else {
+              page++
+            }
+          } else {
+            hasMoreData = false
+          }
+        }
+
+        return allData
+      }
+
+      const vendasLiquidasData = await fetchAllVendasLiquidas()
 
       setSalesData({
         faturasVendedor: faturasData || [],
         orcamentosVendedor: orcamentosData || [],
+        vendasLiquidas: vendasLiquidasData || [],
         faturasVendedorCount: faturasCountData || [],
         orcamentosVendedorCount: orcamentosCountData || [],
       })
@@ -222,65 +404,83 @@ export default function SalesPerformanceCharts({
 
   // Refresh function
   const handleRefresh = useCallback(async () => {
-    await fetchSalesData()
+    await Promise.all([fetchUserMappings(), fetchSalesData()])
     if (onRefresh) {
       await onRefresh()
     }
-  }, [fetchSalesData, onRefresh])
+  }, [fetchUserMappings, fetchSalesData, onRefresh])
 
   useEffect(() => {
-    fetchSalesData()
-  }, [fetchSalesData])
+    const initializeData = async () => {
+      await fetchUserMappings()
+      await fetchSalesData()
+    }
+    initializeData()
+  }, [fetchUserMappings, fetchSalesData])
 
   // Calculate overview metrics
   const overviewMetrics = useMemo(() => {
     const currentYear = new Date().getFullYear()
 
-    // Filter data for current year only for yearly totals and allowed departments
-    const currentYearSales = salesData.faturasVendedor.filter((fatura) => {
-      const dataParts = fatura.data_documento.split('/')
-      if (dataParts.length === 2) {
-        const year = parseInt(dataParts[1])
-        const department = fatura.department || 'Sem Departamento'
-        return year === currentYear && ALLOWED_DEPARTMENTS.includes(department)
+    // Filter data for current year only for yearly totals (no department filtering to match Visão Geral)
+    const currentYearSales = salesData.vendasLiquidas.filter((venda) => {
+      const parts = venda.data_documento.split('/')
+      if (parts.length === 2) {
+        const year = parseInt(parts[1])
+        return year === currentYear
       }
       return false
     })
 
     const currentYearQuotes = salesData.orcamentosVendedor.filter(
       (orcamento) => {
-        const dataParts = orcamento.data_documento.split('/')
-        if (dataParts.length === 2) {
-          const year = parseInt(dataParts[1])
-          const department = orcamento.department || 'Sem Departamento'
-          return (
-            year === currentYear && ALLOWED_DEPARTMENTS.includes(department)
-          )
+        const parts = orcamento.data_documento.split('/')
+        if (parts.length === 2) {
+          const year = parseInt(parts[1])
+          return year === currentYear
         }
         return false
       },
     )
 
     const totalSalesValue = currentYearSales.reduce(
-      (sum, fatura) => sum + (fatura.euro_total || 0),
+      (sum, venda) => sum + (venda.euro_total || 0),
       0,
     )
+
+    // Debug logging for sales discrepancy
+    console.log('🔍 Performance de Vendas Debug (with pagination):')
+    console.log(
+      'Total vendas liquidas records:',
+      salesData.vendasLiquidas.length,
+    )
+    console.log('Current year sales (filtered):', currentYearSales.length)
+    console.log('Total Sales Value:', totalSalesValue)
+    console.log('Sample current year sales:', currentYearSales.slice(0, 3))
+    console.log('All departments found:', allowedDepartments)
 
     const totalQuotesValue = currentYearQuotes.reduce(
       (sum, orcamento) => sum + (orcamento.euro_total || 0),
       0,
     )
 
-    // Updated conversion rate calculation using count data
+    // Debug logging for orçamentos
+    console.log('💰 Total Orçamentos (Ano) Debug (with pagination):')
+    console.log(
+      'Total orcamentos vendedor records:',
+      salesData.orcamentosVendedor.length,
+    )
+    console.log('Current year quotes (filtered):', currentYearQuotes.length)
+    console.log('Total Quotes Value:', totalQuotesValue)
+    console.log('Sample current year quotes:', currentYearQuotes.slice(0, 3))
+
+    // Updated conversion rate calculation using count data (no department filtering to match Visão Geral)
     const currentYearQuotesCount = salesData.orcamentosVendedorCount
       .filter((orcamento) => {
-        const dataParts = orcamento.data_documento.split('/')
-        if (dataParts.length === 2) {
-          const year = parseInt(dataParts[1])
-          const department = orcamento.department || 'Sem Departamento'
-          return (
-            year === currentYear && ALLOWED_DEPARTMENTS.includes(department)
-          )
+        const parts = orcamento.data_documento.split('/')
+        if (parts.length === 2) {
+          const year = parseInt(parts[1])
+          return year === currentYear
         }
         return false
       })
@@ -288,13 +488,10 @@ export default function SalesPerformanceCharts({
 
     const currentYearInvoicesCount = salesData.faturasVendedorCount
       .filter((fatura) => {
-        const dataParts = fatura.data_documento.split('/')
-        if (dataParts.length === 2) {
-          const year = parseInt(dataParts[1])
-          const department = fatura.department || 'Sem Departamento'
-          return (
-            year === currentYear && ALLOWED_DEPARTMENTS.includes(department)
-          )
+        const parts = fatura.data_documento.split('/')
+        if (parts.length === 2) {
+          const year = parseInt(parts[1])
+          return year === currentYear
         }
         return false
       })
@@ -305,50 +502,96 @@ export default function SalesPerformanceCharts({
         ? (currentYearInvoicesCount / currentYearQuotesCount) * 100
         : 0
 
-    const activeSalespeople = new Set([
-      ...currentYearSales.map((f) => f.nome),
-      ...currentYearQuotes.map(
-        (o) => o.nome || o.nome_utilizador || 'Desconhecido',
-      ),
-    ]).size
+    // Debug logging for conversion rate
+    console.log('📊 Taxa de Conversão Debug (with pagination):')
+    console.log(
+      'Total faturas count records fetched:',
+      salesData.faturasVendedorCount.length,
+    )
+    console.log(
+      'Total orcamentos count records fetched:',
+      salesData.orcamentosVendedorCount.length,
+    )
+    console.log('Current year invoices count:', currentYearInvoicesCount)
+    console.log('Current year quotes count:', currentYearQuotesCount)
+    console.log(
+      'Conversion rate calculation:',
+      `(${currentYearInvoicesCount} / ${currentYearQuotesCount}) * 100 = ${conversionRate.toFixed(1)}%`,
+    )
 
     return {
       totalSalesValue,
       totalQuotesValue,
       conversionRate,
-      activeSalespeople,
     }
-  }, [salesData])
+  }, [salesData, allowedDepartments])
 
-  // Process data for top 10 clients - Simple current year vs last year
+  // Client name normalization function
+  const normalizeClientName = (clientName: string): string => {
+    const name = clientName.trim().toUpperCase()
+
+    // HH Print Management Spain variations
+    if (
+      name.includes('HH') &&
+      name.includes('PRINT') &&
+      name.includes('MANAGEMENT') &&
+      name.includes('SPAIN')
+    ) {
+      return 'HH Spain'
+    }
+
+    // Add more normalization rules here as needed
+    // Example:
+    // if (name.includes('SOME_OTHER_CLIENT_PATTERN')) {
+    //   return 'Normalized Name'
+    // }
+
+    // Return original name if no normalization rule applies
+    return clientName
+  }
+
+  // Process data for top 15 clients - Year-to-date comparison
   const top10Clients = useMemo(() => {
     const currentYear = new Date().getFullYear()
     const lastYear = currentYear - 1
+    const currentMonth = new Date().getMonth() + 1 // 1-12
 
     // Get current year clients first (for ranking)
     const currentYearTotals: { [key: string]: number } = {}
     const lastYearTotals: { [key: string]: number } = {}
 
-    salesData.faturasVendedor.forEach((fatura) => {
-      const client = fatura.nome_cliente || 'Cliente Desconhecido'
-      const year = parseInt(fatura.data_documento.split('/')[1])
-      const amount = fatura.euro_total || 0
-      const department = fatura.department || 'Sem Departamento'
+    salesData.vendasLiquidas.forEach((venda) => {
+      const originalClient = venda.nome_cliente || 'Cliente Desconhecido'
+      const client = normalizeClientName(originalClient) // Apply normalization
+      const parts = venda.data_documento.split('/')
+      if (parts.length === 2) {
+        const month = parseInt(parts[0])
+        const year = parseInt(parts[1])
+        const amount = venda.euro_total || 0
+        const department = venda.department || 'Sem Departamento'
 
-      // Only include allowed departments
-      if (ALLOWED_DEPARTMENTS.includes(department)) {
-        if (year === currentYear) {
-          currentYearTotals[client] = (currentYearTotals[client] || 0) + amount
-        } else if (year === lastYear) {
-          lastYearTotals[client] = (lastYearTotals[client] || 0) + amount
+        // Only include allowed departments
+        if (allowedDepartments.includes(department)) {
+          if (year === currentYear) {
+            // Include all current year data up to current month
+            if (month <= currentMonth) {
+              currentYearTotals[client] =
+                (currentYearTotals[client] || 0) + amount
+            }
+          } else if (year === lastYear) {
+            // Include previous year data only up to the same month as current year
+            if (month <= currentMonth) {
+              lastYearTotals[client] = (lastYearTotals[client] || 0) + amount
+            }
+          }
         }
       }
     })
 
-    // Get top 10 clients by current year sales
+    // Get top 15 clients by current year sales
     const result = Object.entries(currentYearTotals)
       .sort(([, a], [, b]) => b - a)
-      .slice(0, 10)
+      .slice(0, 15)
       .map(([client, currentAmount]) => ({
         name: client.length > 35 ? client.substring(0, 35) + '...' : client,
         fullName: client,
@@ -358,20 +601,31 @@ export default function SalesPerformanceCharts({
 
     // Log final data to confirm values are correct
     console.log(
-      '✅ Chart data ready:',
+      '✅ Top 15 Clientes YTD data ready:',
       result.length,
-      'clients with values from',
+      'clients with current month filter:',
+      currentMonth,
+      'current year range:',
       result[0]?.currentYear || 0,
       'to',
       result[result.length - 1]?.currentYear || 0,
     )
 
-    return result
-  }, [salesData])
+    // Log client normalization for debugging
+    const hhSpainEntry = result.find((client) => client.name === 'HH Spain')
+    if (hhSpainEntry) {
+      console.log('🎯 HH Spain grouped data:', hhSpainEntry)
+    }
 
-  // Process monthly sales trend for multiple years
+    return result
+  }, [salesData, allowedDepartments])
+
+  // Enhanced monthlySalesTrend processing with prediction capabilities
   const monthlySalesTrend = useMemo(() => {
     const currentYear = new Date().getFullYear()
+    const currentMonth = new Date().getMonth() + 1 // 1-12
+
+    // Dynamic years: current year, previous year, and year before that
     const targetYears = [currentYear - 2, currentYear - 1, currentYear]
     const monthlyDataByYear: { [year: number]: { [month: string]: number } } =
       {}
@@ -387,27 +641,97 @@ export default function SalesPerformanceCharts({
     })
 
     // Aggregate sales data by month for each year (only allowed departments)
-    salesData.faturasVendedor.forEach((fatura) => {
-      const dataParts = fatura.data_documento.split('/')
-      if (dataParts.length === 2) {
-        const year = parseInt(dataParts[1])
-        const department = fatura.department || 'Sem Departamento'
+    salesData.vendasLiquidas.forEach((venda) => {
+      const parts = venda.data_documento.split('/')
+      if (parts.length === 2) {
+        const year = parseInt(parts[1])
+        const department = venda.department || 'Sem Departamento'
         if (
           targetYears.includes(year) &&
-          ALLOWED_DEPARTMENTS.includes(department)
+          allowedDepartments.includes(department)
         ) {
-          const month = fatura.data_documento
+          const month = venda.data_documento
           monthlyDataByYear[year][month] =
-            (monthlyDataByYear[year][month] || 0) + (fatura.euro_total || 0)
+            (monthlyDataByYear[year][month] || 0) + (venda.euro_total || 0)
         }
       }
     })
 
-    // Create chart data with monthly points for all years
+    // Simple prediction function using linear regression and seasonal adjustments
+    const calculatePrediction = (
+      historicalData: number[],
+      targetMonth: number,
+    ): number => {
+      if (historicalData.length < 2) return 0
+
+      // Get the same month from previous years for seasonal pattern
+      const sameMonthValues = [
+        monthlyDataByYear[currentYear - 2]?.[
+          `${String(targetMonth).padStart(2, '0')}/${currentYear - 2}`
+        ] || 0,
+        monthlyDataByYear[currentYear - 1]?.[
+          `${String(targetMonth).padStart(2, '0')}/${currentYear - 1}`
+        ] || 0,
+      ].filter((val) => val > 0)
+
+      // Calculate year-over-year growth rate
+      let growthRate = 0
+      if (sameMonthValues.length >= 2) {
+        growthRate =
+          (sameMonthValues[sameMonthValues.length - 1] - sameMonthValues[0]) /
+          sameMonthValues[0]
+      }
+
+      // Calculate average of historical data for the same month
+      const seasonalAverage =
+        sameMonthValues.length > 0
+          ? sameMonthValues.reduce((sum, val) => sum + val, 0) /
+            sameMonthValues.length
+          : 0
+
+      // Get recent trend from current year's completed months
+      const currentYearData = []
+      for (let month = 1; month < currentMonth; month++) {
+        const monthKey = `${String(month).padStart(2, '0')}/${currentYear}`
+        const value = monthlyDataByYear[currentYear][monthKey] || 0
+        if (value > 0) currentYearData.push(value)
+      }
+
+      if (currentYearData.length === 0) {
+        // No current year data, use seasonal pattern with growth
+        return Math.max(0, seasonalAverage * (1 + growthRate))
+      }
+
+      // Calculate recent average
+      const recentAverage =
+        currentYearData.reduce((sum, val) => sum + val, 0) /
+        currentYearData.length
+
+      // Combine seasonal pattern with recent performance and growth trend
+      const basePredict = seasonalAverage > 0 ? seasonalAverage : recentAverage
+      const trendAdjusted = basePredict * (1 + growthRate * 0.5) // Moderate the growth rate
+
+      // Blend with recent performance (60% recent trend, 40% seasonal/growth)
+      return Math.max(0, Math.round(recentAverage * 0.6 + trendAdjusted * 0.4))
+    }
+
+    // Find the last month with actual sales data in current year
+    let lastMonthWithData = 0
+    for (let month = 12; month >= 1; month--) {
+      const monthStr = String(month).padStart(2, '0')
+      const monthKey = `${monthStr}/${currentYear}`
+      if (monthlyDataByYear[currentYear][monthKey] > 0) {
+        lastMonthWithData = month
+        break
+      }
+    }
+
+    // Create chart data with monthly points for all years + predictions
     const chartData: Array<{
       month: string
       monthIndex: number
-      [key: string]: number | string
+      isPredicted?: boolean
+      [key: string]: number | string | boolean | undefined | null
     }> = []
 
     for (let month = 1; month <= 12; month++) {
@@ -420,145 +744,237 @@ export default function SalesPerformanceCharts({
       const dataPoint: any = {
         month: monthName,
         monthIndex: month,
+        isPredicted: month > lastMonthWithData, // Mark future months as predicted
       }
 
       targetYears.forEach((year) => {
         const monthKey = `${monthStr}/${year}`
-        dataPoint[`vendas${year}`] = Math.round(
-          monthlyDataByYear[year][monthKey] || 0,
-        )
+
+        if (year === currentYear) {
+          if (month > lastMonthWithData) {
+            // For future months in current year, add prediction
+            const historicalData = []
+            for (let prevMonth = 1; prevMonth < month; prevMonth++) {
+              const prevKey = `${String(prevMonth).padStart(2, '0')}/${year}`
+              historicalData.push(monthlyDataByYear[year][prevKey] || 0)
+            }
+
+            const predictedValue = calculatePrediction(historicalData, month)
+            dataPoint[`vendas${year}`] = predictedValue
+            dataPoint[`vendas${year}_predicted`] = predictedValue // Separate field for predicted data
+            dataPoint[`vendas${year}_actual`] = null // Null for actual data in predicted months
+          } else {
+            // Historical or current month data
+            const actualValue = Math.round(
+              monthlyDataByYear[year][monthKey] || 0,
+            )
+            dataPoint[`vendas${year}`] = actualValue
+            dataPoint[`vendas${year}_predicted`] = null // Null for predicted data in actual months
+            dataPoint[`vendas${year}_actual`] = actualValue // Separate field for actual data
+          }
+        } else {
+          // Historical years - always actual data
+          const actualValue = Math.round(monthlyDataByYear[year][monthKey] || 0)
+          dataPoint[`vendas${year}`] = actualValue
+        }
       })
 
       chartData.push(dataPoint)
     }
 
     return chartData
-  }, [salesData])
+  }, [salesData, allowedDepartments])
+
+  // Calculate total year prediction based on monthlySalesTrend data
+  const totalYearPrediction = useMemo(() => {
+    const currentYear = new Date().getFullYear()
+
+    let actualSalesTotal = 0
+    let predictedSalesTotal = 0
+
+    monthlySalesTrend.forEach((monthData) => {
+      const actualValue = Number(monthData[`vendas${currentYear}_actual`]) || 0
+      const predictedValue =
+        Number(monthData[`vendas${currentYear}_predicted`]) || 0
+
+      actualSalesTotal += actualValue
+      predictedSalesTotal += predictedValue
+    })
+
+    return actualSalesTotal + predictedSalesTotal
+  }, [monthlySalesTrend])
 
   // Process department data
   const departmentData = useMemo(() => {
     const currentYear = new Date().getFullYear()
+    const previousYear = currentYear - 1
+    const currentMonth = new Date().getMonth() + 1 // 1-12
 
-    // Sales by department - CURRENT YEAR ONLY
-    const salesByDept: { [key: string]: number } = {}
-    const quotesValueByDept: { [key: string]: number } = {}
-    const quotesCountByDept: { [key: string]: number } = {}
-    const salesCountByDept: { [key: string]: number } = {}
+    // Year-to-date comparison: Current year vs Previous year up to same month
+    const salesByDeptCurrent: { [key: string]: number } = {}
+    const salesByDeptPrevious: { [key: string]: number } = {}
+    const quotesCountByDeptCurrent: { [key: string]: number } = {}
+    const quotesCountByDeptPrevious: { [key: string]: number } = {}
+    const salesCountByDeptCurrent: { [key: string]: number } = {}
+    const salesCountByDeptPrevious: { [key: string]: number } = {}
 
-    // Filter faturas for current year only
-    salesData.faturasVendedor
-      .filter((fatura) => {
-        const dataParts = fatura.data_documento.split('/')
-        if (dataParts.length === 2) {
-          const year = parseInt(dataParts[1])
-          return year === currentYear
-        }
-        return false
+    // Helper function to check if date is within YTD range
+    const isWithinYTD = (
+      dataDocumento: string,
+      targetYear: number,
+    ): boolean => {
+      const parts = dataDocumento.split('/')
+      if (parts.length === 2) {
+        const month = parseInt(parts[0])
+        const year = parseInt(parts[1])
+        return year === targetYear && month <= currentMonth
+      }
+      return false
+    }
+
+    // Process vendas liquidas for both years
+    salesData.vendasLiquidas
+      .filter((venda) => {
+        return (
+          isWithinYTD(venda.data_documento, currentYear) ||
+          isWithinYTD(venda.data_documento, previousYear)
+        )
       })
-      .forEach((fatura) => {
-        const dept = fatura.department || 'Sem Departamento'
-        // Only include allowed departments
-        if (ALLOWED_DEPARTMENTS.includes(dept)) {
-          salesByDept[dept] =
-            (salesByDept[dept] || 0) + (fatura.euro_total || 0)
-          salesCountByDept[dept] = (salesCountByDept[dept] || 0) + 1
+      .forEach((venda) => {
+        const dept = venda.department || 'Sem Departamento'
+        if (allowedDepartments.includes(dept)) {
+          const parts = venda.data_documento.split('/')
+          const year = parseInt(parts[1])
+
+          if (year === currentYear) {
+            salesByDeptCurrent[dept] =
+              (salesByDeptCurrent[dept] || 0) + (venda.euro_total || 0)
+            salesCountByDeptCurrent[dept] =
+              (salesCountByDeptCurrent[dept] || 0) + 1
+          } else if (year === previousYear) {
+            salesByDeptPrevious[dept] =
+              (salesByDeptPrevious[dept] || 0) + (venda.euro_total || 0)
+            salesCountByDeptPrevious[dept] =
+              (salesCountByDeptPrevious[dept] || 0) + 1
+          }
         }
       })
 
-    // Updated quotes processing to use count data
+    // Process quotes count for both years
     salesData.orcamentosVendedorCount
       .filter((orcamento) => {
-        const dataParts = orcamento.data_documento.split('/')
-        if (dataParts.length === 2) {
-          const year = parseInt(dataParts[1])
-          return year === currentYear
-        }
-        return false
+        return (
+          isWithinYTD(orcamento.data_documento, currentYear) ||
+          isWithinYTD(orcamento.data_documento, previousYear)
+        )
       })
       .forEach((orcamento) => {
         const dept = orcamento.department || 'Sem Departamento'
-        if (ALLOWED_DEPARTMENTS.includes(dept)) {
-          quotesCountByDept[dept] =
-            (quotesCountByDept[dept] || 0) + (orcamento.document_count || 0)
+        if (allowedDepartments.includes(dept)) {
+          const parts = orcamento.data_documento.split('/')
+          const year = parseInt(parts[1])
+
+          if (year === currentYear) {
+            quotesCountByDeptCurrent[dept] =
+              (quotesCountByDeptCurrent[dept] || 0) +
+              (orcamento.document_count || 0)
+          } else if (year === previousYear) {
+            quotesCountByDeptPrevious[dept] =
+              (quotesCountByDeptPrevious[dept] || 0) +
+              (orcamento.document_count || 0)
+          }
         }
       })
 
-    // Also get quotes value data for value-based chart
-    salesData.orcamentosVendedor
-      .filter((orcamento) => {
-        const dataParts = orcamento.data_documento.split('/')
-        if (dataParts.length === 2) {
-          const year = parseInt(dataParts[1])
-          return year === currentYear
-        }
-        return false
-      })
-      .forEach((orcamento) => {
-        const dept = orcamento.department || 'Sem Departamento'
-        // Only include allowed departments
-        if (ALLOWED_DEPARTMENTS.includes(dept)) {
-          quotesValueByDept[dept] =
-            (quotesValueByDept[dept] || 0) + (orcamento.euro_total || 0)
-        }
-      })
-
-    // Also update sales count to use count data
+    // Process sales count for both years
     salesData.faturasVendedorCount
       .filter((fatura) => {
-        const dataParts = fatura.data_documento.split('/')
-        if (dataParts.length === 2) {
-          const year = parseInt(dataParts[1])
-          return year === currentYear
-        }
-        return false
+        return (
+          isWithinYTD(fatura.data_documento, currentYear) ||
+          isWithinYTD(fatura.data_documento, previousYear)
+        )
       })
       .forEach((fatura) => {
         const dept = fatura.department || 'Sem Departamento'
-        if (ALLOWED_DEPARTMENTS.includes(dept)) {
-          salesCountByDept[dept] =
-            (salesCountByDept[dept] || 0) + (fatura.document_count || 0)
+        if (allowedDepartments.includes(dept)) {
+          const parts = fatura.data_documento.split('/')
+          const year = parseInt(parts[1])
+
+          if (year === currentYear) {
+            salesCountByDeptCurrent[dept] =
+              (salesCountByDeptCurrent[dept] || 0) +
+              (fatura.document_count || 0)
+          } else if (year === previousYear) {
+            salesCountByDeptPrevious[dept] =
+              (salesCountByDeptPrevious[dept] || 0) +
+              (fatura.document_count || 0)
+          }
         }
       })
 
-    const salesByDepartment = Object.entries(salesByDept)
-      .map(([dept, total]) => ({
-        name: dept,
-        value: Math.round(total),
-      }))
-      .sort((a, b) => b.value - a.value)
+    // Get all unique departments from both years
+    const allDepartments = new Set([
+      ...Object.keys(salesByDeptCurrent),
+      ...Object.keys(salesByDeptPrevious),
+      ...Object.keys(quotesCountByDeptCurrent),
+      ...Object.keys(quotesCountByDeptPrevious),
+      ...Object.keys(salesCountByDeptCurrent),
+      ...Object.keys(salesCountByDeptPrevious),
+    ])
 
-    const quotesByDepartment = Object.entries(quotesCountByDept)
-      .map(([dept, count]) => ({
+    const salesByDepartment = Array.from(allDepartments)
+      .map((dept) => ({
         name: dept,
-        value: count, // Now showing count instead of euro value
+        currentYear: Math.round(salesByDeptCurrent[dept] || 0),
+        previousYear: Math.round(salesByDeptPrevious[dept] || 0),
       }))
-      .sort((a, b) => b.value - a.value)
+      .filter((item) => item.currentYear > 0 || item.previousYear > 0)
+      .sort((a, b) => b.currentYear - a.currentYear)
 
-    const conversionByDepartment = Object.keys({
-      ...quotesCountByDept,
-      ...salesCountByDept,
-    })
+    const quotesByDepartment = Array.from(allDepartments)
+      .map((dept) => ({
+        name: dept,
+        currentYear: quotesCountByDeptCurrent[dept] || 0,
+        previousYear: quotesCountByDeptPrevious[dept] || 0,
+      }))
+      .filter((item) => item.currentYear > 0 || item.previousYear > 0)
+      .sort((a, b) => b.currentYear - a.currentYear)
+
+    const conversionByDepartment = Array.from(allDepartments)
       .map((dept) => {
-        const quotes = quotesCountByDept[dept] || 0
-        const sales = salesCountByDept[dept] || 0
-        const rate = quotes > 0 ? (sales / quotes) * 100 : 0
+        const quotesCurrent = quotesCountByDeptCurrent[dept] || 0
+        const salesCurrent = salesCountByDeptCurrent[dept] || 0
+        const quotesPrevious = quotesCountByDeptPrevious[dept] || 0
+        const salesPrevious = salesCountByDeptPrevious[dept] || 0
+
+        const rateCurrent =
+          quotesCurrent > 0 ? (salesCurrent / quotesCurrent) * 100 : 0
+        const ratePrevious =
+          quotesPrevious > 0 ? (salesPrevious / quotesPrevious) * 100 : 0
 
         return {
           name: dept,
-          value: Math.round(rate * 10) / 10,
-          quotesCount: quotes,
-          salesCount: sales,
+          currentYear: Math.round(rateCurrent * 10) / 10,
+          previousYear: Math.round(ratePrevious * 10) / 10,
+          quotesCountCurrent: quotesCurrent,
+          salesCountCurrent: salesCurrent,
+          quotesCountPrevious: quotesPrevious,
+          salesCountPrevious: salesPrevious,
         }
       })
-      .filter((item) => item.salesCount > 0)
-      .sort((a, b) => b.value - a.value)
+      .filter(
+        (item) => item.salesCountCurrent > 0 || item.salesCountPrevious > 0,
+      )
+      .sort((a, b) => b.currentYear - a.currentYear)
 
-    const salesCountByDepartment = Object.entries(salesCountByDept)
-      .map(([dept, count]) => ({
+    const salesCountByDepartment = Array.from(allDepartments)
+      .map((dept) => ({
         name: dept,
-        value: count,
+        currentYear: salesCountByDeptCurrent[dept] || 0,
+        previousYear: salesCountByDeptPrevious[dept] || 0,
       }))
-      .sort((a, b) => b.value - a.value)
+      .filter((item) => item.currentYear > 0 || item.previousYear > 0)
+      .sort((a, b) => b.currentYear - a.currentYear)
 
     return {
       salesByDepartment,
@@ -566,7 +982,7 @@ export default function SalesPerformanceCharts({
       conversionByDepartment,
       salesCountByDepartment,
     }
-  }, [salesData])
+  }, [salesData, allowedDepartments])
 
   // Process individual salesperson data
   const individualData = useMemo(() => {
@@ -576,32 +992,32 @@ export default function SalesPerformanceCharts({
     const salesCountByPerson: { [key: string]: number } = {}
 
     // Filter data for allowed departments only
-    const filteredFaturas = salesData.faturasVendedor.filter((f) => {
-      const dept = f.department || 'Sem Departamento'
-      return ALLOWED_DEPARTMENTS.includes(dept)
+    const filteredVendas = salesData.vendasLiquidas.filter((v) => {
+      const dept = v.department || 'Sem Departamento'
+      return allowedDepartments.includes(dept)
     })
 
     const filteredOrcamentos = salesData.orcamentosVendedor.filter((o) => {
       const dept = o.department || 'Sem Departamento'
-      return ALLOWED_DEPARTMENTS.includes(dept)
+      return allowedDepartments.includes(dept)
     })
 
     const filteredOrcamentosCount = salesData.orcamentosVendedorCount.filter(
       (o) => {
         const dept = o.department || 'Sem Departamento'
-        return ALLOWED_DEPARTMENTS.includes(dept)
+        return allowedDepartments.includes(dept)
       },
     )
 
     const filteredFaturasCount = salesData.faturasVendedorCount.filter((f) => {
       const dept = f.department || 'Sem Departamento'
-      return ALLOWED_DEPARTMENTS.includes(dept)
+      return allowedDepartments.includes(dept)
     })
 
-    filteredFaturas.forEach((fatura) => {
-      const person = fatura.nome || 'Sem Nome'
+    filteredVendas.forEach((venda) => {
+      const person = venda.nome || 'Sem Nome'
       salesByPerson[person] =
-        (salesByPerson[person] || 0) + (fatura.euro_total || 0)
+        (salesByPerson[person] || 0) + (venda.euro_total || 0)
     })
 
     filteredOrcamentos.forEach((orcamento) => {
@@ -670,7 +1086,7 @@ export default function SalesPerformanceCharts({
       quotesVsSales,
       conversionByPerson,
     }
-  }, [salesData])
+  }, [salesData, allowedDepartments])
 
   if (loading) {
     return (
@@ -703,7 +1119,7 @@ export default function SalesPerformanceCharts({
           </h2>
           <p className="text-muted-foreground">
             Análise detalhada da performance comercial -{' '}
-            {new Date().getFullYear()} (BRINDES, DIGITAL, IMACX)
+            {new Date().getFullYear()} (Todos os Departamentos)
           </p>
         </div>
         <Button
@@ -730,7 +1146,7 @@ export default function SalesPerformanceCharts({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-muted-foreground text-sm font-medium">
-                    Total Vendas (Ano)
+                    Total Vendas ({new Date().getFullYear()})
                   </h3>
                   <p className="text-2xl font-bold text-green-600">
                     {overviewMetrics.totalSalesValue.toLocaleString('pt-PT', {
@@ -747,7 +1163,7 @@ export default function SalesPerformanceCharts({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-muted-foreground text-sm font-medium">
-                    Total Orçamentos (Ano)
+                    Total Orçamentos ({new Date().getFullYear()})
                   </h3>
                   <p className="text-2xl font-bold text-blue-600">
                     {overviewMetrics.totalQuotesValue.toLocaleString('pt-PT', {
@@ -778,26 +1194,29 @@ export default function SalesPerformanceCharts({
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-muted-foreground text-sm font-medium">
-                    Vendedores Ativos
+                    Previsão Vendas ({new Date().getFullYear()})
                   </h3>
                   <p className="text-2xl font-bold text-orange-600">
-                    {overviewMetrics.activeSalespeople}
+                    {totalYearPrediction.toLocaleString('pt-PT', {
+                      style: 'currency',
+                      currency: 'EUR',
+                    })}
                   </p>
                 </div>
-                <Users className="h-8 w-8 text-orange-600" />
+                <TrendingUp className="h-8 w-8 text-orange-600" />
               </div>
             </Card>
           </div>
 
-          {/* Top 10 Clientes - SIMPLE VERTICAL CHART */}
+          {/* Top 15 Clientes - SIMPLE VERTICAL CHART */}
           <Card className="rounded-none border-2 p-4">
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h3 className="text-lg leading-tight font-semibold">
-                  Top 10 Clientes - Vendas Anuais
+                  Top 15 Clientes - Vendas Anuais
                 </h3>
                 <p className="text-muted-foreground text-sm leading-tight">
-                  Comparação {new Date().getFullYear() - 1} vs{' '}
+                  Comparação Year-to-Date: {new Date().getFullYear() - 1} vs{' '}
                   {new Date().getFullYear()}
                 </p>
               </div>
@@ -810,7 +1229,7 @@ export default function SalesPerformanceCharts({
                 <RotateCw className="h-4 w-4" />
               </Button>
             </div>
-            <ResponsiveContainer width="100%" height={600}>
+            <ResponsiveContainer width="100%" height={750}>
               <BarChart
                 data={top10Clients}
                 margin={{ top: 20, right: 30, left: 20, bottom: 100 }}
@@ -846,7 +1265,7 @@ export default function SalesPerformanceCharts({
             </ResponsiveContainer>
           </Card>
 
-          {/* Monthly Sales Trend */}
+          {/* Enhanced Monthly Sales Trend with Predictions */}
           <Card className="rounded-none border-2 p-4">
             <div className="mb-4 flex items-center justify-between">
               <div>
@@ -856,6 +1275,10 @@ export default function SalesPerformanceCharts({
                 <p className="text-muted-foreground text-sm leading-tight">
                   Evolução mensal das vendas - {new Date().getFullYear() - 2},{' '}
                   {new Date().getFullYear() - 1} e {new Date().getFullYear()}
+                  <span className="font-medium text-blue-600">
+                    {' '}
+                    (com previsão)
+                  </span>
                 </p>
               </div>
               <Button
@@ -879,20 +1302,35 @@ export default function SalesPerformanceCharts({
                   tickFormatter={(value) => `${(value / 1000).toFixed(0)}k€`}
                 />
                 <Tooltip
-                  formatter={(value: number, name: string) => {
-                    const year = name.replace('vendas', '')
+                  formatter={(value: number, name: string, props: any) => {
+                    const currentYear = new Date().getFullYear()
+                    const year = name
+                      .replace('vendas', '')
+                      .replace('_actual', '')
+                      .replace('_predicted', '')
+                    const isPredicted =
+                      name.includes('_predicted') ||
+                      (props.payload?.isPredicted &&
+                        parseInt(year) === currentYear)
+
                     return [
                       value.toLocaleString('pt-PT', {
                         style: 'currency',
                         currency: 'EUR',
                       }),
-                      `Vendas ${year}`,
+                      `${isPredicted ? 'Previsão ' : 'Vendas '}${year}`,
                     ]
+                  }}
+                  labelFormatter={(label, payload) => {
+                    const isPredicted = payload?.[0]?.payload?.isPredicted
+                    return `${label}${isPredicted ? ' (Previsão)' : ''}`
                   }}
                 />
                 <Legend
                   formatter={(value: string) => value.replace('vendas', '')}
                 />
+
+                {/* Historical years - solid lines */}
                 <Line
                   type="monotone"
                   dataKey={`vendas${new Date().getFullYear() - 2}`}
@@ -909,16 +1347,54 @@ export default function SalesPerformanceCharts({
                   dot={{ fill: CHART_COLORS.secondary, strokeWidth: 2, r: 3 }}
                   name={`${new Date().getFullYear() - 1}`}
                 />
+
+                {/* Current year line - actual data */}
                 <Line
                   type="monotone"
-                  dataKey={`vendas${new Date().getFullYear()}`}
+                  dataKey={`vendas${new Date().getFullYear()}_actual`}
                   stroke={CHART_COLORS.primary}
                   strokeWidth={3}
                   dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 4 }}
+                  connectNulls={false}
                   name={`${new Date().getFullYear()}`}
+                />
+
+                {/* Current year line - predicted data (dashed) */}
+                <Line
+                  type="monotone"
+                  dataKey={`vendas${new Date().getFullYear()}_predicted`}
+                  stroke={CHART_COLORS.primary}
+                  strokeWidth={2}
+                  strokeDasharray="8 8"
+                  dot={{
+                    fill: 'none',
+                    stroke: CHART_COLORS.primary,
+                    strokeWidth: 2,
+                    r: 3,
+                  }}
+                  connectNulls={false}
+                  name={`${new Date().getFullYear()} (Previsão)`}
                 />
               </LineChart>
             </ResponsiveContainer>
+
+            {/* Prediction Legend */}
+            <div className="text-muted-foreground mt-2 flex items-center justify-center space-x-6 text-xs">
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center">
+                  <div className="h-0.5 w-5 bg-green-500"></div>
+                  <div className="ml-1 h-1 w-1 rounded-full bg-green-500"></div>
+                </div>
+                <span>Dados Reais</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="flex items-center">
+                  <div className="h-0.5 w-5 border-b-2 border-dashed border-green-500"></div>
+                  <div className="ml-1 h-1 w-1 rounded-full border border-green-500"></div>
+                </div>
+                <span>Previsão Baseada em Tendências</span>
+              </div>
+            </div>
           </Card>
         </TabsContent>
 
@@ -929,10 +1405,12 @@ export default function SalesPerformanceCharts({
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h3 className="text-lg leading-tight font-semibold">
-                    Vendas por Departamento - {new Date().getFullYear()}
+                    Vendas por Departamento - Comparação YTD
                   </h3>
                   <p className="text-muted-foreground text-sm leading-tight">
-                    Volume de vendas por equipa
+                    {new Date().getFullYear() - 1} vs {new Date().getFullYear()}{' '}
+                    (até{' '}
+                    {new Date().toLocaleDateString('pt-PT', { month: 'long' })})
                   </p>
                 </div>
                 <Button
@@ -962,15 +1440,27 @@ export default function SalesPerformanceCharts({
                     tickFormatter={(value) => `${(value / 1000).toFixed(0)}k€`}
                   />
                   <Tooltip
-                    formatter={(value: number) => [
+                    formatter={(value: number, name: string) => [
                       value.toLocaleString('pt-PT', {
                         style: 'currency',
                         currency: 'EUR',
                       }),
-                      'Vendas',
+                      name === 'currentYear'
+                        ? `${new Date().getFullYear()}`
+                        : `${new Date().getFullYear() - 1}`,
                     ]}
                   />
-                  <Bar dataKey="value" fill={CHART_COLORS.primary} />
+                  <Legend />
+                  <Bar
+                    dataKey="previousYear"
+                    fill={CHART_COLORS.neutral}
+                    name={`${new Date().getFullYear() - 1}`}
+                  />
+                  <Bar
+                    dataKey="currentYear"
+                    fill={CHART_COLORS.primary}
+                    name={`${new Date().getFullYear()}`}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -980,10 +1470,12 @@ export default function SalesPerformanceCharts({
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h3 className="text-lg leading-tight font-semibold">
-                    Orçamentos por Departamento - {new Date().getFullYear()}
+                    Orçamentos por Departamento - Comparação YTD
                   </h3>
                   <p className="text-muted-foreground text-sm leading-tight">
-                    Número de orçamentos por equipa
+                    {new Date().getFullYear() - 1} vs {new Date().getFullYear()}{' '}
+                    (até{' '}
+                    {new Date().toLocaleDateString('pt-PT', { month: 'long' })})
                   </p>
                 </div>
                 <Button
@@ -1010,12 +1502,24 @@ export default function SalesPerformanceCharts({
                   />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip
-                    formatter={(value: number) => [
+                    formatter={(value: number, name: string) => [
                       value.toString(),
-                      'Número de Orçamentos',
+                      name === 'currentYear'
+                        ? `Orçamentos ${new Date().getFullYear()}`
+                        : `Orçamentos ${new Date().getFullYear() - 1}`,
                     ]}
                   />
-                  <Bar dataKey="value" fill={CHART_COLORS.secondary} />
+                  <Legend />
+                  <Bar
+                    dataKey="previousYear"
+                    fill={CHART_COLORS.neutral}
+                    name={`${new Date().getFullYear() - 1}`}
+                  />
+                  <Bar
+                    dataKey="currentYear"
+                    fill={CHART_COLORS.secondary}
+                    name={`${new Date().getFullYear()}`}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -1025,11 +1529,12 @@ export default function SalesPerformanceCharts({
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h3 className="text-lg leading-tight font-semibold">
-                    Taxa de Conversão por Departamento -{' '}
-                    {new Date().getFullYear()}
+                    Taxa de Conversão por Departamento - Comparação YTD
                   </h3>
                   <p className="text-muted-foreground text-sm leading-tight">
-                    Eficiência na conversão de orçamentos em vendas
+                    {new Date().getFullYear() - 1} vs {new Date().getFullYear()}{' '}
+                    (até{' '}
+                    {new Date().toLocaleDateString('pt-PT', { month: 'long' })})
                   </p>
                 </div>
                 <Button
@@ -1059,19 +1564,31 @@ export default function SalesPerformanceCharts({
                     tickFormatter={(value) => `${value}%`}
                   />
                   <Tooltip
-                    formatter={(value: number, name, props: any) => [
+                    formatter={(value: number, name: string) => [
                       `${value}%`,
-                      'Taxa de Conversão',
+                      name === 'currentYear'
+                        ? `Taxa ${new Date().getFullYear()}`
+                        : `Taxa ${new Date().getFullYear() - 1}`,
                     ]}
                     labelFormatter={(label, payload) => {
                       if (payload && payload[0]) {
                         const data = payload[0].payload
-                        return `${label}: ${data.salesCount} vendas / ${data.quotesCount} orçamentos`
+                        return `${label} - ${new Date().getFullYear()}: ${data.salesCountCurrent} vendas / ${data.quotesCountCurrent} orçamentos | ${new Date().getFullYear() - 1}: ${data.salesCountPrevious} vendas / ${data.quotesCountPrevious} orçamentos`
                       }
                       return label
                     }}
                   />
-                  <Bar dataKey="value" fill={CHART_COLORS.accent} />
+                  <Legend />
+                  <Bar
+                    dataKey="previousYear"
+                    fill={CHART_COLORS.neutral}
+                    name={`${new Date().getFullYear() - 1}`}
+                  />
+                  <Bar
+                    dataKey="currentYear"
+                    fill={CHART_COLORS.accent}
+                    name={`${new Date().getFullYear()}`}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </Card>
@@ -1081,11 +1598,12 @@ export default function SalesPerformanceCharts({
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h3 className="text-lg leading-tight font-semibold">
-                    Número de Vendas por Departamento -{' '}
-                    {new Date().getFullYear()}
+                    Número de Vendas por Departamento - Comparação YTD
                   </h3>
                   <p className="text-muted-foreground text-sm leading-tight">
-                    Volume de transações por equipa
+                    {new Date().getFullYear() - 1} vs {new Date().getFullYear()}{' '}
+                    (até{' '}
+                    {new Date().toLocaleDateString('pt-PT', { month: 'long' })})
                   </p>
                 </div>
                 <Button
@@ -1112,12 +1630,24 @@ export default function SalesPerformanceCharts({
                   />
                   <YAxis tick={{ fontSize: 12 }} />
                   <Tooltip
-                    formatter={(value: number) => [
+                    formatter={(value: number, name: string) => [
                       value.toString(),
-                      'Número de Vendas',
+                      name === 'currentYear'
+                        ? `Vendas ${new Date().getFullYear()}`
+                        : `Vendas ${new Date().getFullYear() - 1}`,
                     ]}
                   />
-                  <Bar dataKey="value" fill={CHART_COLORS.success} />
+                  <Legend />
+                  <Bar
+                    dataKey="previousYear"
+                    fill={CHART_COLORS.neutral}
+                    name={`${new Date().getFullYear() - 1}`}
+                  />
+                  <Bar
+                    dataKey="currentYear"
+                    fill={CHART_COLORS.success}
+                    name={`${new Date().getFullYear()}`}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </Card>

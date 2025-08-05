@@ -1,0 +1,4091 @@
+[
+  {
+    "db_structure": {
+      "database_structure": [
+        {
+          "table_name": "alertas_stock",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "material_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "materiais",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "nivel_minimo",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nivel_critico",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "ativo",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "true",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "notificar_usuarios",
+              "data_type": "ARRAY",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Authenticated users can manage alertas_stock",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": "(auth.role() = 'authenticated'::text)"
+            }
+          ]
+        },
+        {
+          "table_name": "armazens",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "numero_phc",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_arm",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "morada",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "codigo_pos",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated full access",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Allow authenticated read",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "SELECT",
+              "using_expression": "true",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "cliente_contacts",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "cliente_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "clientes",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "name",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "email",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "phone_number",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "mobile",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "delete_cliente_contacts",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "DELETE",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "insert_cliente_contacts",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "INSERT",
+              "using_expression": null,
+              "with_check_expression": "true"
+            },
+            {
+              "policy_name": "read_cliente_contacts",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "SELECT",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "update_cliente_contacts",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "UPDATE",
+              "using_expression": "true",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "clientes",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "numero_phc",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_cl",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "morada",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "codigo_pos",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "telefone",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow anon access",
+              "policy_type": "PERMISSIVE",
+              "roles": "anon",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Allow authenticated full access",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "complexidade",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "gen_random_uuid()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "grau",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Usuários autenticados podem atualizar",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "UPDATE",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Usuários autenticados podem excluir",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "DELETE",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Usuários autenticados podem inserir",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "INSERT",
+              "using_expression": null,
+              "with_check_expression": "true"
+            },
+            {
+              "policy_name": "Usuários autenticados podem visualizar",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "SELECT",
+              "using_expression": "true",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "designer_items",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "item_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "items_base",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "em_curso",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "true",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "duvidas",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "maquete_enviada",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "paginacao",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "path_trabalho",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_in",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_duvidas",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_envio",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_saida",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "notas",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated access",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Allow authenticated full access",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "faturas_vendedor",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "numero_documento",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_documento",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_documento",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_cliente",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "euro_total",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": "0",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "department",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_vendedor",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated users full access to faturas_vendedor",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "feriados",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "holiday_date",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "description",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated full access",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "folhas_obras",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "numero_fo",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "profile_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "profiles",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "nome_campanha",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "prioridade",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_in",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_saida",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "notas",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "concluido",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "saiu",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "fatura",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_concluido",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_saiu",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_fatura",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "numero_orc",
+              "data_type": "integer",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "cliente",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": "'null'::text",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "notas_prod",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "id_cliente",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "gen_random_uuid()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow anon access",
+              "policy_type": "PERMISSIVE",
+              "roles": "anon",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Allow authenticated access",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Allow authenticated full access",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "fornecedores",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "numero_phc",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_forn",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "morada",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "codigo_pos",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "telefone",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "email",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "contacto_principal",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Authenticated users can manage fornecedores",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": "(auth.role() = 'authenticated'::text)"
+            }
+          ]
+        },
+        {
+          "table_name": "items_base",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "folha_obra_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "folhas_obras",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "descricao",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "codigo",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "dad_end",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "quantidade",
+              "data_type": "integer",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "brindes",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "concluido",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_conc",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "saiu",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_saida",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "complexidade",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "complexidade_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "complexidade",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "concluido_maq",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "prioridade",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated full access",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "iva_excepcoes",
+          "table_description": "VAT exceptions table - stores custom VAT rates for specific suppliers from listagem_compras",
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_fornecedor",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": "Supplier name (matches nome_fornecedor from listagem_compras)",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "taxa_iva",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": "VAT rate as percentage (e.g., 10 for 10%)",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "ativo",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "true",
+              "is_nullable": "YES",
+              "description": "Whether this VAT exception is currently active",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "notas",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": "Optional notes about this VAT exception",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated users full access to iva_excepcoes",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": "(auth.role() = 'authenticated'::text)"
+            },
+            {
+              "policy_name": "Allow service role full access to iva_excepcoes",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'service_role'::text)",
+              "with_check_expression": "(auth.role() = 'service_role'::text)"
+            }
+          ]
+        },
+        {
+          "table_name": "listagem_compras",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_fornecedor",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_documento",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_dossier",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "euro_total",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": "0",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "total_iva",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": "0",
+              "is_nullable": "YES",
+              "description": "IVA/VAT amount in euros from purchase documents",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated users full access to listagem_compras",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": "(auth.role() = 'authenticated'::text)"
+            }
+          ]
+        },
+        {
+          "table_name": "listagem_compras_history",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_fornecedor",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_documento",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_dossier",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "euro_total",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": "0",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "total_iva",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": "0",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated users full access to listagem_compras_histo",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": "(auth.role() = 'authenticated'::text)"
+            }
+          ]
+        },
+        {
+          "table_name": "listagem_notas_credito",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "numero_documento",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_documento",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_documento",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "euro_total",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": "0",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_cliente",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": "Client name for the credit note",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_vendedor",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": "Seller name - can be null for imports",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated users full access to listagem_notas_credito",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "logistica_entregas",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "item_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "items_base",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "is_entrega",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "local_recolha",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "guia",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "transportadora",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "contacto",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "telefone",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "quantidade",
+              "data_type": "integer",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "notas",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "local_entrega",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "contacto_entrega",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "telefone_entrega",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "is_final",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "is_recolha",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "id_local_entrega",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "gen_random_uuid()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "id_local_recolha",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "gen_random_uuid()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "descricao",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "saiu",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "concluido",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_concluido",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_saida",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated full access",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "simple_auth_policy",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "maquinas",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "gen_random_uuid()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "maquina",
+              "data_type": "character varying",
+              "max_length": 200,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "valor_m2",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "integer_id",
+              "data_type": "integer",
+              "max_length": null,
+              "default_value": "nextval('maquinas_integer_id_seq'::regclass)",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "valor_m2_custo",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated users full access to maquinas",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": "true"
+            }
+          ]
+        },
+        {
+          "table_name": "maquinas_operacao",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_maquina",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "tipo",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "ativa",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "true",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "valor_m2",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "valor_m2_custo",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "notas",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Authenticated users can manage maquinas_operacao",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": "(auth.role() = 'authenticated'::text)"
+            }
+          ]
+        },
+        {
+          "table_name": "materiais",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "gen_random_uuid()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "tipo",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "material",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "carateristica",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "cor",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "valor_m2",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "referencia",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "ref_cliente",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "ref_fornecedor",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "fornecedor",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "tipo_canal",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "dimensoes",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "valor_m2_custo",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "valor_placa",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "qt_palete",
+              "data_type": "smallint",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "fornecedor_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "fornecedores",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "stock_minimo",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": "10",
+              "is_nullable": "YES",
+              "description": "Yellow alert threshold - stock below this shows BAIXO",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "stock_critico",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": "5",
+              "is_nullable": "YES",
+              "description": "Red alert threshold - stock below this shows CRÍTICO",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "ORC",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "stock_correct",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "stock_correct_updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated users full access to materiais",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": "true"
+            }
+          ]
+        },
+        {
+          "table_name": "ne_fornecedor",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "numero_documento",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_dossier",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_documento",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_fornecedor",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_utilizador",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "iniciais_utilizador",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "euro_total",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": "0",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "department",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated users full access to ne_fornecedor",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": "(auth.role() = 'authenticated'::text)"
+            }
+          ]
+        },
+        {
+          "table_name": "orcamentos_vendedor",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "numero_documento",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_documento",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_dossier",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_cliente",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "nome_utilizador",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "iniciais_utilizador",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "euro_total",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": "0",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": null
+        },
+        {
+          "table_name": "paletes",
+          "table_description": "Palette management table for tracking palettes with sequential numbering",
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": "Primary key - UUID",
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "no_palete",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": "Sequential palette number (P1, P2, P3...) - auto-generated",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "fornecedor_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": "Foreign key to fornecedores table - supplier information",
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "fornecedores",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "no_guia_forn",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": "Supplier guide number - reference from supplier documentation",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "ref_cartao",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": "Reference from materiais.referencia - material reference code",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "qt_palete",
+              "data_type": "smallint",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": "Quantity per palette from materiais.qt_palete - can be manually overridden",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": "Date of palette creation/registration - defaults to current date",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "author_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": "Foreign key to profiles table - who created this palette",
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "profiles",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": "Timestamp when record was created",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": "Timestamp when record was last updated - auto-updated on changes",
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow admin full access to paletes",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "(EXISTS ( SELECT 1\n   FROM (profiles p\n     JOIN roles r ON ((p.role_id = r.id)))\n  WHERE ((p.user_id = auth.uid()) AND ((r.name)::text = ANY ((ARRAY['admin'::character varying, 'Admin'::character varying, 'ADMIN'::character varying])::text[])))))",
+              "with_check_expression": "(EXISTS ( SELECT 1\n   FROM (profiles p\n     JOIN roles r ON ((p.role_id = r.id)))\n  WHERE ((p.user_id = auth.uid()) AND ((r.name)::text = ANY ((ARRAY['admin'::character varying, 'Admin'::character varying, 'ADMIN'::character varying])::text[])))))"
+            },
+            {
+              "policy_name": "Allow administrativo full access to paletes",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "(EXISTS ( SELECT 1\n   FROM (profiles p\n     JOIN roles r ON ((p.role_id = r.id)))\n  WHERE ((p.user_id = auth.uid()) AND ((r.name)::text = ANY ((ARRAY['administrativo'::character varying, 'Administrativo'::character varying, 'ADMINISTRATIVO'::character varying])::text[])))))",
+              "with_check_expression": "(EXISTS ( SELECT 1\n   FROM (profiles p\n     JOIN roles r ON ((p.role_id = r.id)))\n  WHERE ((p.user_id = auth.uid()) AND ((r.name)::text = ANY ((ARRAY['administrativo'::character varying, 'Administrativo'::character varying, 'ADMINISTRATIVO'::character varying])::text[])))))"
+            },
+            {
+              "policy_name": "Allow authenticated users full access to paletes",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": "true"
+            },
+            {
+              "policy_name": "Allow producao full access to paletes",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "(EXISTS ( SELECT 1\n   FROM (profiles p\n     JOIN roles r ON ((p.role_id = r.id)))\n  WHERE ((p.user_id = auth.uid()) AND ((r.name)::text = ANY ((ARRAY['producao'::character varying, 'Producao'::character varying, 'PRODUCAO'::character varying])::text[])))))",
+              "with_check_expression": "(EXISTS ( SELECT 1\n   FROM (profiles p\n     JOIN roles r ON ((p.role_id = r.id)))\n  WHERE ((p.user_id = auth.uid()) AND ((r.name)::text = ANY ((ARRAY['producao'::character varying, 'Producao'::character varying, 'PRODUCAO'::character varying])::text[])))))"
+            },
+            {
+              "policy_name": "Allow service role full access to paletes",
+              "policy_type": "PERMISSIVE",
+              "roles": "service_role",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": "true"
+            },
+            {
+              "policy_name": "authenticated_all_paletes",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "service_role_all_paletes",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'service_role'::text)",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "producao_operacoes",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_operacao",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "operador_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "profiles",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "folha_obra_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "folhas_obras",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "item_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "items_base",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "no_interno",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "maquina",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "maquinas_operacao",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "material_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "materiais",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "stock_consumido_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "stocks",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "num_placas_print",
+              "data_type": "integer",
+              "max_length": null,
+              "default_value": "0",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "num_placas_corte",
+              "data_type": "integer",
+              "max_length": null,
+              "default_value": "0",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "observacoes",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "status",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": "'Em_Curso'::text",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "concluido",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data_conclusao",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "Tipo_Op",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "N_Pal",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "notas",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "notas_imp",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "QT_print",
+              "data_type": "integer",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "tem_corte",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Authenticated users can manage producao_operacoes",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": "true"
+            }
+          ]
+        },
+        {
+          "table_name": "producao_operacoes_audit",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "operacao_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "producao_operacoes",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "action_type",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "field_name",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "operador_antigo",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "profiles",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "operador_novo",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "profiles",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "quantidade_antiga",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "quantidade_nova",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "old_value",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "new_value",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "changed_by",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "profiles",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "changed_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "operation_details",
+              "data_type": "jsonb",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "notes",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated users to insert audit logs",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "INSERT",
+              "using_expression": null,
+              "with_check_expression": "(auth.role() = 'authenticated'::text)"
+            },
+            {
+              "policy_name": "Allow authenticated users to read audit logs",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "SELECT",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Prevent deletes on audit logs",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "DELETE",
+              "using_expression": "false",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Prevent updates on audit logs",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "UPDATE",
+              "using_expression": "false",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "profiles",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "user_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "first_name",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "last_name",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "role_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "roles",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated users to delete profiles",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "DELETE",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Allow authenticated users to insert profiles",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "INSERT",
+              "using_expression": null,
+              "with_check_expression": "true"
+            },
+            {
+              "policy_name": "Allow authenticated users to read all profiles",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "SELECT",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Allow authenticated users to update all profiles",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "UPDATE",
+              "using_expression": "true",
+              "with_check_expression": "true"
+            },
+            {
+              "policy_name": "authenticated_all_profiles",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "service_role_all_access",
+              "policy_type": "PERMISSIVE",
+              "roles": "service_role",
+              "command": "ALL",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "users_read_own_profile",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "SELECT",
+              "using_expression": "(auth.uid() = user_id)",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "users_update_own_profile",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "UPDATE",
+              "using_expression": "(auth.uid() = user_id)",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "role_permissions",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "role_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "roles",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "page_path",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "can_access",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "true",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Authenticated users can manage role_permissions",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "roles",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "name",
+              "data_type": "character varying",
+              "max_length": 50,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "description",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated users to delete roles",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "DELETE",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Allow authenticated users to insert roles",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "INSERT",
+              "using_expression": null,
+              "with_check_expression": "true"
+            },
+            {
+              "policy_name": "Allow authenticated users to read all roles",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "SELECT",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Allow authenticated users to update all roles",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "UPDATE",
+              "using_expression": "true",
+              "with_check_expression": "true"
+            }
+          ]
+        },
+        {
+          "table_name": "stocks",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "data",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "fornecedor_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "fornecedores",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "no_guia_forn",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "material_id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": {
+                "foreign_table": "materiais",
+                "foreign_column": "id"
+              }
+            },
+            {
+              "column_name": "quantidade",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "quantidade_disponivel",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "vl_m2",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": "'m2'::text",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "preco_unitario",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "valor_total",
+              "data_type": "numeric",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "notas",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "n_palet",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Authenticated users can manage stocks",
+              "policy_type": "PERMISSIVE",
+              "roles": "PUBLIC",
+              "command": "ALL",
+              "using_expression": "(auth.role() = 'authenticated'::text)",
+              "with_check_expression": "(auth.role() = 'authenticated'::text)"
+            }
+          ]
+        },
+        {
+          "table_name": "transportadora",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "gen_random_uuid()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "name",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "date",
+              "max_length": null,
+              "default_value": "CURRENT_DATE",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Authenticated users can delete",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "DELETE",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Authenticated users can insert",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "INSERT",
+              "using_expression": null,
+              "with_check_expression": "true"
+            },
+            {
+              "policy_name": "Authenticated users can read",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "SELECT",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Authenticated users can update",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "UPDATE",
+              "using_expression": "true",
+              "with_check_expression": null
+            }
+          ]
+        },
+        {
+          "table_name": "user_name_mapping",
+          "table_description": null,
+          "columns": [
+            {
+              "column_name": "id",
+              "data_type": "uuid",
+              "max_length": null,
+              "default_value": "uuid_generate_v4()",
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": true,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "initials",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "full_name",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "short_name",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "standardized_name",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "department",
+              "data_type": "text",
+              "max_length": null,
+              "default_value": null,
+              "is_nullable": "NO",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "active",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "true",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "sales",
+              "data_type": "boolean",
+              "max_length": null,
+              "default_value": "false",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "created_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            },
+            {
+              "column_name": "updated_at",
+              "data_type": "timestamp with time zone",
+              "max_length": null,
+              "default_value": "now()",
+              "is_nullable": "YES",
+              "description": null,
+              "is_primary_key": false,
+              "foreign_key_reference": null
+            }
+          ],
+          "rls_policies": [
+            {
+              "policy_name": "Allow authenticated users to delete user_name_mapping",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "DELETE",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Allow authenticated users to insert user_name_mapping",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "INSERT",
+              "using_expression": null,
+              "with_check_expression": "true"
+            },
+            {
+              "policy_name": "Allow authenticated users to select user_name_mapping",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "SELECT",
+              "using_expression": "true",
+              "with_check_expression": null
+            },
+            {
+              "policy_name": "Allow authenticated users to update user_name_mapping",
+              "policy_type": "PERMISSIVE",
+              "roles": "authenticated",
+              "command": "UPDATE",
+              "using_expression": "true",
+              "with_check_expression": "true"
+            }
+          ]
+        }
+      ],
+      "views": [
+        {
+          "view_name": "faturas_vendedor_monthly",
+          "view_definition": " SELECT 'faturas_vendedor'::text AS numero_documento,\n    'Faturas'::text AS nome_documento,\n    to_char((faturas_vendedor.data_documento)::timestamp with time zone, 'MM/YYYY'::text) AS data_documento,\n    faturas_vendedor.nome_cliente,\n    sum(faturas_vendedor.euro_total) AS euro_total,\n        CASE\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'SAN'::text) THEN 'SANDRA'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'MAN'::text) THEN 'MAN'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['IMA'::text, 'IMACX'::text])) THEN 'IMACX'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['RUI'::text, 'RB'::text])) THEN 'RUI'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['PAU'::text, 'PROD'::text])) THEN 'PAULO'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['MÁR'::text, 'MAR'::text])) THEN 'MARCIA'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'EST'::text) THEN 'ESTELA'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'NUN'::text) THEN 'NUNO'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['CAR'::text, 'CG 25'::text, 'CG 70'::text])) THEN 'CARLA'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['RAP'::text, 'RG'::text])) THEN 'RAPHAEL'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'MARIA'::text) THEN 'MARIA'::text\n            ELSE COALESCE(faturas_vendedor.nome_vendedor, 'UNKNOWN'::text)\n        END AS nome,\n        CASE\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'SAN'::text) THEN 'BRINDES'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'MAN'::text) THEN 'IMACX'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['IMA'::text, 'IMACX'::text])) THEN 'IMACX'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['RUI'::text, 'RB'::text])) THEN 'DIGITAL'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['PAU'::text, 'PROD'::text])) THEN 'PRODUCAO'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['MÁR'::text, 'MAR'::text])) THEN 'PRODUCAO'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'EST'::text) THEN 'ADMIN'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'NUN'::text) THEN 'IMACX'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['CAR'::text, 'CG 25'::text, 'CG 70'::text])) THEN 'BRINDES'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['RAP'::text, 'RG'::text])) THEN 'DIGITAL'::text\n            WHEN (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'MARIA'::text) THEN 'IMACX'::text\n            ELSE 'UNKNOWN'::text\n        END AS department,\n    count(*) AS transaction_count,\n    now() AS created_at,\n    now() AS updated_at\n   FROM faturas_vendedor\n  WHERE ((faturas_vendedor.data_documento IS NOT NULL) AND (faturas_vendedor.euro_total IS NOT NULL))\n  GROUP BY (to_char((faturas_vendedor.data_documento)::timestamp with time zone, 'MM/YYYY'::text)), faturas_vendedor.nome_cliente, faturas_vendedor.nome_vendedor\n  ORDER BY (to_char((faturas_vendedor.data_documento)::timestamp with time zone, 'MM/YYYY'::text)) DESC, faturas_vendedor.nome_cliente, faturas_vendedor.nome_vendedor;",
+          "is_updatable": "NO",
+          "is_insertable_into": "NO"
+        },
+        {
+          "view_name": "faturas_vendedor_monthly_count",
+          "view_definition": " SELECT 'faturas_vendedor_count'::text AS numero_documento,\n    'Factura'::text AS nome_documento,\n    to_char((faturas_vendedor.data_documento)::timestamp with time zone, 'MM/YYYY'::text) AS data_documento,\n    faturas_vendedor.nome_cliente,\n    count(*) AS document_count,\n        CASE\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%CARLA%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['CG'::text, 'CAR'::text]))) THEN 'CARLA'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%SANDRA%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'SAN'::text)) THEN 'SANDRA'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%MANUEL%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'MAN'::text)) THEN 'MAN'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%IMACX%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['IMA'::text, 'IM'::text]))) THEN 'IMACX'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%RUI%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['RUI'::text, 'RB'::text]))) THEN 'RUI'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%PAULO%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['PAU'::text, 'PROD'::text]))) THEN 'PAULO'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%MARCIA%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['MÁR'::text, 'MAR'::text]))) THEN 'MARCIA'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%ESTELA%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'EST'::text)) THEN 'ESTELA'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%NUNO%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'NUN'::text)) THEN 'NUNO'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%RAPHAEL%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['RAP'::text, 'RG'::text]))) THEN 'RAPHAEL'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%MARIA%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'MARIA'::text)) THEN 'MARIA'::text\n            ELSE COALESCE(faturas_vendedor.nome_vendedor, 'UNKNOWN'::text)\n        END AS nome,\n        CASE\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%CARLA%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['CG'::text, 'CAR'::text]))) THEN 'BRINDES'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%SANDRA%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'SAN'::text)) THEN 'BRINDES'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%MANUEL%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'MAN'::text)) THEN 'IMACX'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%IMACX%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['IMA'::text, 'IM'::text]))) THEN 'IMACX'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%RUI%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['RUI'::text, 'RB'::text]))) THEN 'DIGITAL'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%PAULO%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['PAU'::text, 'PROD'::text]))) THEN 'PRODUCAO'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%MARCIA%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['MÁR'::text, 'MAR'::text]))) THEN 'PRODUCAO'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%ESTELA%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'EST'::text)) THEN 'ADMIN'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%NUNO%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'NUN'::text)) THEN 'IMACX'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%RAPHAEL%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = ANY (ARRAY['RAP'::text, 'RG'::text]))) THEN 'DIGITAL'::text\n            WHEN ((upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) ~~ '%MARIA%'::text) OR (upper(TRIM(BOTH FROM faturas_vendedor.nome_vendedor)) = 'MARIA'::text)) THEN 'IMACX'::text\n            ELSE 'UNKNOWN'::text\n        END AS department,\n    count(*) AS transaction_count,\n    now() AS created_at,\n    now() AS updated_at\n   FROM faturas_vendedor\n  WHERE (faturas_vendedor.data_documento IS NOT NULL)\n  GROUP BY (to_char((faturas_vendedor.data_documento)::timestamp with time zone, 'MM/YYYY'::text)), faturas_vendedor.nome_cliente, faturas_vendedor.nome_vendedor\n  ORDER BY (to_char((faturas_vendedor.data_documento)::timestamp with time zone, 'MM/YYYY'::text)) DESC, faturas_vendedor.nome_vendedor, faturas_vendedor.nome_cliente;",
+          "is_updatable": "NO",
+          "is_insertable_into": "NO"
+        },
+        {
+          "view_name": "folhas_obras_with_dias",
+          "view_definition": " SELECT fo.id,\n    fo.numero_fo,\n    fo.profile_id,\n    fo.nome_campanha,\n    fo.prioridade,\n    fo.data_in,\n    fo.data_saida,\n    fo.notas,\n    fo.concluido,\n    fo.saiu,\n    fo.fatura,\n    fo.data_concluido,\n    fo.data_saiu,\n    fo.data_fatura,\n    fo.numero_orc,\n    fo.cliente,\n    fo.notas_prod,\n    fo.created_at,\n    fo.updated_at,\n    fo.id_cliente,\n    calculate_working_days(fo.data_in, ( SELECT le.data_concluido\n           FROM logistica_entregas le\n          WHERE (le.item_id IN ( SELECT items_base.id\n                   FROM items_base\n                  WHERE (items_base.folha_obra_id = fo.id)))\n          ORDER BY le.data_concluido DESC\n         LIMIT 1)) AS dias_trabalho\n   FROM folhas_obras fo;",
+          "is_updatable": "YES",
+          "is_insertable_into": "YES"
+        },
+        {
+          "view_name": "listagem_compras_monthly",
+          "view_definition": " SELECT ('MONTHLY_'::text || to_char((combined_data.data_documento)::timestamp with time zone, 'MM/YYYY'::text)) AS numero_documento,\n    to_char((combined_data.data_documento)::timestamp with time zone, 'MM/YYYY'::text) AS data_documento,\n    combined_data.nome_fornecedor,\n    combined_data.nome_dossier,\n    round(sum(combined_data.euro_total), 2) AS euro_total,\n    count(*) AS transaction_count,\n    now() AS created_at,\n    now() AS updated_at\n   FROM ( SELECT listagem_compras_history.nome_fornecedor,\n            listagem_compras_history.data_documento,\n            listagem_compras_history.nome_dossier,\n            listagem_compras_history.euro_total\n           FROM listagem_compras_history\n        UNION ALL\n         SELECT listagem_compras.nome_fornecedor,\n            listagem_compras.data_documento,\n            listagem_compras.nome_dossier,\n            listagem_compras.euro_total\n           FROM listagem_compras\n          WHERE (listagem_compras.data_documento >= '2025-07-31'::date)) combined_data\n  GROUP BY (to_char((combined_data.data_documento)::timestamp with time zone, 'MM/YYYY'::text)), combined_data.nome_fornecedor, combined_data.nome_dossier\n  ORDER BY (to_char((combined_data.data_documento)::timestamp with time zone, 'MM/YYYY'::text)) DESC, combined_data.nome_fornecedor;",
+          "is_updatable": "NO",
+          "is_insertable_into": "NO"
+        },
+        {
+          "view_name": "listagem_notas_credito_monthly",
+          "view_definition": " WITH user_mapping AS (\n         SELECT user_name_mapping.initials,\n            user_name_mapping.full_name,\n            user_name_mapping.short_name,\n            user_name_mapping.standardized_name,\n            user_name_mapping.department,\n            user_name_mapping.sales\n           FROM user_name_mapping\n          WHERE (user_name_mapping.active = true)\n        ), standardized_data AS (\n         SELECT lnc.id,\n            lnc.numero_documento,\n            lnc.nome_documento,\n            lnc.data_documento,\n            lnc.euro_total,\n            lnc.created_at,\n            lnc.updated_at,\n            lnc.nome_cliente,\n            lnc.nome_vendedor,\n            COALESCE(( SELECT user_mapping.standardized_name\n                   FROM user_mapping\n                  WHERE (upper(TRIM(BOTH FROM COALESCE(lnc.nome_vendedor, ''::text))) = upper(TRIM(BOTH FROM user_mapping.initials)))\n                 LIMIT 1), ( SELECT user_mapping.standardized_name\n                   FROM user_mapping\n                  WHERE (upper(TRIM(BOTH FROM COALESCE(lnc.nome_vendedor, ''::text))) = upper(TRIM(BOTH FROM user_mapping.full_name)))\n                 LIMIT 1), ( SELECT user_mapping.standardized_name\n                   FROM user_mapping\n                  WHERE (upper(TRIM(BOTH FROM COALESCE(lnc.nome_vendedor, ''::text))) = upper(TRIM(BOTH FROM user_mapping.short_name)))\n                 LIMIT 1), 'IMACX'::text) AS standardized_seller_name,\n            COALESCE(( SELECT user_mapping.department\n                   FROM user_mapping\n                  WHERE (upper(TRIM(BOTH FROM COALESCE(lnc.nome_vendedor, ''::text))) = upper(TRIM(BOTH FROM user_mapping.initials)))\n                 LIMIT 1), ( SELECT user_mapping.department\n                   FROM user_mapping\n                  WHERE (upper(TRIM(BOTH FROM COALESCE(lnc.nome_vendedor, ''::text))) = upper(TRIM(BOTH FROM user_mapping.full_name)))\n                 LIMIT 1), ( SELECT user_mapping.department\n                   FROM user_mapping\n                  WHERE (upper(TRIM(BOTH FROM COALESCE(lnc.nome_vendedor, ''::text))) = upper(TRIM(BOTH FROM user_mapping.short_name)))\n                 LIMIT 1), 'IMACX'::text) AS seller_department\n           FROM listagem_notas_credito lnc\n        ), monthly_aggregated AS (\n         SELECT to_char((standardized_data.data_documento)::timestamp without time zone, 'MM/YYYY'::text) AS data_documento,\n            standardized_data.numero_documento,\n            standardized_data.nome_documento,\n            standardized_data.nome_cliente,\n            standardized_data.nome_vendedor,\n            standardized_data.standardized_seller_name AS nome,\n            standardized_data.seller_department AS department,\n            sum(standardized_data.euro_total) AS euro_total,\n            count(*) AS transaction_count,\n            min(standardized_data.created_at) AS earliest_transaction,\n            max(standardized_data.updated_at) AS latest_update\n           FROM standardized_data\n          WHERE (standardized_data.data_documento IS NOT NULL)\n          GROUP BY (to_char((standardized_data.data_documento)::timestamp without time zone, 'MM/YYYY'::text)), standardized_data.numero_documento, standardized_data.nome_documento, standardized_data.nome_cliente, standardized_data.nome_vendedor, standardized_data.standardized_seller_name, standardized_data.seller_department\n        )\n SELECT gen_random_uuid() AS id,\n    monthly_aggregated.data_documento,\n    monthly_aggregated.numero_documento,\n    monthly_aggregated.nome_documento,\n    monthly_aggregated.nome_cliente,\n    monthly_aggregated.nome_vendedor,\n    monthly_aggregated.nome,\n    monthly_aggregated.department,\n    monthly_aggregated.euro_total,\n    monthly_aggregated.transaction_count,\n    monthly_aggregated.earliest_transaction AS created_at,\n    monthly_aggregated.latest_update AS updated_at\n   FROM monthly_aggregated\n  ORDER BY monthly_aggregated.data_documento DESC, monthly_aggregated.nome DESC, monthly_aggregated.nome_cliente;",
+          "is_updatable": "NO",
+          "is_insertable_into": "NO"
+        },
+        {
+          "view_name": "ne_fornecedor_monthly",
+          "view_definition": " WITH ne_data AS (\n         SELECT ne.id,\n            ne.numero_documento,\n            ne.nome_dossier,\n            ne.data_documento,\n            ne.nome_fornecedor,\n            ne.nome_utilizador,\n            ne.euro_total,\n            COALESCE(unm.standardized_name, 'UNKNOWN'::text) AS nome,\n                CASE\n                    WHEN (ne.nome_fornecedor = 'Astrografe, Lda'::text) THEN 'OFFSET'::text\n                    ELSE COALESCE(unm.department, 'UNKNOWN'::text)\n                END AS department,\n            1 AS transaction_count,\n            ne.created_at,\n            ne.updated_at,\n            'ne_fornecedor'::text AS source_table\n           FROM (ne_fornecedor ne\n             LEFT JOIN user_name_mapping unm ON (((ne.iniciais_utilizador = unm.initials) OR (ne.nome_utilizador = unm.full_name) OR (ne.nome_utilizador = unm.short_name))))\n        ), listagem_selected AS (\n         SELECT lc.id,\n            'compras'::text AS numero_documento,\n            lc.nome_dossier,\n            lc.data_documento,\n            lc.nome_fornecedor,\n            unm.full_name AS nome_utilizador,\n            lc.euro_total,\n            unm.standardized_name AS nome,\n            unm.department,\n            1 AS transaction_count,\n            lc.created_at,\n            lc.updated_at,\n            'listagem_compras'::text AS source_table\n           FROM (listagem_compras lc\n             CROSS JOIN user_name_mapping unm)\n          WHERE ((lc.nome_fornecedor = ANY (ARRAY['DIGIDELTA Internacional Import Export SA'::text, 'Fujifilm Portugal, S.A.'::text, 'Kongsberg Precision Cutting Systems Belgium'::text])) AND (unm.initials = 'PAU'::text))\n        ), combined_data AS (\n         SELECT ne_data.id,\n            ne_data.numero_documento,\n            ne_data.nome_dossier,\n            ne_data.data_documento,\n            ne_data.nome_fornecedor,\n            ne_data.nome_utilizador,\n            ne_data.euro_total,\n            ne_data.nome,\n            ne_data.department,\n            ne_data.transaction_count,\n            ne_data.created_at,\n            ne_data.updated_at,\n            ne_data.source_table\n           FROM ne_data\n        UNION ALL\n         SELECT listagem_selected.id,\n            listagem_selected.numero_documento,\n            listagem_selected.nome_dossier,\n            listagem_selected.data_documento,\n            listagem_selected.nome_fornecedor,\n            listagem_selected.nome_utilizador,\n            listagem_selected.euro_total,\n            listagem_selected.nome,\n            listagem_selected.department,\n            listagem_selected.transaction_count,\n            listagem_selected.created_at,\n            listagem_selected.updated_at,\n            listagem_selected.source_table\n           FROM listagem_selected\n        )\n SELECT uuid_generate_v4() AS id,\n    combined_data.numero_documento,\n    combined_data.nome_dossier,\n    to_char((combined_data.data_documento)::timestamp with time zone, 'MM/YYYY'::text) AS data_documento,\n    combined_data.nome_fornecedor,\n    sum(combined_data.euro_total) AS euro_total,\n    combined_data.nome_utilizador,\n    combined_data.nome,\n    combined_data.department,\n    sum(combined_data.transaction_count) AS transaction_count,\n    min(combined_data.created_at) AS created_at,\n    max(combined_data.updated_at) AS updated_at\n   FROM combined_data\n  GROUP BY combined_data.numero_documento, combined_data.nome_dossier, (to_char((combined_data.data_documento)::timestamp with time zone, 'MM/YYYY'::text)), combined_data.nome_fornecedor, combined_data.nome_utilizador, combined_data.nome, combined_data.department\n  ORDER BY (to_char((combined_data.data_documento)::timestamp with time zone, 'MM/YYYY'::text)) DESC, combined_data.nome_fornecedor;",
+          "is_updatable": "NO",
+          "is_insertable_into": "NO"
+        },
+        {
+          "view_name": "orcamentos_vendedor_monthly",
+          "view_definition": " SELECT 'orcamentos_vendedor'::text AS numero_documento,\n    to_char((orcamentos_vendedor.data_documento)::timestamp with time zone, 'MM/YYYY'::text) AS data_documento,\n    orcamentos_vendedor.nome_cliente,\n    orcamentos_vendedor.nome_utilizador,\n    sum(orcamentos_vendedor.euro_total) AS euro_total,\n    COALESCE(( SELECT user_name_mapping.initials\n           FROM user_name_mapping\n          WHERE ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) = upper(TRIM(BOTH FROM user_name_mapping.full_name))) AND (user_name_mapping.active = true))\n         LIMIT 1), orcamentos_vendedor.iniciais_utilizador) AS iniciais_utilizador,\n    COALESCE(orcamentos_vendedor.nome_dossier, 'Orçamento'::text) AS nome_dossier,\n    COALESCE(( SELECT user_name_mapping.standardized_name\n           FROM user_name_mapping\n          WHERE ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) = upper(TRIM(BOTH FROM user_name_mapping.full_name))) AND (user_name_mapping.active = true))\n         LIMIT 1), 'UNKNOWN'::text) AS nome,\n    COALESCE(( SELECT user_name_mapping.department\n           FROM user_name_mapping\n          WHERE ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) = upper(TRIM(BOTH FROM user_name_mapping.full_name))) AND (user_name_mapping.active = true))\n         LIMIT 1), 'UNKNOWN'::text) AS department,\n    count(*) AS transaction_count,\n    now() AS created_at,\n    now() AS updated_at\n   FROM orcamentos_vendedor\n  WHERE ((orcamentos_vendedor.data_documento IS NOT NULL) AND (orcamentos_vendedor.euro_total IS NOT NULL))\n  GROUP BY (to_char((orcamentos_vendedor.data_documento)::timestamp with time zone, 'MM/YYYY'::text)), orcamentos_vendedor.nome_cliente, orcamentos_vendedor.nome_utilizador, orcamentos_vendedor.iniciais_utilizador, orcamentos_vendedor.nome_dossier\n  ORDER BY (to_char((orcamentos_vendedor.data_documento)::timestamp with time zone, 'MM/YYYY'::text)) DESC, orcamentos_vendedor.nome_utilizador, orcamentos_vendedor.nome_cliente;",
+          "is_updatable": "NO",
+          "is_insertable_into": "NO"
+        },
+        {
+          "view_name": "orcamentos_vendedor_monthly_count",
+          "view_definition": " SELECT 'orcamentos_vendedor_count'::text AS numero_documento,\n    to_char((orcamentos_vendedor.data_documento)::timestamp with time zone, 'MM/YYYY'::text) AS data_documento,\n    orcamentos_vendedor.nome_cliente,\n    orcamentos_vendedor.nome_utilizador,\n    count(*) AS document_count,\n    orcamentos_vendedor.iniciais_utilizador,\n    COALESCE(orcamentos_vendedor.nome_dossier, 'Orçamento'::text) AS nome_dossier,\n        CASE\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%CARLA%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = ANY (ARRAY['CG'::text, 'CAR'::text]))) THEN 'CARLA'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%SANDRA%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = 'SAN'::text)) THEN 'SANDRA'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%MANUEL%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = 'MAN'::text)) THEN 'MAN'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%IMACX%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = ANY (ARRAY['IMA'::text, 'IM'::text]))) THEN 'IMACX'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%RUI%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = ANY (ARRAY['RUI'::text, 'RB'::text]))) THEN 'RUI'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%PAULO%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = ANY (ARRAY['PAU'::text, 'PROD'::text]))) THEN 'PAULO'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%MARCIA%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = ANY (ARRAY['MÁR'::text, 'MAR'::text]))) THEN 'MARCIA'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%ESTELA%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = 'EST'::text)) THEN 'ESTELA'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%NUNO%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = 'NUN'::text)) THEN 'NUNO'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%RAPHAEL%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = ANY (ARRAY['RAP'::text, 'RG'::text]))) THEN 'RAPHAEL'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%MARIA%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = 'MARIA'::text)) THEN 'MARIA'::text\n            ELSE COALESCE(orcamentos_vendedor.nome_utilizador, 'UNKNOWN'::text)\n        END AS nome,\n        CASE\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%CARLA%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = ANY (ARRAY['CG'::text, 'CAR'::text]))) THEN 'BRINDES'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%SANDRA%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = 'SAN'::text)) THEN 'BRINDES'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%MANUEL%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = 'MAN'::text)) THEN 'IMACX'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%IMACX%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = ANY (ARRAY['IMA'::text, 'IM'::text]))) THEN 'IMACX'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%RUI%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = ANY (ARRAY['RUI'::text, 'RB'::text]))) THEN 'DIGITAL'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%PAULO%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = ANY (ARRAY['PAU'::text, 'PROD'::text]))) THEN 'PRODUCAO'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%MARCIA%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = ANY (ARRAY['MÁR'::text, 'MAR'::text]))) THEN 'PRODUCAO'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%ESTELA%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = 'EST'::text)) THEN 'ADMIN'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%NUNO%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = 'NUN'::text)) THEN 'IMACX'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%RAPHAEL%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = ANY (ARRAY['RAP'::text, 'RG'::text]))) THEN 'DIGITAL'::text\n            WHEN ((upper(TRIM(BOTH FROM orcamentos_vendedor.nome_utilizador)) ~~ '%MARIA%'::text) OR (upper(TRIM(BOTH FROM orcamentos_vendedor.iniciais_utilizador)) = 'MARIA'::text)) THEN 'IMACX'::text\n            ELSE 'UNKNOWN'::text\n        END AS department,\n    count(*) AS transaction_count,\n    now() AS created_at,\n    now() AS updated_at\n   FROM orcamentos_vendedor\n  WHERE (orcamentos_vendedor.data_documento IS NOT NULL)\n  GROUP BY (to_char((orcamentos_vendedor.data_documento)::timestamp with time zone, 'MM/YYYY'::text)), orcamentos_vendedor.nome_cliente, orcamentos_vendedor.nome_utilizador, orcamentos_vendedor.iniciais_utilizador, orcamentos_vendedor.nome_dossier\n  ORDER BY (to_char((orcamentos_vendedor.data_documento)::timestamp with time zone, 'MM/YYYY'::text)) DESC, orcamentos_vendedor.nome_utilizador, orcamentos_vendedor.nome_cliente;",
+          "is_updatable": "NO",
+          "is_insertable_into": "NO"
+        },
+        {
+          "view_name": "vendas_liquidas_monthly",
+          "view_definition": " SELECT f.numero_documento,\n    f.nome_documento,\n    f.data_documento,\n    f.nome_cliente,\n    (f.euro_total + COALESCE(lnc.euro_total, (0)::numeric)) AS euro_total,\n    f.nome,\n    f.department,\n    f.transaction_count,\n    f.created_at,\n    f.updated_at\n   FROM (faturas_vendedor_monthly f\n     LEFT JOIN listagem_notas_credito_monthly lnc ON (((f.data_documento = lnc.data_documento) AND (f.nome_cliente = lnc.nome_cliente) AND (f.nome = lnc.nome))));",
+          "is_updatable": "NO",
+          "is_insertable_into": "NO"
+        }
+      ]
+    }
+  }
+]

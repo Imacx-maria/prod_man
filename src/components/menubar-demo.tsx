@@ -93,6 +93,11 @@ const MENU_STRUCTURE = [
         path: '/definicoes/fornecedores',
         requiredPath: '/definicoes/fornecedores',
       },
+      {
+        label: 'Excepções Iva',
+        path: '/definicoes/iva-excepcoes',
+        requiredPath: '/definicoes/iva-excepcoes',
+      },
       { label: 'separator', path: '', requiredPath: '' },
       {
         label: 'Máquinas',
@@ -120,6 +125,11 @@ const MENU_STRUCTURE = [
         label: 'Utilizadores',
         path: '/definicoes/utilizadores',
         requiredPath: '/definicoes/utilizadores',
+      },
+      {
+        label: 'User Name Mapping',
+        path: '/definicoes/user-name-mapping',
+        requiredPath: '/definicoes/user-name-mapping',
       },
     ],
   },

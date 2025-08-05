@@ -103,6 +103,11 @@ const PAGE_CATEGORIES = {
         description: 'Gestão de fornecedores',
       },
       {
+        path: '/definicoes/iva-excepcoes',
+        name: 'Excepções Iva',
+        description: 'Gestão de exceções de IVA por fornecedor',
+      },
+      {
         path: '/definicoes/maquinas',
         name: 'Máquinas',
         description: 'Gestão de máquinas',
@@ -121,6 +126,11 @@ const PAGE_CATEGORIES = {
         path: '/definicoes/transportadoras',
         name: 'Transportadoras',
         description: 'Empresas de transporte',
+      },
+      {
+        path: '/definicoes/user-name-mapping',
+        name: 'User Name Mapping',
+        description: 'Gestão de mapeamento de nomes de utilizadores',
       },
       {
         path: '/definicoes/utilizadores',
@@ -317,7 +327,7 @@ export default function RolePermissionsDrawer({
 
   return (
     <Drawer open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
-      <DrawerContent className="!top-0 h-[98vh] max-h-[98vh] min-h-[98vh] overflow-y-auto">
+      <DrawerContent className="!top-0 flex h-[98vh] max-h-[98vh] min-h-[98vh] flex-col">
         <DrawerHeader className="sr-only">
           <DrawerTitle>Gerir Permissões do Papel</DrawerTitle>
           <DrawerDescription>
@@ -325,143 +335,148 @@ export default function RolePermissionsDrawer({
           </DrawerDescription>
         </DrawerHeader>
 
-        <div className="relative space-y-6 p-6">
-          {/* Close button */}
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={onClose}
-            className="absolute top-6 right-6 z-10"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+        {/* Scrollable content area */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="relative space-y-6 p-6 pb-0">
+            {/* Close button */}
+            <Button
+              size="icon"
+              variant="outline"
+              onClick={onClose}
+              className="absolute top-6 right-6 z-10"
+            >
+              <X className="h-4 w-4" />
+            </Button>
 
-          {/* Header */}
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Shield className="h-6 w-6 text-[var(--orange)]" />
-              <div>
-                <h2 className="text-2xl font-bold">Permissões do Papel</h2>
-                <div className="text-muted-foreground">
-                  Configure o acesso às páginas para o papel{' '}
-                  <Badge variant="outline">{role?.name}</Badge>
+            {/* Header */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Shield className="h-6 w-6 text-[var(--orange)]" />
+                <div>
+                  <h2 className="text-2xl font-bold">Permissões do Papel</h2>
+                  <div className="text-muted-foreground">
+                    Configure o acesso às páginas para o papel{' '}
+                    <Badge variant="outline">{role?.name}</Badge>
+                  </div>
+                </div>
+              </div>
+
+              {role?.description && (
+                <p className="text-muted-foreground bg-muted/50 rounded-none border p-3 text-sm">
+                  {role.description}
+                </p>
+              )}
+
+              <div className="flex items-center justify-between">
+                <p className="text-muted-foreground text-sm">
+                  {selectedCount} de {totalCount} páginas selecionadas
+                </p>
+                <div className="flex gap-2">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setPermissions((prev) =>
+                              prev.map((p) => ({ ...p, can_access: true })),
+                            )
+                          }}
+                        >
+                          Selecionar Todas
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Dar acesso a todas as páginas
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setPermissions((prev) =>
+                              prev.map((p) => ({ ...p, can_access: false })),
+                            )
+                          }}
+                        >
+                          Limpar Todas
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Remover acesso a todas as páginas
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
             </div>
 
-            {role?.description && (
-              <p className="text-muted-foreground bg-muted/50 rounded-none border p-3 text-sm">
-                {role.description}
-              </p>
+            {/* Error message */}
+            {error && (
+              <div className="bg-destructive/10 border-destructive rounded-none border p-3">
+                <p className="text-destructive text-sm">{error}</p>
+              </div>
             )}
 
-            <div className="flex items-center justify-between">
-              <p className="text-muted-foreground text-sm">
-                {selectedCount} de {totalCount} páginas selecionadas
-              </p>
-              <div className="flex gap-2">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setPermissions((prev) =>
-                            prev.map((p) => ({ ...p, can_access: true })),
-                          )
-                        }}
-                      >
-                        Selecionar Todas
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      Dar acesso a todas as páginas
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setPermissions((prev) =>
-                            prev.map((p) => ({ ...p, can_access: false })),
-                          )
-                        }}
-                      >
-                        Limpar Todas
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      Remover acesso a todas as páginas
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+            {/* Loading state */}
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
               </div>
-            </div>
-          </div>
-
-          {/* Error message */}
-          {error && (
-            <div className="bg-destructive/10 border-destructive rounded-none border p-3">
-              <p className="text-destructive text-sm">{error}</p>
-            </div>
-          )}
-
-          {/* Loading state */}
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="text-muted-foreground h-8 w-8 animate-spin" />
-            </div>
-          ) : (
-            <div className="space-y-6">
-              {Object.entries(PAGE_CATEGORIES).map(
-                ([categoryName, category]) => (
-                  <div key={categoryName} className="space-y-3">
-                    <h3 className="mb-3 text-lg font-semibold text-[var(--orange)]">
-                      {categoryName} ({category.pages.length} páginas)
-                    </h3>
-                    <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-                      {category.pages.map((page) => (
-                        <div
-                          key={page.path}
-                          className="bg-muted/20 hover:bg-muted/40 flex items-start space-x-2 rounded p-2 transition-colors"
-                        >
-                          <Checkbox
-                            id={`page-${page.path}`}
-                            checked={getPermission(page.path)}
-                            onCheckedChange={(checked) => {
-                              const value =
-                                checked === 'indeterminate' ? false : checked
-                              handlePermissionChange(page.path, value)
-                            }}
-                            className="mt-1"
-                          />
-                          <div className="min-w-0 flex-1">
-                            <Label
-                              htmlFor={`page-${page.path}`}
-                              className="block cursor-pointer text-sm leading-tight font-medium"
-                            >
-                              {page.name}
-                            </Label>
-                            <p className="text-muted-foreground text-xs leading-tight">
-                              {page.description}
-                            </p>
+            ) : (
+              <div className="space-y-6 pb-6">
+                {Object.entries(PAGE_CATEGORIES).map(
+                  ([categoryName, category]) => (
+                    <div key={categoryName} className="space-y-3">
+                      <h3 className="mb-3 text-lg font-semibold text-[var(--orange)]">
+                        {categoryName} ({category.pages.length} páginas)
+                      </h3>
+                      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                        {category.pages.map((page) => (
+                          <div
+                            key={page.path}
+                            className="bg-muted/20 hover:bg-muted/40 flex items-start space-x-2 rounded p-2 transition-colors"
+                          >
+                            <Checkbox
+                              id={`page-${page.path}`}
+                              checked={getPermission(page.path)}
+                              onCheckedChange={(checked) => {
+                                const value =
+                                  checked === 'indeterminate' ? false : checked
+                                handlePermissionChange(page.path, value)
+                              }}
+                              className="mt-1"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <Label
+                                htmlFor={`page-${page.path}`}
+                                className="block cursor-pointer text-sm leading-tight font-medium"
+                              >
+                                {page.name}
+                              </Label>
+                              <p className="text-muted-foreground text-xs leading-tight">
+                                {page.description}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                ),
-              )}
-            </div>
-          )}
+                  ),
+                )}
+              </div>
+            )}
+          </div>
+        </div>
 
-          {/* Action buttons */}
-          <div className="flex justify-end gap-2 border-t pt-6">
+        {/* Fixed action buttons at bottom */}
+        <div className="bg-background flex-none border-t p-6">
+          <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={onClose} disabled={saving}>
               Cancelar
             </Button>

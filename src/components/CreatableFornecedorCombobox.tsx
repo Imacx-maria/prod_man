@@ -1,5 +1,7 @@
 import { Label } from '@/components/ui/label'
-import CreatableCombobox, { CreatableComboboxOption } from '@/components/ui/CreatableCombobox'
+import CreatableCombobox, {
+  CreatableComboboxOption,
+} from '@/components/ui/CreatableCombobox'
 import { Loader2 } from 'lucide-react'
 import React from 'react'
 import { createBrowserClient } from '@/utils/supabase'
@@ -22,7 +24,9 @@ interface CreatableFornecedorComboboxProps {
   error?: string | null
 }
 
-export const CreatableFornecedorCombobox: React.FC<CreatableFornecedorComboboxProps> = ({
+export const CreatableFornecedorCombobox: React.FC<
+  CreatableFornecedorComboboxProps
+> = ({
   value,
   onChange,
   options,
@@ -36,47 +40,11 @@ export const CreatableFornecedorCombobox: React.FC<CreatableFornecedorComboboxPr
 }) => {
   const supabase = createBrowserClient()
 
-  const handleCreateNew = async (inputValue: string): Promise<CreatableComboboxOption | null> => {
-    try {
-      // Create new fornecedor in the database
-      const { data, error } = await supabase
-        .from('fornecedores')
-        .insert({
-          nome_forn: inputValue.trim().toUpperCase(),
-          numero_phc: null,
-          morada: null,
-          codigo_pos: null,
-          telefone: null,
-          email: null,
-          contacto_principal: null
-        })
-        .select('*')
-
-      if (error) {
-        console.error('Error creating fornecedor:', error)
-        return null
-      }
-
-      if (!data || !data[0]) {
-        return null
-      }
-
-      const newFornecedor = data[0]
-      const newOption: CreatableComboboxOption = {
-        value: newFornecedor.id,
-        label: newFornecedor.nome_forn
-      }
-
-      // Update the options list if callback is provided
-      if (onOptionsUpdate) {
-        onOptionsUpdate([...options, newOption])
-      }
-
-      return newOption
-    } catch (error) {
-      console.error('Error creating new fornecedor:', error)
-      return null
-    }
+  const handleCreateNew = async (
+    inputValue: string,
+  ): Promise<CreatableComboboxOption | null> => {
+    // For IVA Exceções, we don't create new fornecedores, only select from existing ones in listagem_compras
+    return null
   }
 
   return (
@@ -85,30 +53,29 @@ export const CreatableFornecedorCombobox: React.FC<CreatableFornecedorComboboxPr
         <Label className="mb-1 block">{label}</Label>
       )}
       <div className="relative w-full">
-        <div className={
-          (disabled || loading)
-            ? 'opacity-60 pointer-events-none'
-            : ''
-        }>
+        <div
+          className={
+            disabled || loading ? 'pointer-events-none opacity-60' : ''
+          }
+        >
           <CreatableCombobox
             value={value}
             onChange={onChange}
-            onCreateNew={handleCreateNew}
+            onCreateNew={undefined}
             options={options}
             placeholder={placeholder}
-            searchPlaceholder="Pesquisar..."
             aria-label={label}
             disabled={disabled}
             loading={loading}
             error={error}
             buttonClassName="border-border"
             createMessage="Criar fornecedor"
-            allowCreate={true}
+            allowCreate={false}
           />
         </div>
       </div>
       {error && (
-        <div className="mt-1 text-sm text-red-600 flex items-center gap-1">
+        <div className="mt-1 flex items-center gap-1 text-sm text-red-600">
           <span>{error}</span>
         </div>
       )}
@@ -116,4 +83,4 @@ export const CreatableFornecedorCombobox: React.FC<CreatableFornecedorComboboxPr
   )
 }
 
-export default CreatableFornecedorCombobox 
+export default CreatableFornecedorCombobox

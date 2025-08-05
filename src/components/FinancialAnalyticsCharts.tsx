@@ -36,6 +36,7 @@ import {
   type SimpleGroupedData,
   convertToStandardPeriod,
   convertToDisplayPeriod,
+  getFinancialYearRange,
   // Legacy functions for backward compatibility during transition
   groupDataByMonth,
   groupDataByYear,
@@ -109,12 +110,27 @@ interface ListagemNotasCreditoMonthly {
   updated_at: string // View timestamp
 }
 
+interface VendasLiquidasMonthly {
+  id: string
+  numero_documento: string
+  nome_documento: string
+  data_documento: string // MM/YYYY format from monthly view
+  nome_cliente: string
+  euro_total: number
+  nome: string // Standardized seller name from view
+  department: string // Standardized department from view
+  transaction_count: number // Count of original transactions
+  created_at: string // View timestamp
+  updated_at: string // View timestamp
+}
+
 interface FinancialData {
   faturasVendedor: FaturasVendedorMonthly[]
   orcamentosVendedor: OrcamentosVendedorMonthly[]
   listagemCompras: ListagemComprasMonthly[]
   neFornecedor: NeFornecedorMonthly[]
   listagemNotasCredito: ListagemNotasCreditoMonthly[]
+  vendasLiquidas: VendasLiquidasMonthly[]
 }
 
 interface FinancialAnalyticsChartsProps {
@@ -141,26 +157,35 @@ export default function FinancialAnalyticsCharts({
     listagemCompras: [],
     neFornecedor: [],
     listagemNotasCredito: [],
+    vendasLiquidas: [],
   })
-  const [multiYearData, setMultiYearData] = useState<FaturasVendedorMonthly[]>(
+  const [multiYearData, setMultiYearData] = useState<VendasLiquidasMonthly[]>(
     [],
   )
+  const [multiYearCountData, setMultiYearCountData] = useState<
+    FaturasVendedorMonthly[]
+  >([])
+  const [multiYearOrcamentosCountData, setMultiYearOrcamentosCountData] =
+    useState<OrcamentosVendedorMonthly[]>([])
+  const [multiYearAvgData, setMultiYearAvgData] = useState<
+    FaturasVendedorMonthly[]
+  >([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  // Fetch multi-year faturas data for yearly comparison chart
+  // Fetch multi-year data for yearly comparison chart - using vendas_liquidas_monthly
   const fetchMultiYearData = useCallback(async () => {
     try {
-      // Dynamic year range: from 4 years ago to next year
-      const currentYear = new Date().getFullYear()
-      const startYear = currentYear - 4
-      const endYear = currentYear + 1
+      // Use standardized financial year range
+      const yearRange = getFinancialYearRange()
+      const startYear = Math.min(...yearRange)
+      const endYear = Math.max(...yearRange)
 
       // Fetch data for each year separately with pagination to get ALL records
-      const allYearlyData: FaturasVendedorMonthly[] = []
+      const allYearlyData: VendasLiquidasMonthly[] = []
 
       for (let year = startYear; year <= endYear; year++) {
-        let allYearData: FaturasVendedorMonthly[] = []
+        let allYearData: VendasLiquidasMonthly[] = []
         let hasMoreData = true
         let page = 0
 
@@ -170,18 +195,20 @@ export default function FinancialAnalyticsCharts({
           const endRange = startRange + 999
 
           const { data, error, count } = await supabase
-            .from('faturas_vendedor_monthly')
+            .from('vendas_liquidas_monthly')
             .select('*', { count: 'exact' })
             .order('data_documento', { ascending: true })
             .range(startRange, endRange)
 
           if (error) {
-            throw new Error(`Multi-year faturas for ${year}: ${error.message}`)
+            throw new Error(
+              `Multi-year vendas_liquidas for ${year}: ${error.message}`,
+            )
           }
 
           // Filter data to only include our target year in MM/YYYY format
           if (data && data.length > 0) {
-            const filteredData = data.filter((item: FaturasVendedorMonthly) => {
+            const filteredData = data.filter((item: VendasLiquidasMonthly) => {
               const dataParts = item.data_documento.split('/')
               if (dataParts.length === 2) {
                 const itemYear = parseInt(dataParts[1])
@@ -216,15 +243,226 @@ export default function FinancialAnalyticsCharts({
     }
   }, [supabase])
 
+  // Fetch multi-year count data for yearly comparison count chart - using faturas_vendedor_monthly_count
+  const fetchMultiYearCountData = useCallback(async () => {
+    try {
+      // Use standardized financial year range
+      const yearRange = getFinancialYearRange()
+      const startYear = Math.min(...yearRange)
+      const endYear = Math.max(...yearRange)
+
+      // Fetch data for each year separately with pagination to get ALL records
+      const allYearlyCountData: FaturasVendedorMonthly[] = []
+
+      for (let year = startYear; year <= endYear; year++) {
+        let allYearData: FaturasVendedorMonthly[] = []
+        let hasMoreData = true
+        let page = 0
+
+        // Paginate through all data for this year
+        while (hasMoreData) {
+          const startRange = page * 1000
+          const endRange = startRange + 999
+
+          const { data, error, count } = await supabase
+            .from('faturas_vendedor_monthly_count')
+            .select('*', { count: 'exact' })
+            .order('data_documento', { ascending: true })
+            .range(startRange, endRange)
+
+          if (error) {
+            throw new Error(
+              `Multi-year faturas_vendedor_monthly_count for ${year}: ${error.message}`,
+            )
+          }
+
+          // Filter data to only include our target year in MM/YYYY format
+          if (data && data.length > 0) {
+            const filteredData = data.filter((item: FaturasVendedorMonthly) => {
+              const dataParts = item.data_documento.split('/')
+              if (dataParts.length === 2) {
+                const itemYear = parseInt(dataParts[1])
+                return itemYear === year
+              }
+              return false
+            })
+
+            allYearData = [...allYearData, ...filteredData]
+
+            // If we got fewer than 1000 records, we've reached the end
+            if (data.length < 1000) {
+              hasMoreData = false
+            } else {
+              // Move to next page
+              page++
+            }
+          } else {
+            // No data returned, end pagination
+            hasMoreData = false
+          }
+        }
+
+        // Add this year's data to the overall collection
+        allYearlyCountData.push(...allYearData)
+      }
+
+      setMultiYearCountData(allYearlyCountData)
+    } catch (err: any) {
+      console.error('Error fetching multi-year count data:', err)
+      // Don't set main error for this, just log it
+    }
+  }, [supabase])
+
+  // Fetch multi-year orcamentos count data for yearly comparison orcamentos count chart - using orcamentos_vendedor_monthly_count
+  const fetchMultiYearOrcamentosCountData = useCallback(async () => {
+    try {
+      // Use standardized financial year range
+      const yearRange = getFinancialYearRange()
+      const startYear = Math.min(...yearRange)
+      const endYear = Math.max(...yearRange)
+
+      // Fetch data for each year separately with pagination to get ALL records
+      const allYearlyOrcamentosCountData: OrcamentosVendedorMonthly[] = []
+
+      for (let year = startYear; year <= endYear; year++) {
+        let allYearData: OrcamentosVendedorMonthly[] = []
+        let hasMoreData = true
+        let page = 0
+
+        // Paginate through all data for this year
+        while (hasMoreData) {
+          const startRange = page * 1000
+          const endRange = startRange + 999
+
+          const { data, error, count } = await supabase
+            .from('orcamentos_vendedor_monthly_count')
+            .select('*', { count: 'exact' })
+            .order('data_documento', { ascending: true })
+            .range(startRange, endRange)
+
+          if (error) {
+            throw new Error(
+              `Multi-year orcamentos_vendedor_monthly_count for ${year}: ${error.message}`,
+            )
+          }
+
+          // Filter data to only include our target year in MM/YYYY format
+          if (data && data.length > 0) {
+            const filteredData = data.filter(
+              (item: OrcamentosVendedorMonthly) => {
+                const dataParts = item.data_documento.split('/')
+                if (dataParts.length === 2) {
+                  const itemYear = parseInt(dataParts[1])
+                  return itemYear === year
+                }
+                return false
+              },
+            )
+
+            allYearData = [...allYearData, ...filteredData]
+
+            // If we got fewer than 1000 records, we've reached the end
+            if (data.length < 1000) {
+              hasMoreData = false
+            } else {
+              // Move to next page
+              page++
+            }
+          } else {
+            // No data returned, end pagination
+            hasMoreData = false
+          }
+        }
+
+        // Add this year's data to the overall collection
+        allYearlyOrcamentosCountData.push(...allYearData)
+      }
+
+      setMultiYearOrcamentosCountData(allYearlyOrcamentosCountData)
+    } catch (err: any) {
+      console.error('Error fetching multi-year orcamentos count data:', err)
+      // Don't set main error for this, just log it
+    }
+  }, [supabase])
+
+  // Fetch multi-year average data for yearly comparison average chart - using faturas_vendedor_monthly
+  const fetchMultiYearAvgData = useCallback(async () => {
+    try {
+      // Use standardized financial year range
+      const yearRange = getFinancialYearRange()
+      const startYear = Math.min(...yearRange)
+      const endYear = Math.max(...yearRange)
+
+      // Fetch data for each year separately with pagination to get ALL records
+      const allYearlyAvgData: FaturasVendedorMonthly[] = []
+
+      for (let year = startYear; year <= endYear; year++) {
+        let allYearData: FaturasVendedorMonthly[] = []
+        let hasMoreData = true
+        let page = 0
+
+        // Paginate through all data for this year
+        while (hasMoreData) {
+          const startRange = page * 1000
+          const endRange = startRange + 999
+
+          const { data, error, count } = await supabase
+            .from('faturas_vendedor_monthly')
+            .select('*', { count: 'exact' })
+            .order('data_documento', { ascending: true })
+            .range(startRange, endRange)
+
+          if (error) {
+            throw new Error(
+              `Multi-year faturas_vendedor_monthly for ${year}: ${error.message}`,
+            )
+          }
+
+          // Filter data to only include our target year in MM/YYYY format
+          if (data && data.length > 0) {
+            const filteredData = data.filter((item: FaturasVendedorMonthly) => {
+              const dataParts = item.data_documento.split('/')
+              if (dataParts.length === 2) {
+                const itemYear = parseInt(dataParts[1])
+                return itemYear === year
+              }
+              return false
+            })
+
+            allYearData = [...allYearData, ...filteredData]
+
+            // If we got fewer than 1000 records, we've reached the end
+            if (data.length < 1000) {
+              hasMoreData = false
+            } else {
+              // Move to next page
+              page++
+            }
+          } else {
+            // No data returned, end pagination
+            hasMoreData = false
+          }
+        }
+
+        // Add this year's data to the overall collection
+        allYearlyAvgData.push(...allYearData)
+      }
+
+      setMultiYearAvgData(allYearlyAvgData)
+    } catch (err: any) {
+      console.error('Error fetching multi-year average data:', err)
+      // Don't set main error for this, just log it
+    }
+  }, [supabase])
+
   // Fetch financial data for current and next year
   const fetchFinancialData = useCallback(async () => {
     setLoading(true)
     setError(null)
 
     try {
-      // Dynamic year range: current year and next year
-      const currentYear = new Date().getFullYear()
-      const targetYears = [currentYear, currentYear + 1]
+      // Use standardized financial year range
+      const targetYears = getFinancialYearRange()
 
       // Helper function to generate MM/YYYY patterns for a given year
       const generateMonthYearPatterns = (year: number): string[] => {
@@ -316,6 +554,11 @@ export default function FinancialAnalyticsCharts({
           'listagem_notas_credito_monthly',
           targetYears,
         )
+      const vendasLiquidasData =
+        await fetchAllWithPagination<VendasLiquidasMonthly>(
+          'vendas_liquidas_monthly',
+          targetYears,
+        )
 
       setFinancialData({
         faturasVendedor: faturasData || [],
@@ -323,17 +566,27 @@ export default function FinancialAnalyticsCharts({
         listagemCompras: listagemData || [],
         neFornecedor: neData || [],
         listagemNotasCredito: notasCreditoData || [],
+        vendasLiquidas: vendasLiquidasData || [],
       })
 
       // Also fetch multi-year data
       await fetchMultiYearData()
+      await fetchMultiYearCountData()
+      await fetchMultiYearOrcamentosCountData()
+      await fetchMultiYearAvgData()
     } catch (err: any) {
       console.error('Error fetching financial data:', err)
       setError(err.message || 'Erro ao carregar dados financeiros')
     } finally {
       setLoading(false)
     }
-  }, [supabase, fetchMultiYearData])
+  }, [
+    supabase,
+    fetchMultiYearData,
+    fetchMultiYearCountData,
+    fetchMultiYearOrcamentosCountData,
+    fetchMultiYearAvgData,
+  ])
 
   // Refresh function that calls both local refresh and parent refresh
   const handleRefresh = useCallback(async () => {
@@ -354,20 +607,20 @@ export default function FinancialAnalyticsCharts({
     const currentYear = currentDate.getFullYear()
     const currentMonth = currentDate.getMonth() + 1 // JavaScript months are 0-indexed
 
-    // Debug: Log euro_total values by month for faturas_vendedor
-    const faturasMonthlyTotals = new Map<string, number>()
+    // Debug: Log euro_total values by month for vendas_liquidas (net sales)
+    const vendasLiquidasMonthlyTotals = new Map<string, number>()
 
-    financialData.faturasVendedor.forEach((fatura) => {
-      const dateParts = fatura.data_documento.split('/')
+    financialData.vendasLiquidas.forEach((venda) => {
+      const dateParts = venda.data_documento.split('/')
       const month = parseInt(dateParts[0])
       const year = parseInt(dateParts[1])
 
       if (year === currentYear) {
         const monthKey = `${year}-${String(month).padStart(2, '0')}`
-        const currentTotal = faturasMonthlyTotals.get(monthKey) || 0
-        faturasMonthlyTotals.set(
+        const currentTotal = vendasLiquidasMonthlyTotals.get(monthKey) || 0
+        vendasLiquidasMonthlyTotals.set(
           monthKey,
-          currentTotal + (fatura.euro_total || 0),
+          currentTotal + (venda.euro_total || 0),
         )
       }
     })
@@ -394,11 +647,13 @@ export default function FinancialAnalyticsCharts({
     const currentYearStart = new Date(currentYear, 0, 1) // January 1st of current year
 
     // Year-to-date data for second row of cards
-    const yearToDateFaturas = financialData.faturasVendedor.filter((f) => {
-      const dateParts = f.data_documento.split('/')
-      const year = parseInt(dateParts[1])
-      return year === currentYear
-    })
+    const yearToDateVendasLiquidas = financialData.vendasLiquidas.filter(
+      (v) => {
+        const dateParts = v.data_documento.split('/')
+        const year = parseInt(dateParts[1])
+        return year === currentYear
+      },
+    )
 
     const yearToDateCompras = financialData.listagemCompras.filter((c) => {
       const dateParts = c.data_documento.split('/')
@@ -407,20 +662,23 @@ export default function FinancialAnalyticsCharts({
     })
 
     // Group data by month
-    const faturasGroupedByMonth = new Map<string, FaturasVendedorMonthly[]>()
+    const vendasLiquidasGroupedByMonth = new Map<
+      string,
+      VendasLiquidasMonthly[]
+    >()
     const comprasGroupedByMonth = new Map<string, ListagemComprasMonthly[]>()
 
-    financialData.faturasVendedor.forEach((fatura) => {
-      const dateParts = fatura.data_documento.split('/')
+    financialData.vendasLiquidas.forEach((venda) => {
+      const dateParts = venda.data_documento.split('/')
       const month = parseInt(dateParts[0])
       const year = parseInt(dateParts[1])
       const monthKey = `${year}-${String(month).padStart(2, '0')}`
 
-      if (!faturasGroupedByMonth.has(monthKey)) {
-        faturasGroupedByMonth.set(monthKey, [])
+      if (!vendasLiquidasGroupedByMonth.has(monthKey)) {
+        vendasLiquidasGroupedByMonth.set(monthKey, [])
       }
 
-      faturasGroupedByMonth.get(monthKey)?.push(fatura)
+      vendasLiquidasGroupedByMonth.get(monthKey)?.push(venda)
     })
 
     financialData.listagemCompras.forEach((compra) => {
@@ -439,7 +697,7 @@ export default function FinancialAnalyticsCharts({
     // Get all month keys and sort them in descending order (most recent first)
     const allMonthKeys = Array.from(
       new Set([
-        ...Array.from(faturasGroupedByMonth.keys()),
+        ...Array.from(vendasLiquidasGroupedByMonth.keys()),
         ...Array.from(comprasGroupedByMonth.keys()),
       ]),
     )
@@ -449,23 +707,20 @@ export default function FinancialAnalyticsCharts({
     // Current month key
     const currentMonthKey = `${currentYear}-${String(currentMonth).padStart(2, '0')}`
 
-    // Use current month if it has data, otherwise use the most recent month with data
-    const monthToUse = allMonthKeys.includes(currentMonthKey)
-      ? currentMonthKey
-      : allMonthKeys.length > 0
-        ? allMonthKeys[0]
-        : currentMonthKey
+    // Always use current month - no fallback logic
+    const monthToUse = currentMonthKey
 
-    // Get the data for the selected month
-    const selectedMonthFaturas = faturasGroupedByMonth.get(monthToUse) || []
+    // Get the data for the current month (will be empty array if no data)
+    const selectedMonthVendasLiquidas =
+      vendasLiquidasGroupedByMonth.get(monthToUse) || []
     const selectedMonthCompras = comprasGroupedByMonth.get(monthToUse) || []
 
-    // Check if we're using fallback data (not current month)
-    const usingFallbackData = monthToUse !== currentMonthKey
+    // No fallback data - always using current month
+    const usingFallbackData = false
 
-    // Monthly metrics calculations
-    const totalVendasMes = selectedMonthFaturas.reduce(
-      (sum, f) => sum + (f.euro_total || 0),
+    // Monthly metrics calculations - using vendas_liquidas (net sales) directly
+    const totalVendasMes = selectedMonthVendasLiquidas.reduce(
+      (sum, v) => sum + (v.euro_total || 0),
       0,
     )
     const totalComprasMes = selectedMonthCompras.reduce(
@@ -480,10 +735,26 @@ export default function FinancialAnalyticsCharts({
         ? ((totalVendasMes - totalComprasMes) / totalVendasMes) * 100
         : 0
 
-    // Year-to-date metrics calculations
-    const totalVendasAno = yearToDateFaturas.reduce(
-      (sum, f) => sum + (f.euro_total || 0),
+    // Year-to-date metrics calculations - using vendas_liquidas (net sales) directly
+    const totalVendasAno = yearToDateVendasLiquidas.reduce(
+      (sum, v) => sum + (v.euro_total || 0),
       0,
+    )
+
+    // Debug logging for main page comparison
+    console.log('📊 Main Visão Geral Debug:')
+    console.log(
+      'Total vendas liquidas records:',
+      financialData.vendasLiquidas.length,
+    )
+    console.log(
+      'Year-to-date vendas liquidas (filtered):',
+      yearToDateVendasLiquidas.length,
+    )
+    console.log('Total Vendas Ano:', totalVendasAno)
+    console.log(
+      'Sample year-to-date records:',
+      yearToDateVendasLiquidas.slice(0, 3),
     )
     const totalComprasAno = yearToDateCompras.reduce(
       (sum, c) => sum + (c.euro_total || 0),
@@ -501,13 +772,13 @@ export default function FinancialAnalyticsCharts({
 
     // Create monthly evolution data for charts
     // Convert financial data to MonthYearData format and group by month
-    const faturasMonthYearData: MonthYearData[] =
-      financialData.faturasVendedor.map((fatura) => ({
-        data_documento: fatura.data_documento, // Already in MM/YYYY format
-        euro_total: fatura.euro_total,
-        id: fatura.id,
-        nome_vendedor: fatura.nome, // Updated to use nome field
-        nome_cliente: fatura.nome_cliente,
+    const vendasLiquidasMonthYearData: MonthYearData[] =
+      financialData.vendasLiquidas.map((venda) => ({
+        data_documento: venda.data_documento, // Already in MM/YYYY format
+        euro_total: venda.euro_total,
+        id: venda.id,
+        nome_vendedor: venda.nome, // Updated to use nome field
+        nome_cliente: venda.nome_cliente,
       }))
 
     const comprasMonthYearData: MonthYearData[] =
@@ -520,7 +791,7 @@ export default function FinancialAnalyticsCharts({
 
     // Group by month with euro_total aggregation - much simpler now!
     const chartFaturasGroupedByMonth = groupMonthYearData(
-      faturasMonthYearData,
+      vendasLiquidasMonthYearData,
       ['euro_total'],
     )
     const chartComprasGroupedByMonth = groupMonthYearData(
@@ -591,9 +862,6 @@ export default function FinancialAnalyticsCharts({
         totalComprasAno,
         margemBrutaAnoPercentage,
         margemBrutaAno,
-        // Add fallback indicator
-        usingFallbackData,
-        fallbackMonth: usingFallbackData ? monthToUse : null,
       },
       monthlyEvolution: monthlyDataArray,
       cashFlowData: monthlyDataArray,
@@ -611,8 +879,208 @@ export default function FinancialAnalyticsCharts({
     const allYears = new Set<string>()
     const allMonths = new Set<string>()
 
+    // Process each venda to aggregate by year and month - MM/YYYY format
+    multiYearData.forEach((venda) => {
+      const dateStr = venda.data_documento
+
+      // Parse MM/YYYY format
+      const dateParts = dateStr.split('/')
+      if (dateParts.length !== 2) {
+        console.warn('⚠️ Invalid MM/YYYY date format:', dateStr)
+        return
+      }
+
+      const monthNum = parseInt(dateParts[0])
+      const year = dateParts[1]
+
+      // Create month label using Portuguese abbreviations
+      const monthNames = [
+        'jan',
+        'fev',
+        'mar',
+        'abr',
+        'mai',
+        'jun',
+        'jul',
+        'ago',
+        'set',
+        'out',
+        'nov',
+        'dez',
+      ]
+      const monthLabel = monthNames[monthNum - 1]
+
+      if (!monthLabel) {
+        console.warn('⚠️ Invalid month number:', monthNum, 'in', dateStr)
+        return
+      }
+
+      allYears.add(year)
+      allMonths.add(monthLabel)
+
+      if (!yearlyData[year]) {
+        yearlyData[year] = {}
+      }
+      if (!yearlyData[year][monthLabel]) {
+        yearlyData[year][monthLabel] = 0
+      }
+      yearlyData[year][monthLabel] += venda.euro_total || 0
+    })
+
+    const availableYears = Array.from(allYears).sort()
+
+    // Create chart data: each entry = one month with all years as properties
+    // Using lowercase month names to match what's coming from the date formatter
+    const monthOrder = [
+      'jan',
+      'fev',
+      'mar',
+      'abr',
+      'mai',
+      'jun',
+      'jul',
+      'ago',
+      'set',
+      'out',
+      'nov',
+      'dez',
+    ]
+
+    const chartData = monthOrder
+      .filter((month) => allMonths.has(month)) // Only include months that have data
+      .map((month) => {
+        const monthData: { month: string; [year: string]: number | string } = {
+          month,
+        }
+
+        // Add data for each available year (0 if no data for that month/year)
+        availableYears.forEach((year) => {
+          monthData[year] = yearlyData[year][month] || 0
+        })
+
+        return monthData
+      })
+
+    return { data: chartData, availableYears }
+  }, [multiYearData])
+
+  // Process multi-year average data for yearly comparison average chart - SIDE BY SIDE BY MONTH
+  const yearlyComparisonAvgData = useMemo(() => {
+    if (!multiYearAvgData || multiYearAvgData.length === 0) {
+      return { data: [], availableYears: [] }
+    }
+
+    // Build data structure: year -> month -> {total, count} for averaging
+    const yearlyData: {
+      [year: string]: { [month: string]: { total: number; count: number } }
+    } = {}
+    const allYears = new Set<string>()
+    const allMonths = new Set<string>()
+
     // Process each fatura to aggregate by year and month - MM/YYYY format
-    multiYearData.forEach((fatura) => {
+    multiYearAvgData.forEach((fatura) => {
+      const dateStr = fatura.data_documento
+
+      // Parse MM/YYYY format
+      const dateParts = dateStr.split('/')
+      if (dateParts.length !== 2) {
+        console.warn('⚠️ Invalid MM/YYYY date format:', dateStr)
+        return
+      }
+
+      const monthNum = parseInt(dateParts[0])
+      const year = dateParts[1]
+
+      // Create month label using Portuguese abbreviations
+      const monthNames = [
+        'jan',
+        'fev',
+        'mar',
+        'abr',
+        'mai',
+        'jun',
+        'jul',
+        'ago',
+        'set',
+        'out',
+        'nov',
+        'dez',
+      ]
+      const monthLabel = monthNames[monthNum - 1]
+
+      if (!monthLabel) {
+        console.warn('⚠️ Invalid month number:', monthNum, 'in', dateStr)
+        return
+      }
+
+      allYears.add(year)
+      allMonths.add(monthLabel)
+
+      if (!yearlyData[year]) {
+        yearlyData[year] = {}
+      }
+      if (!yearlyData[year][monthLabel]) {
+        yearlyData[year][monthLabel] = { total: 0, count: 0 }
+      }
+      yearlyData[year][monthLabel].total += fatura.euro_total || 0
+      yearlyData[year][monthLabel].count += fatura.transaction_count || 1
+    })
+
+    const availableYears = Array.from(allYears).sort()
+
+    // Create chart data: each entry = one month with all years as properties
+    // Using lowercase month names to match what's coming from the date formatter
+    const monthOrder = [
+      'jan',
+      'fev',
+      'mar',
+      'abr',
+      'mai',
+      'jun',
+      'jul',
+      'ago',
+      'set',
+      'out',
+      'nov',
+      'dez',
+    ]
+
+    const chartData = monthOrder
+      .filter((month) => allMonths.has(month)) // Only include months that have data
+      .map((month) => {
+        const monthData: { month: string; [year: string]: number | string } = {
+          month,
+        }
+
+        // Add average data for each available year (0 if no data for that month/year)
+        availableYears.forEach((year) => {
+          const monthStats = yearlyData[year][month]
+          if (monthStats && monthStats.count > 0) {
+            monthData[year] = monthStats.total / monthStats.count // Calculate average
+          } else {
+            monthData[year] = 0
+          }
+        })
+
+        return monthData
+      })
+
+    return { data: chartData, availableYears }
+  }, [multiYearAvgData])
+
+  // Process multi-year count data for yearly comparison count chart - SIDE BY SIDE BY MONTH
+  const yearlyComparisonCountData = useMemo(() => {
+    if (!multiYearCountData || multiYearCountData.length === 0) {
+      return { data: [], availableYears: [] }
+    }
+
+    // Build data structure: year -> month -> count
+    const yearlyData: { [year: string]: { [month: string]: number } } = {}
+    const allYears = new Set<string>()
+    const allMonths = new Set<string>()
+
+    // Process each fatura to aggregate by year and month - MM/YYYY format
+    multiYearCountData.forEach((fatura) => {
       const dateStr = fatura.data_documento
 
       // Parse MM/YYYY format
@@ -656,7 +1124,7 @@ export default function FinancialAnalyticsCharts({
       if (!yearlyData[year][monthLabel]) {
         yearlyData[year][monthLabel] = 0
       }
-      yearlyData[year][monthLabel] += fatura.euro_total || 0
+      yearlyData[year][monthLabel] += fatura.transaction_count || 1 // Use transaction_count if available, otherwise 1
     })
 
     const availableYears = Array.from(allYears).sort()
@@ -694,7 +1162,106 @@ export default function FinancialAnalyticsCharts({
       })
 
     return { data: chartData, availableYears }
-  }, [multiYearData])
+  }, [multiYearCountData])
+
+  // Process multi-year orcamentos count data for yearly comparison orcamentos count chart - SIDE BY SIDE BY MONTH
+  const yearlyComparisonOrcamentosCountData = useMemo(() => {
+    if (
+      !multiYearOrcamentosCountData ||
+      multiYearOrcamentosCountData.length === 0
+    ) {
+      return { data: [], availableYears: [] }
+    }
+
+    // Build data structure: year -> month -> count
+    const yearlyData: { [year: string]: { [month: string]: number } } = {}
+    const allYears = new Set<string>()
+    const allMonths = new Set<string>()
+
+    // Process each orcamento to aggregate by year and month - MM/YYYY format
+    multiYearOrcamentosCountData.forEach((orcamento) => {
+      const dateStr = orcamento.data_documento
+
+      // Parse MM/YYYY format
+      const dateParts = dateStr.split('/')
+      if (dateParts.length !== 2) {
+        console.warn('⚠️ Invalid MM/YYYY date format:', dateStr)
+        return
+      }
+
+      const monthNum = parseInt(dateParts[0])
+      const year = dateParts[1]
+
+      // Create month label using Portuguese abbreviations
+      const monthNames = [
+        'jan',
+        'fev',
+        'mar',
+        'abr',
+        'mai',
+        'jun',
+        'jul',
+        'ago',
+        'set',
+        'out',
+        'nov',
+        'dez',
+      ]
+      const monthLabel = monthNames[monthNum - 1]
+
+      if (!monthLabel) {
+        console.warn('⚠️ Invalid month number:', monthNum, 'in', dateStr)
+        return
+      }
+
+      allYears.add(year)
+      allMonths.add(monthLabel)
+
+      if (!yearlyData[year]) {
+        yearlyData[year] = {}
+      }
+      if (!yearlyData[year][monthLabel]) {
+        yearlyData[year][monthLabel] = 0
+      }
+      yearlyData[year][monthLabel] += orcamento.transaction_count || 1 // Use transaction_count if available, otherwise 1
+    })
+
+    const availableYears = Array.from(allYears).sort()
+
+    // Create chart data: each entry = one month with all years as properties
+    // Using lowercase month names to match what's coming from the date formatter
+    const monthOrder = [
+      'jan',
+      'fev',
+      'mar',
+      'abr',
+      'mai',
+      'jun',
+      'jul',
+      'ago',
+      'set',
+      'out',
+      'nov',
+      'dez',
+    ]
+
+    const chartData = monthOrder
+      .filter((month) => allMonths.has(month)) // Only include months that have data
+      .map((month) => {
+        const monthData: { month: string; [year: string]: number | string } = {
+          month,
+        }
+
+        // Add data for each available year (0 if no data for that month/year)
+        availableYears.forEach((year) => {
+          monthData[year] = yearlyData[year][month] || 0
+        })
+
+        return monthData
+      })
+
+    return { data: chartData, availableYears }
+  }, [multiYearOrcamentosCountData])
 
   // Process data for sales performance
 
@@ -771,11 +1338,11 @@ export default function FinancialAnalyticsCharts({
     }
 
     // Filter data for last 12 months and convert to MonthYearData format
-    const recentVendas: MonthYearData[] = financialData.faturasVendedor
-      .filter((f) => last12Months.includes(f.data_documento))
-      .map((f) => ({
-        data_documento: f.data_documento,
-        euro_total: f.euro_total,
+    const recentVendas: MonthYearData[] = financialData.vendasLiquidas
+      .filter((v) => last12Months.includes(v.data_documento))
+      .map((v) => ({
+        data_documento: v.data_documento,
+        euro_total: v.euro_total,
       }))
 
     const recentNe: MonthYearData[] = financialData.neFornecedor
@@ -864,19 +1431,19 @@ export default function FinancialAnalyticsCharts({
           euro_total: o.euro_total,
         }))
 
-    // Note: Since vendas_vendedor no longer exists, we'll use faturasVendedor for sales data
-    const currentYearVendas: MonthYearData[] = financialData.faturasVendedor
+    // Use vendas_liquidas for net sales data (includes credit notes)
+    const currentYearVendas: MonthYearData[] = financialData.vendasLiquidas
       .filter((v) => currentYearMonths.includes(v.data_documento))
       .map((v) => ({
         data_documento: v.data_documento,
         euro_total: v.euro_total,
       }))
 
-    const currentYearFaturas: MonthYearData[] = financialData.faturasVendedor
-      .filter((f) => currentYearMonths.includes(f.data_documento))
-      .map((f) => ({
-        data_documento: f.data_documento,
-        euro_total: f.euro_total,
+    const currentYearFaturas: MonthYearData[] = financialData.vendasLiquidas
+      .filter((v) => currentYearMonths.includes(v.data_documento))
+      .map((v) => ({
+        data_documento: v.data_documento,
+        euro_total: v.euro_total,
       }))
 
     // Group by month - no complex aggregation needed since data is already monthly
@@ -889,7 +1456,7 @@ export default function FinancialAnalyticsCharts({
     ])
 
     // Create pipeline data map
-    // Note: Since vendas_vendedor no longer exists, vendas and faturas will show the same data from faturas_vendedor
+    // Note: Both vendas and faturas use vendas_liquidas data (net sales including credit notes)
     const pipelineData = new Map<
       string,
       { month: string; orcamentos: number; vendas: number; faturas: number }
@@ -944,9 +1511,9 @@ export default function FinancialAnalyticsCharts({
     const previousMonthKey = `${previousMonthMM}/${previousMonthYYYY}`
 
     // Current month data - direct filtering by MM/YYYY key
-    const currentMonthVendas = financialData.faturasVendedor
-      .filter((f) => f.data_documento === currentMonthKey)
-      .reduce((sum, f) => sum + (f.euro_total || 0), 0)
+    const currentMonthVendas = financialData.vendasLiquidas
+      .filter((v) => v.data_documento === currentMonthKey)
+      .reduce((sum, v) => sum + (v.euro_total || 0), 0)
 
     const currentMonthCompras = financialData.listagemCompras
       .filter((c) => c.data_documento === currentMonthKey)
@@ -957,9 +1524,9 @@ export default function FinancialAnalyticsCharts({
       .reduce((sum, n) => sum + (n.euro_total || 0), 0)
 
     // Previous month data - direct filtering by MM/YYYY key
-    const previousMonthVendas = financialData.faturasVendedor
-      .filter((f) => f.data_documento === previousMonthKey)
-      .reduce((sum, f) => sum + (f.euro_total || 0), 0)
+    const previousMonthVendas = financialData.vendasLiquidas
+      .filter((v) => v.data_documento === previousMonthKey)
+      .reduce((sum, v) => sum + (v.euro_total || 0), 0)
 
     const previousMonthCompras = financialData.listagemCompras
       .filter((c) => c.data_documento === previousMonthKey)
@@ -1069,7 +1636,7 @@ export default function FinancialAnalyticsCharts({
         <TabsList className="grid w-full grid-cols-4 rounded-none border-2">
           <TabsTrigger value="overview">Visão Geral</TabsTrigger>
           <TabsTrigger value="vendas">Performance de Vendas</TabsTrigger>
-          <TabsTrigger value="custos">Custos Operacionais</TabsTrigger>
+          <TabsTrigger value="custos">Custos de Produção</TabsTrigger>
           <TabsTrigger value="analise">Análise Temporal</TabsTrigger>
         </TabsList>
 
@@ -1082,7 +1649,7 @@ export default function FinancialAnalyticsCharts({
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-muted-foreground text-sm font-medium">
-                      Total Vendas do Mês
+                      Total Vendas do Mês (menos NC)
                     </h3>
                     <p className="text-2xl font-bold text-green-600">
                       {chartData.overviewMetrics.totalVendasMes.toLocaleString(
@@ -1166,7 +1733,7 @@ export default function FinancialAnalyticsCharts({
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-muted-foreground text-sm font-medium">
-                      Total Vendas do Ano
+                      Total Vendas do Ano (menos NC)
                     </h3>
                     <p className="text-2xl font-bold text-green-600">
                       {chartData.overviewMetrics.totalVendasAno.toLocaleString(
@@ -1252,7 +1819,7 @@ export default function FinancialAnalyticsCharts({
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h3 className="text-lg leading-tight font-semibold">
-                    Evolução Mensal - Vendas vs Compras
+                    Evolução Mensal - Vendas (menos NC) vs Compras
                   </h3>
                   <p className="text-muted-foreground text-sm leading-tight">
                     {new Date().getFullYear()}
@@ -1319,8 +1886,8 @@ export default function FinancialAnalyticsCharts({
                     Cash Flow Mensal
                   </h3>
                   <p className="text-muted-foreground text-sm leading-tight">
-                    Diferença entre vendas e compras (verde: positivo, vermelho:
-                    negativo)
+                    Diferença entre vendas (menos NC) e compras (verde:
+                    positivo, vermelho: negativo)
                   </p>
                 </div>
                 <Button
@@ -1382,7 +1949,7 @@ export default function FinancialAnalyticsCharts({
                     Comparação Anual de Vendas
                   </h3>
                   <p className="text-muted-foreground text-sm leading-tight">
-                    Valor Vendas por mês
+                    Valor Vendas por mês (menos NC)
                   </p>
                   <div className="text-muted-foreground mt-1 text-xs">
                     Anos disponíveis:{' '}
@@ -1449,6 +2016,235 @@ export default function FinancialAnalyticsCharts({
                 </BarChart>
               </ResponsiveContainer>
             </Card>
+
+            {/* Annual Average Comparison Chart */}
+            <Card className="rounded-none border-2 p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg leading-tight font-semibold">
+                    Comparação Anual Médias de Vendas
+                  </h3>
+                  <p className="text-muted-foreground text-sm leading-tight">
+                    Vendas Médias por mês
+                  </p>
+                  <div className="text-muted-foreground mt-1 text-xs">
+                    Anos disponíveis:{' '}
+                    {yearlyComparisonAvgData.availableYears.join(', ')} | Dados:{' '}
+                    {yearlyComparisonAvgData.data.length} meses
+                  </div>
+                </div>
+                <Button
+                  onClick={handleRefresh}
+                  variant="outline"
+                  size="icon"
+                  className="h-10"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+              </div>
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart
+                  data={yearlyComparisonAvgData.data}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <YAxis
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => `${(value / 1000).toFixed(0)}k€`}
+                  />
+                  <Tooltip
+                    formatter={(value: number, name: string) => [
+                      value.toLocaleString('pt-PT', {
+                        style: 'currency',
+                        currency: 'EUR',
+                      }),
+                      `Média Vendas ${name}`,
+                    ]}
+                    labelStyle={{ color: '#333' }}
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #ccc',
+                      borderRadius: '0px',
+                    }}
+                  />
+                  {yearlyComparisonAvgData.availableYears.map((year, index) => {
+                    // Cycle through different colors for each year to create side-by-side effect
+                    const colors = [
+                      '#22c55e', // green-500 for averages
+                      '#3b82f6', // blue-500
+                      '#94a3b8',
+                      '#f97316',
+                      '#10b981',
+                      '#8b5cf6',
+                    ]
+                    const fillColor = colors[index % colors.length]
+
+                    return (
+                      <Bar
+                        key={year}
+                        dataKey={year}
+                        fill={fillColor}
+                        name={year}
+                      />
+                    )
+                  })}
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+
+            {/* Annual Count Comparison Chart */}
+            <Card className="rounded-none border-2 p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg leading-tight font-semibold">
+                    Comparação Anual de Número Vendas
+                  </h3>
+                  <p className="text-muted-foreground text-sm leading-tight">
+                    Número Vendas por mês
+                  </p>
+                  <div className="text-muted-foreground mt-1 text-xs">
+                    Anos disponíveis:{' '}
+                    {yearlyComparisonCountData.availableYears.join(', ')} |
+                    Dados: {yearlyComparisonCountData.data.length} meses
+                  </div>
+                </div>
+                <Button
+                  onClick={handleRefresh}
+                  variant="outline"
+                  size="icon"
+                  className="h-10"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+              </div>
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart
+                  data={yearlyComparisonCountData.data}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <YAxis
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => `${value}`}
+                  />
+                  <Tooltip
+                    formatter={(value: number, name: string) => [
+                      value.toLocaleString('pt-PT'),
+                      `Vendas ${name}`,
+                    ]}
+                    labelStyle={{ color: '#333' }}
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #ccc',
+                      borderRadius: '0px',
+                    }}
+                  />
+                  {yearlyComparisonCountData.availableYears.map(
+                    (year, index) => {
+                      // Cycle through different colors for each year to create side-by-side effect
+                      const colors = [
+                        CHART_COLORS.vendas,
+                        CHART_COLORS.orcamentos,
+                        '#94a3b8',
+                        '#f97316',
+                        '#10b981',
+                        '#8b5cf6',
+                      ]
+                      const fillColor = colors[index % colors.length]
+
+                      return (
+                        <Bar
+                          key={year}
+                          dataKey={year}
+                          fill={fillColor}
+                          name={year}
+                        />
+                      )
+                    },
+                  )}
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+
+            {/* Annual Orcamentos Count Comparison Chart */}
+            <Card className="rounded-none border-2 p-4">
+              <div className="mb-4 flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg leading-tight font-semibold">
+                    Comparação Anual de Número Orçamentos
+                  </h3>
+                  <p className="text-muted-foreground text-sm leading-tight">
+                    Número Orçamentos por mês
+                  </p>
+                  <div className="text-muted-foreground mt-1 text-xs">
+                    Anos disponíveis:{' '}
+                    {yearlyComparisonOrcamentosCountData.availableYears.join(
+                      ', ',
+                    )}{' '}
+                    | Dados: {yearlyComparisonOrcamentosCountData.data.length}{' '}
+                    meses
+                  </div>
+                </div>
+                <Button
+                  onClick={handleRefresh}
+                  variant="outline"
+                  size="icon"
+                  className="h-10"
+                >
+                  <RotateCw className="h-4 w-4" />
+                </Button>
+              </div>
+              <ResponsiveContainer width="100%" height={400}>
+                <BarChart
+                  data={yearlyComparisonOrcamentosCountData.data}
+                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <YAxis
+                    tick={{ fontSize: 12 }}
+                    tickFormatter={(value) => `${value}`}
+                  />
+                  <Tooltip
+                    formatter={(value: number, name: string) => [
+                      value.toLocaleString('pt-PT'),
+                      `Orçamentos ${name}`,
+                    ]}
+                    labelStyle={{ color: '#333' }}
+                    contentStyle={{
+                      backgroundColor: '#fff',
+                      border: '1px solid #ccc',
+                      borderRadius: '0px',
+                    }}
+                  />
+                  {yearlyComparisonOrcamentosCountData.availableYears.map(
+                    (year, index) => {
+                      // Cycle through different colors for each year to create side-by-side effect
+                      const colors = [
+                        CHART_COLORS.orcamentos,
+                        CHART_COLORS.vendas,
+                        '#94a3b8',
+                        '#f97316',
+                        '#10b981',
+                        '#8b5cf6',
+                      ]
+                      const fillColor = colors[index % colors.length]
+
+                      return (
+                        <Bar
+                          key={year}
+                          dataKey={year}
+                          fill={fillColor}
+                          name={year}
+                        />
+                      )
+                    },
+                  )}
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
           </div>
         </TabsContent>
 
@@ -1457,6 +2253,498 @@ export default function FinancialAnalyticsCharts({
         </TabsContent>
 
         <TabsContent value="custos" className="space-y-4">
+          {/* Overview cards for operational costs */}
+          <div className="space-y-4">
+            {/* Monthly data cards - first row */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card className="rounded-none border-2 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-muted-foreground text-sm font-medium">
+                      Total Vendas do Mês (menos NC)
+                    </h3>
+                    <p className="text-2xl font-bold text-green-600">
+                      {chartData.overviewMetrics.totalVendasMes.toLocaleString(
+                        'pt-PT',
+                        {
+                          style: 'currency',
+                          currency: 'EUR',
+                        },
+                      )}
+                    </p>
+                  </div>
+                  <TrendingUp className="h-8 w-8 text-green-600" />
+                </div>
+              </Card>
+
+              <Card className="rounded-none border-2 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-muted-foreground text-sm font-medium">
+                      Custos Operacionais Mês
+                    </h3>
+                    <p className="text-2xl font-bold text-orange-600">
+                      {(() => {
+                        const currentDate = new Date()
+                        const currentYear = currentDate.getFullYear()
+                        const currentMonth = currentDate.getMonth() + 1
+                        const currentMonthKey = `${String(currentMonth).padStart(2, '0')}/${currentYear}`
+
+                        const totalCustosOperacionaisMes =
+                          financialData.neFornecedor
+                            .filter(
+                              (ne) => ne.data_documento === currentMonthKey,
+                            )
+                            .reduce((sum, ne) => sum + (ne.euro_total || 0), 0)
+
+                        return totalCustosOperacionaisMes.toLocaleString(
+                          'pt-PT',
+                          {
+                            style: 'currency',
+                            currency: 'EUR',
+                          },
+                        )
+                      })()}
+                    </p>
+                  </div>
+                  <TrendingDown className="h-8 w-8 text-orange-600" />
+                </div>
+              </Card>
+
+              <Card className="rounded-none border-2 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-muted-foreground text-sm font-medium">
+                      Margem Bruta (%)
+                    </h3>
+                    <p
+                      className={`text-2xl font-bold ${(() => {
+                        const currentDate = new Date()
+                        const currentYear = currentDate.getFullYear()
+                        const currentMonth = currentDate.getMonth() + 1
+                        const currentMonthKey = `${String(currentMonth).padStart(2, '0')}/${currentYear}`
+
+                        const totalVendasMes =
+                          chartData.overviewMetrics.totalVendasMes
+                        const totalCustosOperacionaisMes =
+                          financialData.neFornecedor
+                            .filter(
+                              (ne) => ne.data_documento === currentMonthKey,
+                            )
+                            .reduce((sum, ne) => sum + (ne.euro_total || 0), 0)
+
+                        const margemBrutaPercentage =
+                          totalVendasMes > 0
+                            ? ((totalVendasMes - totalCustosOperacionaisMes) /
+                                totalVendasMes) *
+                              100
+                            : 0
+
+                        return margemBrutaPercentage >= 0
+                          ? 'text-green-600'
+                          : 'text-red-600'
+                      })()}`}
+                    >
+                      {(() => {
+                        const currentDate = new Date()
+                        const currentYear = currentDate.getFullYear()
+                        const currentMonth = currentDate.getMonth() + 1
+                        const currentMonthKey = `${String(currentMonth).padStart(2, '0')}/${currentYear}`
+
+                        const totalVendasMes =
+                          chartData.overviewMetrics.totalVendasMes
+                        const totalCustosOperacionaisMes =
+                          financialData.neFornecedor
+                            .filter(
+                              (ne) => ne.data_documento === currentMonthKey,
+                            )
+                            .reduce((sum, ne) => sum + (ne.euro_total || 0), 0)
+
+                        const margemBrutaPercentage =
+                          totalVendasMes > 0
+                            ? ((totalVendasMes - totalCustosOperacionaisMes) /
+                                totalVendasMes) *
+                              100
+                            : 0
+
+                        return margemBrutaPercentage.toFixed(1)
+                      })()}
+                      %
+                    </p>
+                  </div>
+                  <Euro className="h-8 w-8 text-purple-600" />
+                </div>
+              </Card>
+
+              <Card className="rounded-none border-2 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-muted-foreground text-sm font-medium">
+                      Margem Bruta
+                    </h3>
+                    <p
+                      className={`text-2xl font-bold ${(() => {
+                        const currentDate = new Date()
+                        const currentYear = currentDate.getFullYear()
+                        const currentMonth = currentDate.getMonth() + 1
+                        const currentMonthKey = `${String(currentMonth).padStart(2, '0')}/${currentYear}`
+
+                        const totalVendasMes =
+                          chartData.overviewMetrics.totalVendasMes
+                        const totalCustosOperacionaisMes =
+                          financialData.neFornecedor
+                            .filter(
+                              (ne) => ne.data_documento === currentMonthKey,
+                            )
+                            .reduce((sum, ne) => sum + (ne.euro_total || 0), 0)
+
+                        const margemBrutaMes =
+                          totalVendasMes - totalCustosOperacionaisMes
+
+                        return margemBrutaMes >= 0
+                          ? 'text-green-600'
+                          : 'text-red-600'
+                      })()}`}
+                    >
+                      {(() => {
+                        const currentDate = new Date()
+                        const currentYear = currentDate.getFullYear()
+                        const currentMonth = currentDate.getMonth() + 1
+                        const currentMonthKey = `${String(currentMonth).padStart(2, '0')}/${currentYear}`
+
+                        const totalVendasMes =
+                          chartData.overviewMetrics.totalVendasMes
+                        const totalCustosOperacionaisMes =
+                          financialData.neFornecedor
+                            .filter(
+                              (ne) => ne.data_documento === currentMonthKey,
+                            )
+                            .reduce((sum, ne) => sum + (ne.euro_total || 0), 0)
+
+                        const margemBrutaMes =
+                          totalVendasMes - totalCustosOperacionaisMes
+
+                        return margemBrutaMes.toLocaleString('pt-PT', {
+                          style: 'currency',
+                          currency: 'EUR',
+                        })
+                      })()}
+                    </p>
+                  </div>
+                  <Euro className="h-8 w-8 text-blue-600" />
+                </div>
+              </Card>
+            </div>
+
+            {/* Annual data cards - second row */}
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card className="rounded-none border-2 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-muted-foreground text-sm font-medium">
+                      Total Vendas do Ano (menos NC)
+                    </h3>
+                    <p className="text-2xl font-bold text-green-600">
+                      {chartData.overviewMetrics.totalVendasAno.toLocaleString(
+                        'pt-PT',
+                        {
+                          style: 'currency',
+                          currency: 'EUR',
+                        },
+                      )}
+                    </p>
+                  </div>
+                  <TrendingUp className="h-8 w-8 text-green-600" />
+                </div>
+              </Card>
+
+              <Card className="rounded-none border-2 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-muted-foreground text-sm font-medium">
+                      Custos Operacionais Ano
+                    </h3>
+                    <p className="text-2xl font-bold text-orange-600">
+                      {(() => {
+                        const currentYear = new Date().getFullYear()
+
+                        const totalCustosOperacionaisAno =
+                          financialData.neFornecedor
+                            .filter((ne) => {
+                              const dateParts = ne.data_documento.split('/')
+                              const year = parseInt(dateParts[1])
+                              return year === currentYear
+                            })
+                            .reduce((sum, ne) => sum + (ne.euro_total || 0), 0)
+
+                        return totalCustosOperacionaisAno.toLocaleString(
+                          'pt-PT',
+                          {
+                            style: 'currency',
+                            currency: 'EUR',
+                          },
+                        )
+                      })()}
+                    </p>
+                  </div>
+                  <TrendingDown className="h-8 w-8 text-orange-600" />
+                </div>
+              </Card>
+
+              <Card className="rounded-none border-2 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-muted-foreground text-sm font-medium">
+                      Margem Bruta Anual (%)
+                    </h3>
+                    <p
+                      className={`text-2xl font-bold ${(() => {
+                        const currentYear = new Date().getFullYear()
+
+                        const totalVendasAno =
+                          chartData.overviewMetrics.totalVendasAno
+                        const totalCustosOperacionaisAno =
+                          financialData.neFornecedor
+                            .filter((ne) => {
+                              const dateParts = ne.data_documento.split('/')
+                              const year = parseInt(dateParts[1])
+                              return year === currentYear
+                            })
+                            .reduce((sum, ne) => sum + (ne.euro_total || 0), 0)
+
+                        const margemBrutaAnoPercentage =
+                          totalVendasAno > 0
+                            ? ((totalVendasAno - totalCustosOperacionaisAno) /
+                                totalVendasAno) *
+                              100
+                            : 0
+
+                        return margemBrutaAnoPercentage >= 0
+                          ? 'text-green-600'
+                          : 'text-red-600'
+                      })()}`}
+                    >
+                      {(() => {
+                        const currentYear = new Date().getFullYear()
+
+                        const totalVendasAno =
+                          chartData.overviewMetrics.totalVendasAno
+                        const totalCustosOperacionaisAno =
+                          financialData.neFornecedor
+                            .filter((ne) => {
+                              const dateParts = ne.data_documento.split('/')
+                              const year = parseInt(dateParts[1])
+                              return year === currentYear
+                            })
+                            .reduce((sum, ne) => sum + (ne.euro_total || 0), 0)
+
+                        const margemBrutaAnoPercentage =
+                          totalVendasAno > 0
+                            ? ((totalVendasAno - totalCustosOperacionaisAno) /
+                                totalVendasAno) *
+                              100
+                            : 0
+
+                        return margemBrutaAnoPercentage.toFixed(1)
+                      })()}
+                      %
+                    </p>
+                  </div>
+                  <Euro className="h-8 w-8 text-purple-600" />
+                </div>
+              </Card>
+
+              <Card className="rounded-none border-2 p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-muted-foreground text-sm font-medium">
+                      Margem Bruta Anual
+                    </h3>
+                    <p
+                      className={`text-2xl font-bold ${(() => {
+                        const currentYear = new Date().getFullYear()
+
+                        const totalVendasAno =
+                          chartData.overviewMetrics.totalVendasAno
+                        const totalCustosOperacionaisAno =
+                          financialData.neFornecedor
+                            .filter((ne) => {
+                              const dateParts = ne.data_documento.split('/')
+                              const year = parseInt(dateParts[1])
+                              return year === currentYear
+                            })
+                            .reduce((sum, ne) => sum + (ne.euro_total || 0), 0)
+
+                        const margemBrutaAno =
+                          totalVendasAno - totalCustosOperacionaisAno
+
+                        return margemBrutaAno >= 0
+                          ? 'text-green-600'
+                          : 'text-red-600'
+                      })()}`}
+                    >
+                      {(() => {
+                        const currentYear = new Date().getFullYear()
+
+                        const totalVendasAno =
+                          chartData.overviewMetrics.totalVendasAno
+                        const totalCustosOperacionaisAno =
+                          financialData.neFornecedor
+                            .filter((ne) => {
+                              const dateParts = ne.data_documento.split('/')
+                              const year = parseInt(dateParts[1])
+                              return year === currentYear
+                            })
+                            .reduce((sum, ne) => sum + (ne.euro_total || 0), 0)
+
+                        const margemBrutaAno =
+                          totalVendasAno - totalCustosOperacionaisAno
+
+                        return margemBrutaAno.toLocaleString('pt-PT', {
+                          style: 'currency',
+                          currency: 'EUR',
+                        })
+                      })()}
+                    </p>
+                  </div>
+                  <Euro className="h-8 w-8 text-blue-600" />
+                </div>
+              </Card>
+            </div>
+          </div>
+
+          {/* Monthly Evolution Chart for Production Costs */}
+          <Card className="rounded-none border-2 p-4">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg leading-tight font-semibold">
+                  Evolução Mensal - Vendas vs Custos de Produção
+                </h3>
+                <p className="text-muted-foreground text-sm leading-tight">
+                  {new Date().getFullYear()}
+                </p>
+              </div>
+              <Button
+                onClick={handleRefresh}
+                variant="outline"
+                size="icon"
+                className="h-10"
+              >
+                <RotateCw className="h-4 w-4" />
+              </Button>
+            </div>
+            <ResponsiveContainer width="100%" height={400}>
+              <LineChart
+                data={(() => {
+                  // Create production costs evolution data using ne_fornecedor_monthly
+                  const custosProducaoMonthYearData: MonthYearData[] =
+                    financialData.neFornecedor.map((ne) => ({
+                      data_documento: ne.data_documento, // Already in MM/YYYY format
+                      euro_total: ne.euro_total,
+                      id: ne.id,
+                    }))
+
+                  // Group by month with euro_total aggregation
+                  const chartCustosProducaoGroupedByMonth = groupMonthYearData(
+                    custosProducaoMonthYearData,
+                    ['euro_total'],
+                  )
+
+                  // Create combined monthly data using existing vendas data and new production costs data
+                  const monthlyDataMap = new Map<
+                    string,
+                    {
+                      monthKey: string
+                      month: string
+                      vendas: number
+                      compras: number
+                      cashFlow: number
+                    }
+                  >()
+
+                  // Add vendas data (reuse from existing chartData)
+                  chartData.monthlyEvolution.forEach((month) => {
+                    monthlyDataMap.set(month.monthKey, {
+                      monthKey: month.monthKey,
+                      month: month.month,
+                      vendas: month.vendas,
+                      compras: 0, // Will be filled from production costs
+                      cashFlow: 0,
+                    })
+                  })
+
+                  // Add production costs data
+                  chartCustosProducaoGroupedByMonth.forEach((group) => {
+                    const monthLabel = formatSimplePeriodDisplay(
+                      group.period,
+                      'month',
+                    )
+                    const existing = monthlyDataMap.get(group.period)
+                    if (existing) {
+                      existing.compras = group.euro_total || 0
+                      existing.cashFlow = existing.vendas - existing.compras
+                    } else {
+                      monthlyDataMap.set(group.period, {
+                        monthKey: group.period,
+                        month: monthLabel,
+                        vendas: 0,
+                        compras: group.euro_total || 0,
+                        cashFlow: -(group.euro_total || 0),
+                      })
+                    }
+                  })
+
+                  // Finalize cash flow calculations
+                  monthlyDataMap.forEach((month) => {
+                    month.cashFlow = month.vendas - month.compras
+                  })
+
+                  // Convert to array and sort chronologically
+                  return Array.from(monthlyDataMap.values()).sort((a, b) =>
+                    a.monthKey.localeCompare(b.monthKey),
+                  )
+                })()}
+                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) => `${(value / 1000).toFixed(0)}k€`}
+                />
+                <Tooltip
+                  formatter={(value: number, name: string) => [
+                    value.toLocaleString('pt-PT', {
+                      style: 'currency',
+                      currency: 'EUR',
+                    }),
+                    name === 'vendas' ? 'Vendas' : 'Custos de Produção',
+                  ]}
+                  labelStyle={{ color: '#333' }}
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: '1px solid #ccc',
+                    borderRadius: '0px',
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="vendas"
+                  stroke={CHART_COLORS.vendas}
+                  strokeWidth={3}
+                  dot={{ fill: CHART_COLORS.vendas, strokeWidth: 2, r: 4 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="compras"
+                  stroke="#f97316"
+                  strokeWidth={3}
+                  dot={{ fill: '#f97316', strokeWidth: 2, r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </Card>
+
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             {/* Distribuição de Compras - Pie Chart */}
             <Card className="rounded-none border-2 p-4">

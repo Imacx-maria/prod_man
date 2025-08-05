@@ -20,6 +20,16 @@ export const formatDateToYYYYMMDD = (
 }
 
 /**
+ * Get standardized year range for financial data
+ * Returns current year, previous year, and 2 years ago
+ * Example: If current year is 2025, returns [2025, 2024, 2023]
+ */
+export const getFinancialYearRange = (): number[] => {
+  const currentYear = new Date().getFullYear()
+  return [currentYear, currentYear - 1, currentYear - 2]
+}
+
+/**
  * Simplified utilities for working with MM/YYYY format data
  * Since data is already aggregated by month, no complex aggregation needed
  */
