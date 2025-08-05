@@ -127,6 +127,7 @@ type DesignerItem = {
         folha_obra_id: string
         descricao: string
         codigo: string | null
+        quantidade: number | null
         complexidade_id?: string | null
         complexidade?: string | null
       }
@@ -135,6 +136,7 @@ type DesignerItem = {
         folha_obra_id: string
         descricao: string
         codigo: string | null
+        quantidade: number | null
         complexidade_id?: string | null
         complexidade?: string | null
       }[]
@@ -146,6 +148,7 @@ interface Item {
   folha_obra_id: string
   descricao: string
   codigo: string | null
+  quantidade: number | null
   complexidade_id?: string | null
   complexidade?: string | null
   em_curso: boolean | null
@@ -407,6 +410,7 @@ const fetchAllItems = async (
           folha_obra_id,
           descricao,
           codigo,
+          quantidade,
           complexidade_id,
           complexidade
         )
@@ -437,6 +441,7 @@ const fetchAllItems = async (
             folha_obra_id: base.folha_obra_id,
             descricao: base.descricao ?? '',
             codigo: base.codigo ?? null,
+            quantidade: base.quantidade ?? null,
             complexidade_id: base.complexidade_id ?? null,
             complexidade: base.complexidade ?? null,
             em_curso: d.em_curso,
@@ -870,6 +875,7 @@ export default function DesignerFlow() {
             folha_obra_id,
             descricao,
             codigo,
+            quantidade,
             complexidade_id,
             complexidade
           )
@@ -900,6 +906,7 @@ export default function DesignerFlow() {
               folha_obra_id: base.folha_obra_id,
               descricao: base.descricao ?? '',
               codigo: base.codigo ?? null,
+              quantidade: base.quantidade ?? null,
               complexidade_id: base.complexidade_id ?? null,
               complexidade: base.complexidade ?? null,
               em_curso: d.em_curso,
@@ -938,12 +945,49 @@ export default function DesignerFlow() {
     const sort = drawerSort[jobId]
     if (!sort) return items
     const { column, direction } = sort
+
     return [...items].sort((a, b) => {
-      const aValue = !!a[column]
-      const bValue = !!b[column]
-      if (aValue === bValue) return 0
-      if (direction === 'asc') return aValue ? -1 : 1
-      return aValue ? 1 : -1
+      // Handle boolean columns (existing logic)
+      if (
+        column === 'em_curso' ||
+        column === 'duvidas' ||
+        column === 'maquete_enviada' ||
+        column === 'paginacao'
+      ) {
+        const aValue = !!a[column]
+        const bValue = !!b[column]
+        if (aValue === bValue) return 0
+        if (direction === 'asc') return aValue ? -1 : 1
+        return aValue ? 1 : -1
+      }
+
+      // Handle string columns
+      if (
+        column === 'descricao' ||
+        column === 'codigo' ||
+        column === 'complexidade'
+      ) {
+        const aValue = (a[column] || '').toString().toLowerCase()
+        const bValue = (b[column] || '').toString().toLowerCase()
+        if (direction === 'asc') {
+          return aValue.localeCompare(bValue)
+        } else {
+          return bValue.localeCompare(aValue)
+        }
+      }
+
+      // Handle numeric columns
+      if (column === 'quantidade') {
+        const aValue = a[column] || 0
+        const bValue = b[column] || 0
+        if (direction === 'asc') {
+          return aValue - bValue
+        } else {
+          return bValue - aValue
+        }
+      }
+
+      return 0
     })
   }
 
@@ -1169,57 +1213,6 @@ export default function DesignerFlow() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Atualizar</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="default"
-                    size="icon"
-                    className="h-10 w-10 rounded-none"
-                    onClick={async () => {
-                      const supabase = createBrowserClient()
-                      // Get next numero_fo (max + 1)
-                      const { data: maxData } = await supabase
-                        .from('folhas_obras')
-                        .select('numero_fo')
-                        .order('numero_fo', { ascending: false })
-                        .limit(1)
-                      const nextNumeroFo =
-                        maxData && maxData[0]?.numero_fo
-                          ? maxData[0].numero_fo + 1
-                          : 1
-                      const newJob = {
-                        numero_fo: nextNumeroFo,
-                        profile_id: null,
-                        nome_campanha: '',
-                        prioridade: false,
-                        data_in: new Date().toISOString(),
-                        data_saida: null,
-                        notas: '',
-                      }
-                      const { data, error } = await supabase
-                        .from('folhas_obras')
-                        .insert([newJob])
-                        .select('*')
-                      if (!error && data && data[0]) {
-                        // Reset all filters so the new job is visible
-                        setSelectedDesigner('all')
-                        setPoFilter('')
-                        setCampaignFilter('')
-                        setShowFechados(false)
-                        // Directly add the new job to state
-                        setJobs((prev) => [...prev, data[0]])
-                        // Optionally refresh items if needed
-                        setOpenDrawerId(data[0].id)
-                      } else {
-                        // Optionally handle error
-                      }
-                    }}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Novo Trabalho</TooltipContent>
               </Tooltip>
             </TooltipProvider>
           </div>
@@ -1906,71 +1899,6 @@ export default function DesignerFlow() {
               <div className="flex h-full w-full flex-col px-4 md:px-8">
                 <DrawerHeader className="flex-none">
                   <div className="mb-2 flex items-center justify-end gap-2">
-                    <Button
-                      variant="outline"
-                      className="h-10 rounded-none"
-                      onClick={async () => {
-                        if (
-                          !(
-                            job.numero_fo &&
-                            job.nome_campanha &&
-                            String(job.nome_campanha).trim().length > 0
-                          )
-                        )
-                          return
-
-                        const supabase = createBrowserClient()
-
-                        // First create the base item
-                        const { data: baseData, error: baseError } =
-                          await supabase
-                            .from('items_base')
-                            .insert({
-                              folha_obra_id: job.id,
-                              descricao: '',
-                              codigo: '',
-                            })
-                            .select('*')
-                            .single()
-
-                        if (baseError || !baseData) {
-                          return
-                        }
-
-                        // Then create the designer item
-                        const { data: designerData, error: designerError } =
-                          await supabase
-                            .from('designer_items')
-                            .insert({
-                              item_id: baseData.id,
-                              em_curso: true,
-                              duvidas: false,
-                              maquete_enviada: false,
-                              paginacao: false,
-                            })
-                            .select('*')
-                            .single()
-
-                        if (designerError) {
-                          return
-                        }
-
-                        // Refresh items for this job
-                        refreshItems(job.id)
-
-                        // Focus the new item after refresh
-                        setFocusRow({ jobId: job.id, itemId: baseData.id })
-                      }}
-                      disabled={
-                        !(
-                          job.numero_fo &&
-                          job.nome_campanha &&
-                          String(job.nome_campanha).trim().length > 0
-                        )
-                      }
-                    >
-                      Adicionar Item
-                    </Button>
                     <DrawerClose asChild>
                       <Button
                         variant="outline"
@@ -2060,14 +1988,145 @@ export default function DesignerFlow() {
                       <Table className="w-full caption-bottom rounded-none border-0 text-sm [&_td]:px-3 [&_td]:py-2 [&_th]:px-3 [&_th]:py-2">
                         <TableHeader>
                           <TableRow className="sticky top-0 z-10 bg-[var(--orange)]">
-                            <TableHead className="border-border w-2/3 border-b-2 font-bold uppercase">
+                            <TableHead
+                              className="border-border w-2/3 cursor-pointer border-b-2 font-bold uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (current?.column === 'descricao') {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'descricao',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'descricao',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
                               Item
+                              {drawerSort[job.id]?.column === 'descricao' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
                             </TableHead>
-                            <TableHead className="border-border w-[29ch] border-b-2 font-bold uppercase">
+                            <TableHead
+                              className="border-border w-[29ch] cursor-pointer border-b-2 font-bold uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (current?.column === 'codigo') {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'codigo',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'codigo',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
                               Código
+                              {drawerSort[job.id]?.column === 'codigo' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
                             </TableHead>
-                            <TableHead className="border-border w-[140px] border-b-2 font-bold uppercase">
+                            <TableHead
+                              className="border-border w-[100px] cursor-pointer border-b-2 text-center font-bold uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (current?.column === 'quantidade') {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'quantidade',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'quantidade',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
+                              Quantidade
+                              {drawerSort[job.id]?.column === 'quantidade' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </TableHead>
+                            <TableHead
+                              className="border-border w-[140px] cursor-pointer border-b-2 font-bold uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (current?.column === 'complexidade') {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'complexidade',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'complexidade',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
                               Complexidade
+                              {drawerSort[job.id]?.column === 'complexidade' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
                             </TableHead>
                             <TableHead
                               className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
@@ -2221,7 +2280,7 @@ export default function DesignerFlow() {
                         <TableBody>
                           {loadingItems ? (
                             <TableRow>
-                              <TableCell colSpan={8}>
+                              <TableCell colSpan={9}>
                                 Carregando itens...
                               </TableCell>
                             </TableRow>
@@ -2273,6 +2332,36 @@ export default function DesignerFlow() {
                                       debouncedUpdateCodigo(item.id, newValue)
                                     }}
                                     className="h-10 w-full border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                                  />
+                                </TableCell>
+                                <TableCell className="font-base align-middle text-sm">
+                                  <Input
+                                    type="number"
+                                    value={item.quantidade || ''}
+                                    onChange={(e) => {
+                                      const newValue =
+                                        e.target.value === ''
+                                          ? null
+                                          : Number(e.target.value)
+                                      updateItemInState({
+                                        designerItemId: item.designer_item_id,
+                                        updates: { quantidade: newValue },
+                                      })
+                                    }}
+                                    onBlur={async (e) => {
+                                      const newValue =
+                                        e.target.value === ''
+                                          ? null
+                                          : Number(e.target.value)
+                                      const supabase = createBrowserClient()
+                                      await supabase
+                                        .from('items_base')
+                                        .update({ quantidade: newValue })
+                                        .eq('id', item.id)
+                                    }}
+                                    className="h-10 w-full border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                                    style={{ textAlign: 'right' }}
+                                    placeholder="Qtd"
                                   />
                                 </TableCell>
                                 <TableCell className="font-base align-middle text-sm">
@@ -2596,6 +2685,7 @@ export default function DesignerFlow() {
                                           folha_obra_id: job.id,
                                           descricao: item.descricao || '',
                                           codigo: item.codigo || '',
+                                          quantidade: item.quantidade || null,
                                         })
                                         .select('*')
                                         .single()
@@ -2646,7 +2736,7 @@ export default function DesignerFlow() {
                             ))
                           ) : (
                             <TableRow>
-                              <TableCell colSpan={8}>
+                              <TableCell colSpan={9}>
                                 Nenhum item encontrado.
                               </TableCell>
                             </TableRow>

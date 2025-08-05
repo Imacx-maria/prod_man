@@ -59,6 +59,8 @@ import {
   X,
   ReceiptText,
   RefreshCcw,
+  Check,
+  Edit,
 } from 'lucide-react'
 import CreatableClienteCombobox, {
   ClienteOption,
@@ -115,9 +117,9 @@ interface Item {
   descricao: string
   codigo?: string | null
   quantidade?: number | null
-  paginacao?: boolean | null
   brindes?: boolean | null
   concluido?: boolean | null
+  paginacao?: boolean | null
 }
 
 interface LoadingState {
@@ -1031,9 +1033,13 @@ export default function ProducaoPage() {
           .select('id, item_id, paginacao')
           .in(
             'item_id',
-            // Need to get item IDs for these jobs first
+            // Need to get item IDs for these jobs first (exclude pending items)
             allItems
-              .filter((item) => jobIds.includes(item.folha_obra_id))
+              .filter(
+                (item) =>
+                  jobIds.includes(item.folha_obra_id) &&
+                  !item.id.startsWith('temp-'),
+              )
               .map((item) => item.id),
           )
 
@@ -1043,7 +1049,11 @@ export default function ProducaoPage() {
           setAllDesignerItems((prev) => {
             // Replace designer items for these jobs to avoid duplicates
             const jobItemIds = allItems
-              .filter((item) => jobIds.includes(item.folha_obra_id))
+              .filter(
+                (item) =>
+                  jobIds.includes(item.folha_obra_id) &&
+                  !item.id.startsWith('temp-'),
+              )
               .map((item) => item.id)
             const filtered = prev.filter(
               (designer) => !jobItemIds.includes(designer.item_id),
@@ -2494,41 +2504,12 @@ export default function ProducaoPage() {
                                             }
 
                                             try {
-                                              // 1. Get all items for this job
-                                              const { data: itemsData } =
-                                                await supabase
-                                                  .from('items_base')
-                                                  .select('id')
-                                                  .eq('folha_obra_id', job.id)
-
-                                              if (
-                                                itemsData &&
-                                                itemsData.length > 0
-                                              ) {
-                                                const itemIds = itemsData.map(
-                                                  (item: any) => item.id,
-                                                )
-
-                                                // 2. Delete logistics entries for these items
-                                                await supabase
-                                                  .from('logistica_entregas')
-                                                  .delete()
-                                                  .in('item_id', itemIds)
-
-                                                // 3. Delete designer items
-                                                await supabase
-                                                  .from('designer_items')
-                                                  .delete()
-                                                  .in('item_id', itemIds)
-
-                                                // 4. Delete items_base
-                                                await supabase
-                                                  .from('items_base')
-                                                  .delete()
-                                                  .in('id', itemIds)
-                                              }
-
-                                              // 5. Delete the job itself
+                                              // Simple deletion using database CASCADE DELETE
+                                              // Cascade delete automatically handles:
+                                              // - items_base (CASCADE)
+                                              // - logistica_entregas (CASCADE via items_base)
+                                              // - designer_items (CASCADE via items_base)
+                                              // - producao_operacoes (CASCADE via items_base)
                                               await supabase
                                                 .from('folhas_obras')
                                                 .delete()
@@ -3428,41 +3409,12 @@ export default function ProducaoPage() {
                                             }
 
                                             try {
-                                              // 1. Get all items for this job
-                                              const { data: itemsData } =
-                                                await supabase
-                                                  .from('items_base')
-                                                  .select('id')
-                                                  .eq('folha_obra_id', job.id)
-
-                                              if (
-                                                itemsData &&
-                                                itemsData.length > 0
-                                              ) {
-                                                const itemIds = itemsData.map(
-                                                  (item: any) => item.id,
-                                                )
-
-                                                // 2. Delete logistics entries for these items
-                                                await supabase
-                                                  .from('logistica_entregas')
-                                                  .delete()
-                                                  .in('item_id', itemIds)
-
-                                                // 3. Delete designer items
-                                                await supabase
-                                                  .from('designer_items')
-                                                  .delete()
-                                                  .in('item_id', itemIds)
-
-                                                // 4. Delete items_base
-                                                await supabase
-                                                  .from('items_base')
-                                                  .delete()
-                                                  .in('id', itemIds)
-                                              }
-
-                                              // 5. Delete the job itself
+                                              // Simple deletion using database CASCADE DELETE
+                                              // Cascade delete automatically handles:
+                                              // - items_base (CASCADE)
+                                              // - logistica_entregas (CASCADE via items_base)
+                                              // - designer_items (CASCADE via items_base)
+                                              // - producao_operacoes (CASCADE via items_base)
                                               await supabase
                                                 .from('folhas_obras')
                                                 .delete()
@@ -3711,11 +3663,327 @@ function JobDrawerContent({
     deleteLogisticaRow,
   } = useLogisticaData()
 
+  // Inline editing state management
+  const [editingItems, setEditingItems] = useState<Set<string>>(new Set())
+  const [tempValues, setTempValues] = useState<{
+    [itemId: string]: Partial<Item>
+  }>({})
+  const [savingItems, setSavingItems] = useState<Set<string>>(new Set())
+  const [pendingItems, setPendingItems] = useState<{ [itemId: string]: Item }>(
+    {},
+  )
+
+  // Helper functions for inline editing
+  const isEditing = (itemId: string) => editingItems.has(itemId)
+  const isSaving = (itemId: string) => savingItems.has(itemId)
+  const isNewItem = (itemId: string) => itemId.startsWith('temp-')
+  const isPending = (itemId: string) => !!pendingItems[itemId]
+
+  const getDisplayValue = (item: Item, field: keyof Item) => {
+    if (isEditing(item.id) && tempValues[item.id]?.[field] !== undefined) {
+      return tempValues[item.id][field]
+    }
+    return item[field]
+  }
+
+  const updateTempValue = (itemId: string, field: keyof Item, value: any) => {
+    setTempValues((prev) => ({
+      ...prev,
+      [itemId]: {
+        ...prev[itemId],
+        [field]: value,
+      },
+    }))
+  }
+
+  // Accept pending item (save to database)
+  const acceptItem = async (pendingItem: Item) => {
+    const itemId = pendingItem.id
+    setSavingItems((prev) => new Set([...Array.from(prev), itemId]))
+
+    try {
+      // Get current values from tempValues or use pending item values
+      const tempData = tempValues[itemId] || {}
+      const finalData = {
+        folha_obra_id: pendingItem.folha_obra_id,
+        descricao: tempData.descricao ?? pendingItem.descricao ?? '',
+        codigo: tempData.codigo ?? pendingItem.codigo ?? '',
+        quantidade: tempData.quantidade ?? pendingItem.quantidade ?? 1,
+        brindes: tempData.brindes ?? pendingItem.brindes ?? false,
+        concluido: false,
+      }
+
+      // 1. Save the item to database
+      console.log('🔄 Inserting item with data:', finalData)
+      const { data: baseData, error: baseError } = await supabase
+        .from('items_base')
+        .insert(finalData)
+        .select('*')
+        .single()
+
+      if (baseError) {
+        console.error('❌ Database error details:', baseError)
+        throw new Error(
+          `Database error: ${baseError.message} (Code: ${baseError.code})`,
+        )
+      }
+
+      if (!baseData) {
+        throw new Error('Failed to create item - no data returned')
+      }
+
+      // 2. Create designer_items row
+      const { error: designerError } = await supabase
+        .from('designer_items')
+        .insert({
+          item_id: baseData.id,
+          em_curso: true,
+          duvidas: false,
+          maquete_enviada: false,
+          paginacao: false,
+        })
+
+      if (designerError) {
+        throw new Error(designerError.message)
+      }
+
+      // 3. Create logistics entry
+      await supabase.from('logistica_entregas').insert({
+        item_id: baseData.id,
+        descricao: baseData.descricao || '',
+        data: new Date().toISOString().split('T')[0],
+        is_entrega: true,
+      })
+
+      // 4. Update local state - add real item and remove from pending
+      setAllItems((prev) => [
+        ...prev,
+        {
+          id: baseData.id,
+          folha_obra_id: baseData.folha_obra_id,
+          descricao: baseData.descricao ?? '',
+          codigo: baseData.codigo ?? null,
+          quantidade: baseData.quantidade ?? null,
+          brindes: baseData.brindes ?? false,
+          concluido: false,
+        },
+      ])
+
+      // Remove from pending items
+      setPendingItems((prev) => {
+        const newPending = { ...prev }
+        delete newPending[itemId]
+        return newPending
+      })
+
+      // Clear editing state
+      setEditingItems((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(itemId)
+        return newSet
+      })
+      setTempValues((prev) => {
+        const newValues = { ...prev }
+        delete newValues[itemId]
+        return newValues
+      })
+
+      // 5. Refresh logistics data to show the new entry
+      await fetchLogisticaRows()
+    } catch (error: any) {
+      console.error('Error accepting item:', error)
+      alert(`Erro ao aceitar item: ${error.message}`)
+    } finally {
+      setSavingItems((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(itemId)
+        return newSet
+      })
+    }
+  }
+
+  // Cancel pending item (remove from local state)
+  const cancelItem = (itemId: string) => {
+    // Remove from pending items
+    setPendingItems((prev) => {
+      const newPending = { ...prev }
+      delete newPending[itemId]
+      return newPending
+    })
+
+    // Clear editing state
+    setEditingItems((prev) => {
+      const newSet = new Set(prev)
+      newSet.delete(itemId)
+      return newSet
+    })
+    setTempValues((prev) => {
+      const newValues = { ...prev }
+      delete newValues[itemId]
+      return newValues
+    })
+  }
+
+  // Save changes to existing item
+  const saveItem = async (item: Item) => {
+    const itemId = item.id
+    setSavingItems((prev) => new Set([...Array.from(prev), itemId]))
+
+    try {
+      const tempData = tempValues[itemId] || {}
+
+      // Helper function to handle empty strings as null
+      const handleEmptyString = (value: any) => {
+        if (typeof value === 'string' && value.trim() === '') {
+          return null
+        }
+        return value
+      }
+
+      // Helper function to handle quantity values
+      const handleQuantity = (value: any) => {
+        if (value === null || value === undefined) return null
+        const num = Number(value)
+        return !isNaN(num) && num > 0 ? num : null
+      }
+
+      const finalData = {
+        descricao: tempData.descricao ?? item.descricao ?? '',
+        codigo: handleEmptyString(tempData.codigo ?? item.codigo),
+        quantidade: handleQuantity(tempData.quantidade ?? item.quantidade),
+        brindes: tempData.brindes ?? item.brindes ?? false,
+      }
+
+      // Debug log the data being sent
+      console.log('🔧 Updating item with data:', finalData)
+
+      // Update existing item in database
+      const { error } = await supabase
+        .from('items_base')
+        .update(finalData)
+        .eq('id', itemId)
+
+      if (error) {
+        console.error('🚨 Database error details:', error)
+        throw new Error(
+          `Database error: ${error.message} (Code: ${error.code})`,
+        )
+      }
+
+      // Update designer_items for paginacao field
+      const designerData = {
+        paginacao: tempData.paginacao ?? item.paginacao ?? false,
+      }
+
+      const { error: designerError } = await supabase
+        .from('designer_items')
+        .update(designerData)
+        .eq('item_id', itemId)
+
+      if (designerError) {
+        console.error('🚨 Designer items error:', designerError)
+        throw new Error(`Designer error: ${designerError.message}`)
+      }
+
+      // Sync description to logistics
+      await supabase
+        .from('logistica_entregas')
+        .update({ descricao: finalData.descricao })
+        .eq('item_id', itemId)
+
+      // Update local state (combine items_base and designer_items data)
+      const combinedData = { ...finalData, ...designerData }
+      setAllItems((prev) =>
+        prev.map((i) => (i.id === itemId ? { ...i, ...combinedData } : i)),
+      )
+
+      // Clear editing state
+      setEditingItems((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(itemId)
+        return newSet
+      })
+      setTempValues((prev) => {
+        const newValues = { ...prev }
+        delete newValues[itemId]
+        return newValues
+      })
+    } catch (error: any) {
+      console.error('Error saving item:', error)
+      alert(`Erro ao salvar item: ${error.message}`)
+    } finally {
+      setSavingItems((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(itemId)
+        return newSet
+      })
+    }
+  }
+
+  const cancelEdit = (itemId: string) => {
+    if (isPending(itemId)) {
+      // For pending items, call cancelItem to remove from pending state
+      cancelItem(itemId)
+    } else {
+      // For existing items, just clear editing state
+      setEditingItems((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(itemId)
+        return newSet
+      })
+      setTempValues((prev) => {
+        const newValues = { ...prev }
+        delete newValues[itemId]
+        return newValues
+      })
+    }
+  }
+
+  // Duplicate item (create pending copy)
+  const duplicateItem = (sourceItem: Item) => {
+    if (!job) return
+
+    // Generate a new temporary ID for the duplicated item
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+
+    // Create a copy of the source item as a pending item
+    const duplicatedItem: Item = {
+      id: tempId,
+      folha_obra_id: job.id,
+      descricao: sourceItem.descricao || '',
+      codigo: sourceItem.codigo || '',
+      quantidade: sourceItem.quantidade || 1,
+      brindes: sourceItem.brindes || false,
+      concluido: false,
+    }
+
+    // Add to pending items
+    setPendingItems((prev) => ({
+      ...prev,
+      [tempId]: duplicatedItem,
+    }))
+
+    // Mark as editing and initialize temp values
+    setEditingItems((prev) => new Set([...Array.from(prev), tempId]))
+    setTempValues((prev) => ({
+      ...prev,
+      [tempId]: {
+        descricao: sourceItem.descricao || '',
+        codigo: sourceItem.codigo || '',
+        quantidade: sourceItem.quantidade || 1,
+      },
+    }))
+  }
+
   // Find job and items AFTER all hooks are declared
   const job = jobs.find((j) => j.id === jobId)
   const jobItems = useMemo(() => {
-    return job ? items.filter((i) => i.folha_obra_id === jobId) : []
-  }, [job, items, jobId])
+    const realItems = job ? items.filter((i) => i.folha_obra_id === jobId) : []
+    const pendingItemsArray = Object.values(pendingItems).filter(
+      (item) => item.folha_obra_id === jobId,
+    )
+    return [...realItems, ...pendingItemsArray]
+  }, [job, items, jobId, pendingItems])
 
   const toggleSort = (col: SortKey) => {
     if (sortCol === col) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
@@ -3777,7 +4045,17 @@ function JobDrawerContent({
       return
     }
 
-    const itemIds = jobItems.map((item) => item.id)
+    // Filter out pending items (they don't exist in database yet)
+    const realItems = jobItems.filter((item) => !isPending(item.id))
+    const pendingItemsArray = jobItems.filter((item) => isPending(item.id))
+    const itemIds = realItems.map((item) => item.id)
+
+    console.log('🔍 jobItems breakdown:', {
+      total: jobItems.length,
+      real: realItems.length,
+      pending: pendingItemsArray.length,
+      pendingIds: pendingItemsArray.map((i) => i.id),
+    })
     // 2. Fetch all logistics records for those items
     let logisticsData: any[] = []
     if (itemIds.length > 0) {
@@ -3820,8 +4098,8 @@ function JobDrawerContent({
       mergedRows.push(logistics)
     })
 
-    // Create logistics entries for job items that don't have them yet
-    const itemsWithoutLogistics = jobItems.filter(
+    // Create logistics entries for real job items that don't have them yet (exclude temp items)
+    const itemsWithoutLogistics = realItems.filter(
       (item) => !logisticsData.some((l) => l.item_id === item.id),
     )
 
@@ -3968,67 +4246,41 @@ function JobDrawerContent({
               </div>
               <div className="flex items-center gap-2">
                 <Button
-                  onClick={async () => {
-                    // 1. Create a new item in items_base
-                    console.log('➕ Creating new item in items_base...')
-                    const { data: baseData, error: baseError } = await supabase
-                      .from('items_base')
-                      .insert({
-                        folha_obra_id: job.id,
-                        descricao: '',
-                        codigo: '',
-                        quantidade: 1, // 🔧 FIX: Add default quantity
-                      })
-                      .select('*')
-                      .single()
+                  onClick={() => {
+                    // Generate a temporary ID for the new pending item
+                    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
-                    console.log('➕ Created item result:', {
-                      data: baseData,
-                      error: baseError,
-                    })
-                    if (baseError || !baseData) {
-                      // Optionally show an error message
-                      return
-                    }
-                    // 2. Create a new designer_items row linked to the new item
-                    const { error: designerError } = await supabase
-                      .from('designer_items')
-                      .insert({
-                        item_id: baseData.id,
-                        em_curso: true,
-                        duvidas: false,
-                        maquete_enviada: false,
-                        paginacao: false,
-                      })
-                    if (designerError) {
-                      // Optionally show an error message
-                      return
-                    }
-                    // 3. Automatically create a logistics entry for this new item
-                    await supabase.from('logistica_entregas').insert({
-                      item_id: baseData.id,
-                      descricao: baseData.descricao || '', // Store item description directly
-                      data: new Date().toISOString().split('T')[0],
-                      is_entrega: true,
-                    })
-
-                    // 4. Add the new item to global state
-                    const newItem: Item = {
-                      id: baseData.id,
-                      folha_obra_id: baseData.folha_obra_id,
-                      descricao: baseData.descricao ?? '',
-                      codigo: baseData.codigo ?? '',
-                      quantidade: baseData.quantidade ?? null,
-                      paginacao: false,
-                      brindes: baseData.brindes ?? false,
+                    // Create a pending item (not saved to database yet)
+                    const newPendingItem: Item = {
+                      id: tempId,
+                      folha_obra_id: job.id,
+                      descricao: '',
+                      codigo: '',
+                      quantidade: 1,
+                      brindes: false,
                       concluido: false,
                     }
 
-                    // Update global state
-                    setAllItems((prev) => [...prev, newItem])
+                    // Add to pending items (local state only)
+                    setPendingItems((prev) => ({
+                      ...prev,
+                      [tempId]: newPendingItem,
+                    }))
 
-                    // Refresh logistics data
-                    await fetchLogisticaRows()
+                    // Mark this item as being edited
+                    setEditingItems(
+                      (prev) => new Set([...Array.from(prev), tempId]),
+                    )
+
+                    // Initialize temp values for this item
+                    setTempValues((prev) => ({
+                      ...prev,
+                      [tempId]: {
+                        descricao: '',
+                        codigo: '',
+                        quantidade: 1,
+                      },
+                    }))
                   }}
                 >
                   Adicionar Item
@@ -4125,430 +4377,277 @@ function JobDrawerContent({
                       sortedItems.map((it, index) => (
                         <TableRow
                           key={it.id || `item-${index}`}
-                          className="hover:bg-[var(--main)]"
+                          className={`hover:bg-[var(--main)] ${isEditing(it.id) ? 'bg-yellow-50' : ''}`}
                         >
                           <TableCell className="text-center">
                             <Checkbox
-                              checked={!!it.brindes}
+                              checked={!!getDisplayValue(it, 'brindes')}
+                              disabled={isEditing(it.id)}
                               onCheckedChange={async (checked) => {
+                                if (isEditing(it.id)) return
+
                                 const value =
                                   checked === 'indeterminate' ? false : checked
-                                // Update global state
-                                setAllItems((prevItems) =>
-                                  prevItems.map((item) =>
-                                    item.id === it.id
-                                      ? { ...item, brindes: value }
-                                      : item,
-                                  ),
-                                )
-                                // Persist to Supabase
-                                await supabase
-                                  .from('items_base')
-                                  .update({ brindes: value })
-                                  .eq('id', it.id)
+
+                                if (isNewItem(it.id)) {
+                                  updateTempValue(it.id, 'brindes', value)
+                                } else {
+                                  // Update global state
+                                  setAllItems((prevItems) =>
+                                    prevItems.map((item) =>
+                                      item.id === it.id
+                                        ? { ...item, brindes: value }
+                                        : item,
+                                    ),
+                                  )
+                                  // Persist to Supabase
+                                  await supabase
+                                    .from('items_base')
+                                    .update({ brindes: value })
+                                    .eq('id', it.id)
+                                }
                               }}
                             />
                           </TableCell>
                           <TableCell>
                             <Input
-                              defaultValue={it.descricao}
+                              value={String(
+                                getDisplayValue(it, 'descricao') || '',
+                              )}
                               onChange={(e) => {
                                 const newValue = e.target.value
-                                console.log('📝 onChange descricao:', {
-                                  itemId: it.id,
-                                  newValue,
-                                })
-                              }}
-                              onBlur={async (e) => {
-                                const newValue = e.target.value
-                                console.log('📝 onBlur start descricao:', {
-                                  itemId: it.id,
-                                  newValue,
-                                  originalDescricao: it.descricao,
-                                })
-
-                                // Skip if no change
-                                if (newValue === it.descricao) {
-                                  console.log(
-                                    '📝 No change detected, skipping update',
-                                  )
-                                  return
-                                }
-
-                                try {
-                                  console.log(
-                                    '📝 Updating descricao in database...',
-                                  )
-
-                                  // Update the items_base table
-                                  const { error } = await supabase
-                                    .from('items_base')
-                                    .update({ descricao: newValue })
-                                    .eq('id', it.id)
-
-                                  if (error) {
-                                    console.error(
-                                      '❌ Failed to update descricao:',
-                                      error,
-                                    )
-                                    alert(
-                                      `Erro ao atualizar descrição: ${error.message}`,
-                                    )
-                                  } else {
-                                    console.log(
-                                      '✅ Successfully updated descricao',
-                                    )
-
-                                    // Update global state
-                                    setAllItems((prev) =>
-                                      prev.map((item) =>
-                                        item.id === it.id
-                                          ? { ...item, descricao: newValue }
-                                          : item,
-                                      ),
-                                    )
-
-                                    // 🔄 SYNC: Also update all logistics entries for this item
-                                    console.log(
-                                      '🔄 Syncing description to logistics entries...',
-                                    )
-                                    const { error: logisticsError } =
-                                      await supabase
-                                        .from('logistica_entregas')
-                                        .update({ descricao: newValue })
-                                        .eq('item_id', it.id)
-
-                                    if (logisticsError) {
-                                      console.error(
-                                        '❌ Failed to sync description to logistics:',
-                                        logisticsError,
-                                      )
-                                    } else {
-                                      console.log(
-                                        '✅ Successfully synced description to logistics entries',
-                                      )
-                                    }
-                                  }
-                                } catch (error: any) {
-                                  console.error(
-                                    '❌ Exception updating descricao:',
-                                    error,
-                                  )
-                                  alert(
-                                    `Erro ao atualizar descrição: ${error?.message || error}`,
-                                  )
+                                if (isEditing(it.id)) {
+                                  updateTempValue(it.id, 'descricao', newValue)
                                 }
                               }}
-                              className="h-10 border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                              onDoubleClick={() => {
+                                if (!isEditing(it.id) && !isNewItem(it.id)) {
+                                  setEditingItems(
+                                    (prev) =>
+                                      new Set([...Array.from(prev), it.id]),
+                                  )
+                                  setTempValues((prev) => ({
+                                    ...prev,
+                                    [it.id]: {
+                                      descricao: it.descricao,
+                                      codigo: it.codigo,
+                                      quantidade: it.quantidade,
+                                    },
+                                  }))
+                                }
+                              }}
+                              disabled={!isEditing(it.id) && !isNewItem(it.id)}
+                              className="disabled:text-foreground h-10 border-0 text-sm outline-0 focus:border-0 focus:ring-0 disabled:cursor-pointer disabled:opacity-100"
+                              placeholder="Descrição do item"
                             />
                           </TableCell>
                           <TableCell>
                             <Input
-                              defaultValue={it.codigo || ''}
+                              value={String(
+                                getDisplayValue(it, 'codigo') || '',
+                              )}
                               onChange={(e) => {
                                 const newValue = e.target.value
-                                console.log('🔤 onChange codigo:', {
-                                  itemId: it.id,
-                                  newValue,
-                                })
-                              }}
-                              onBlur={async (e) => {
-                                const newValue = e.target.value || null
-                                console.log('🔤 onBlur start codigo:', {
-                                  itemId: it.id,
-                                  newValue,
-                                  originalCodigo: it.codigo,
-                                })
-
-                                // Skip if no change
-                                if (newValue === it.codigo) {
-                                  console.log(
-                                    '🔤 No change detected, skipping update',
-                                  )
-                                  return
-                                }
-
-                                try {
-                                  console.log(
-                                    '🔤 Updating codigo in database...',
-                                  )
-
-                                  const { error } = await supabase
-                                    .from('items_base')
-                                    .update({ codigo: newValue })
-                                    .eq('id', it.id)
-
-                                  if (error) {
-                                    console.error(
-                                      '❌ Failed to update codigo:',
-                                      error,
-                                    )
-                                    alert(
-                                      `Erro ao atualizar código: ${error.message}`,
-                                    )
-                                  } else {
-                                    console.log(
-                                      '✅ Successfully updated codigo',
-                                    )
-
-                                    setAllItems((prev) =>
-                                      prev.map((item) =>
-                                        item.id === it.id
-                                          ? { ...item, codigo: newValue }
-                                          : item,
-                                      ),
-                                    )
-                                  }
-                                } catch (error: any) {
-                                  console.error(
-                                    '❌ Exception updating codigo:',
-                                    error,
-                                  )
-                                  alert(
-                                    `Erro ao atualizar código: ${error?.message || error}`,
-                                  )
+                                if (isEditing(it.id)) {
+                                  updateTempValue(it.id, 'codigo', newValue)
                                 }
                               }}
-                              className="h-10 border-0 text-sm outline-0 focus:border-0 focus:ring-0"
+                              onDoubleClick={() => {
+                                if (!isEditing(it.id) && !isNewItem(it.id)) {
+                                  setEditingItems(
+                                    (prev) =>
+                                      new Set([...Array.from(prev), it.id]),
+                                  )
+                                  setTempValues((prev) => ({
+                                    ...prev,
+                                    [it.id]: {
+                                      descricao: it.descricao,
+                                      codigo: it.codigo,
+                                      quantidade: it.quantidade,
+                                    },
+                                  }))
+                                }
+                              }}
+                              disabled={!isEditing(it.id) && !isNewItem(it.id)}
+                              className="disabled:text-foreground h-10 border-0 text-sm outline-0 focus:border-0 focus:ring-0 disabled:cursor-pointer disabled:opacity-100"
+                              placeholder="Código do item"
                             />
                           </TableCell>
                           <TableCell className="text-right">
                             <Input
                               type="text"
-                              defaultValue={it.quantidade ?? ''}
+                              value={String(
+                                getDisplayValue(it, 'quantidade') ?? '',
+                              )}
                               onChange={(e) => {
-                                // Just log for now, don't update state during typing
-                                const value = e.target.value
-                                console.log('🔢 onChange:', {
-                                  value,
-                                  itemId: it.id,
-                                })
-                              }}
-                              onBlur={async (e) => {
                                 const value = e.target.value.trim()
                                 const numValue =
                                   value === '' ? null : Number(value)
-                                const originalValue = it.quantidade
-
-                                console.log('🔢 onBlur start:', {
-                                  value,
-                                  numValue,
-                                  itemId: it.id,
-                                  originalQuantidade: originalValue,
-                                })
-
-                                // Skip if no change
-                                if (numValue === originalValue) {
-                                  console.log(
-                                    '🔢 No change detected, skipping update',
-                                  )
-                                  return
-                                }
-
-                                try {
-                                  console.log(
-                                    '🔢 Updating quantidade in database...',
-                                    {
-                                      itemId: it.id,
-                                      oldQuantidade: originalValue,
-                                      newQuantidade: numValue,
-                                    },
-                                  )
-
-                                  const { error } = await supabase
-                                    .from('items_base')
-                                    .update({ quantidade: numValue })
-                                    .eq('id', it.id)
-
-                                  if (error) {
-                                    console.error(
-                                      '❌ Failed to update quantidade:',
-                                      error,
-                                    )
-                                    alert(
-                                      `Erro ao atualizar quantidade: ${error.message}`,
-                                    )
-
-                                    // Revert to original value on error
-                                    setAllItems((prevItems) =>
-                                      prevItems.map((item) =>
-                                        item.id === it.id
-                                          ? {
-                                              ...item,
-                                              quantidade: originalValue,
-                                            }
-                                          : item,
-                                      ),
-                                    )
-                                  } else {
-                                    console.log(
-                                      '✅ Successfully updated quantidade',
-                                    )
-
-                                    // Update parent state
-                                    setAllItems((prevItems) =>
-                                      prevItems.map((item) =>
-                                        item.id === it.id
-                                          ? { ...item, quantidade: numValue }
-                                          : item,
-                                      ),
-                                    )
-
-                                    // Sync to logistics entries
-                                    const { error: logisticsError } =
-                                      await supabase
-                                        .from('logistica_entregas')
-                                        .update({ quantidade: numValue })
-                                        .eq('item_id', it.id)
-
-                                    if (logisticsError) {
-                                      console.error(
-                                        '❌ Failed to sync quantidade to logistics:',
-                                        logisticsError,
-                                      )
-                                    } else {
-                                      console.log(
-                                        '✅ Successfully synced quantidade to logistics entries',
-                                      )
-                                    }
-                                  }
-                                } catch (error: any) {
-                                  console.error(
-                                    '❌ Exception updating quantidade:',
-                                    error,
-                                  )
-                                  alert(
-                                    `Erro ao atualizar quantidade: ${error?.message || error}`,
-                                  )
-
-                                  // Revert to original value on exception
-                                  setAllItems((prevItems) =>
-                                    prevItems.map((item) =>
-                                      item.id === it.id
-                                        ? { ...item, quantidade: originalValue }
-                                        : item,
-                                    ),
-                                  )
+                                if (isEditing(it.id)) {
+                                  updateTempValue(it.id, 'quantidade', numValue)
                                 }
                               }}
-                              className="h-10 w-20 rounded-none border-0 text-right text-sm outline-0 focus:border-0 focus:ring-0"
+                              onDoubleClick={() => {
+                                if (!isEditing(it.id) && !isNewItem(it.id)) {
+                                  setEditingItems(
+                                    (prev) =>
+                                      new Set([...Array.from(prev), it.id]),
+                                  )
+                                  setTempValues((prev) => ({
+                                    ...prev,
+                                    [it.id]: {
+                                      descricao: it.descricao,
+                                      codigo: it.codigo,
+                                      quantidade: it.quantidade,
+                                    },
+                                  }))
+                                }
+                              }}
+                              disabled={!isEditing(it.id) && !isNewItem(it.id)}
+                              className="disabled:text-foreground h-10 w-20 rounded-none border-0 text-right text-sm outline-0 focus:border-0 focus:ring-0 disabled:cursor-pointer disabled:opacity-100"
+                              placeholder="Qtd"
                             />
                           </TableCell>
 
-                          <TableCell className="flex w-[100px] justify-center gap-2 pr-2">
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="secondary"
-                                    className="flex aspect-square size-10 items-center justify-center !p-0"
-                                    onClick={async () => {
-                                      // Duplicate item: insert into items_base, then designer_items, then refresh
-                                      const {
-                                        data: newBase,
-                                        error: baseError,
-                                      } = await supabase
-                                        .from('items_base')
-                                        .insert({
-                                          folha_obra_id: it.folha_obra_id,
-                                          descricao: it.descricao,
-                                          codigo: it.codigo,
-                                          quantidade: it.quantidade,
-                                          brindes: it.brindes,
-                                        })
-                                        .select('*')
-                                        .single()
-                                      if (baseError || !newBase) return
-                                      await supabase
-                                        .from('designer_items')
-                                        .insert({
-                                          item_id: newBase.id,
-                                          em_curso: true,
-                                          duvidas: false,
-                                          maquete_enviada: false,
-                                          paginacao: it.paginacao || false,
-                                        })
-
-                                      // Create logistics entry for the duplicated item
-                                      await supabase
-                                        .from('logistica_entregas')
-                                        .insert({
-                                          item_id: newBase.id,
-                                          descricao: newBase.descricao || '', // Store item description directly
-                                          data: new Date()
-                                            .toISOString()
-                                            .split('T')[0],
-                                          is_entrega: true,
-                                        })
-
-                                      // Add duplicated item to global state
-                                      const duplicatedItem: Item = {
-                                        id: newBase.id,
-                                        folha_obra_id: newBase.folha_obra_id,
-                                        descricao: newBase.descricao ?? '',
-                                        codigo: newBase.codigo ?? '',
-                                        quantidade: newBase.quantidade ?? null,
-                                        paginacao: it.paginacao || false,
-                                        brindes: newBase.brindes ?? false,
-                                        concluido: false, // duplicated items start as not completed
-                                      }
-
-                                      // Update global state
-                                      setAllItems((prev) => [
-                                        ...prev,
-                                        duplicatedItem,
-                                      ])
-
-                                      // Refresh logistics data
-                                      await fetchLogisticaRows()
-                                    }}
-                                  >
-                                    <Copy className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Duplicar</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <Button
-                                    size="icon"
-                                    variant="destructive"
-                                    className="flex aspect-square size-10 items-center justify-center !p-0"
-                                    onClick={async () => {
-                                      // Delete item: remove from logistics, designer_items, then items_base
-                                      await supabase
-                                        .from('logistica_entregas')
-                                        .delete()
-                                        .eq('item_id', it.id)
-                                      await supabase
-                                        .from('designer_items')
-                                        .delete()
-                                        .eq('item_id', it.id)
-                                      await supabase
-                                        .from('items_base')
-                                        .delete()
-                                        .eq('id', it.id)
-
-                                      // Remove from global state
-                                      setAllItems((prev) =>
-                                        prev.filter(
-                                          (item) => item.id !== it.id,
-                                        ),
-                                      )
-
-                                      // Refresh logistics data
-                                      await fetchLogisticaRows()
-                                    }}
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </TooltipTrigger>
-                                <TooltipContent>Eliminar</TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
+                          <TableCell className="w-[130px] min-w-[130px] p-2 text-sm">
+                            {isEditing(it.id) ? (
+                              // Save/Cancel buttons for editing mode
+                              <div className="flex justify-center gap-1">
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="icon"
+                                        variant="default"
+                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                        onClick={() =>
+                                          isPending(it.id)
+                                            ? acceptItem(it)
+                                            : saveItem(it)
+                                        }
+                                        disabled={isSaving(it.id)}
+                                      >
+                                        {isSaving(it.id) ? (
+                                          <Loader2 className="h-4 w-4 animate-spin" />
+                                        ) : (
+                                          <Check className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      {isPending(it.id) ? 'Aceitar' : 'Salvar'}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="icon"
+                                        variant="destructive"
+                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                        onClick={() => cancelEdit(it.id)}
+                                        disabled={isSaving(it.id)}
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Cancelar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                            ) : (
+                              // Normal edit/duplicate/delete buttons
+                              <div className="flex justify-center gap-1">
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="icon"
+                                        variant="outline"
+                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                        onClick={() => {
+                                          if (!isNewItem(it.id)) {
+                                            setEditingItems(
+                                              (prev) =>
+                                                new Set([
+                                                  ...Array.from(prev),
+                                                  it.id,
+                                                ]),
+                                            )
+                                            setTempValues((prev) => ({
+                                              ...prev,
+                                              [it.id]: {
+                                                descricao: it.descricao,
+                                                codigo: it.codigo,
+                                                quantidade: it.quantidade,
+                                              },
+                                            }))
+                                          }
+                                        }}
+                                      >
+                                        <Edit className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Editar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="icon"
+                                        variant="outline"
+                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                        onClick={() => duplicateItem(it)}
+                                      >
+                                        <Copy className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Duplicar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                                <TooltipProvider>
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        size="icon"
+                                        variant="destructive"
+                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                        onClick={async () => {
+                                          if (isNewItem(it.id)) {
+                                            // Just remove from state for temp items
+                                            setAllItems((prev) =>
+                                              prev.filter(
+                                                (item) => item.id !== it.id,
+                                              ),
+                                            )
+                                          } else {
+                                            // Simple deletion using database CASCADE DELETE
+                                            // Cascade delete automatically handles:
+                                            // - logistica_entregas (CASCADE via items_base)
+                                            // - designer_items (CASCADE via items_base)
+                                            // - producao_operacoes (CASCADE via items_base)
+                                            await supabase
+                                              .from('items_base')
+                                              .delete()
+                                              .eq('id', it.id)
+                                            setAllItems((prev) =>
+                                              prev.filter(
+                                                (item) => item.id !== it.id,
+                                              ),
+                                            )
+                                          }
+                                        }}
+                                      >
+                                        <Trash2 className="h-4 w-4" />
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Eliminar</TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))
@@ -4573,80 +4672,41 @@ function JobDrawerContent({
               <div className="flex items-center gap-2">
                 <Button
                   disabled={logisticaLoading}
-                  onClick={async () => {
-                    try {
-                      setLogisticaLoading(true)
+                  onClick={() => {
+                    // Generate a temporary ID for the new pending item
+                    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
 
-                      // 1. Create a new folhas_obras entry
-                      const { data: folhaObraData, error: folhaObraError } =
-                        await supabase
-                          .from('folhas_obras')
-                          .insert({
-                            numero_fo: '',
-                            numero_orc: null,
-                            nome_campanha: 'Entrega ou recolha especial',
-                            cliente: '',
-                            data_in: new Date().toISOString(),
-                            saiu: false,
-                          })
-                          .select('*')
-                          .single()
-
-                      if (folhaObraError || !folhaObraData) {
-                        alert(
-                          `Erro ao criar folha obra: ${folhaObraError?.message}`,
-                        )
-                        return
-                      }
-
-                      // 2. Create items_base entry
-                      const { data: itemData, error: itemError } =
-                        await supabase
-                          .from('items_base')
-                          .insert({
-                            folha_obra_id: folhaObraData.id,
-                            descricao: '',
-                            codigo: '',
-                            quantidade: 1,
-                            brindes: false,
-                            concluido: false,
-                          })
-                          .select('*')
-                          .single()
-
-                      if (itemError || !itemData) {
-                        alert(`Erro ao criar item: ${itemError?.message}`)
-                        return
-                      }
-
-                      // 3. Create logistica_entregas entry
-                      const { error: logisticsError } = await supabase
-                        .from('logistica_entregas')
-                        .insert({
-                          item_id: itemData.id,
-                          descricao: '',
-                          data_saida: new Date().toISOString().split('T')[0],
-                          is_entrega: true,
-                        })
-
-                      if (logisticsError) {
-                        alert(
-                          `Erro ao criar logística: ${logisticsError.message}`,
-                        )
-                        return
-                      }
-
-                      // 4. Update local state and refresh
-                      setJobs((prev) => [...prev, folhaObraData])
-                      setAllItems((prev) => [...prev, itemData])
-                      await fetchLogisticaRows()
-
-                      alert('Entrada criada com sucesso!')
-                    } catch (error) {
-                      alert(`Erro: ${error}`)
-                    } finally {
-                      setLogisticaLoading(false)
+                    // Create a pending item for the current job
+                    const newPendingItem: Item = {
+                      id: tempId,
+                      folha_obra_id: job.id,
+                      descricao: '',
+                      codigo: '',
+                      quantidade: 1,
+                      brindes: false,
+                      concluido: false,
                     }
+
+                    // Add to pending items (local state only)
+                    setPendingItems((prev) => ({
+                      ...prev,
+                      [tempId]: newPendingItem,
+                    }))
+
+                    // Mark this item as being edited
+                    setEditingItems(
+                      (prev) => new Set([...Array.from(prev), tempId]),
+                    )
+
+                    // Initialize temp values for this item
+                    setTempValues((prev) => ({
+                      ...prev,
+                      [tempId]: {
+                        descricao: '',
+                        codigo: '',
+                        quantidade: 1,
+                      },
+                    }))
                   }}
                 >
                   {logisticaLoading ? (
