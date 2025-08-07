@@ -461,30 +461,8 @@ export const DashboardLogisticaTable: React.FC<
     fetchData(showDispatched)
   }, [fetchData, showDispatched])
 
-  // Auto-refresh when page gains focus (user switches back from production page)
-  useEffect(() => {
-    const handleFocus = () => {
-      console.log('Page gained focus, refreshing logistics data...')
-      fetchData(showDispatched)
-    }
-
-    window.addEventListener('focus', handleFocus)
-
-    // Also listen for visibility change (when tab becomes visible)
-    const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        console.log('Tab became visible, refreshing logistics data...')
-        fetchData(showDispatched)
-      }
-    }
-
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-
-    return () => {
-      window.removeEventListener('focus', handleFocus)
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-    }
-  }, [fetchData, showDispatched])
+  // Removed auto-refresh on focus/visibility change to prevent unwanted refreshes during editing
+  // Table will only refresh when the refresh button is explicitly clicked
 
   // Create lookup dictionaries
   const clienteLookup = useMemo(() => {
@@ -949,13 +927,17 @@ export const DashboardLogisticaTable: React.FC<
           .update({ saiu: value })
           .eq('id', record.logistica_id)
 
-        // Refresh data
-        await fetchData(showDispatched)
+        // Update local state instead of full refresh
+        setRecords((prevRecords) =>
+          prevRecords.map((r) =>
+            r.logistica_id === record.logistica_id ? { ...r, saiu: value } : r,
+          ),
+        )
       } catch (error) {
         console.error('Error updating saiu status:', error)
       }
     },
-    [supabase, fetchData, showDispatched],
+    [supabase, setRecords],
   )
 
   // Update data_saida status - now updates logistica_entregas.data_saida field
@@ -976,13 +958,19 @@ export const DashboardLogisticaTable: React.FC<
           .update({ data_saida: dateString })
           .eq('id', record.logistica_id)
 
-        // Refresh data
-        await fetchData(showDispatched)
+        // Update local state instead of full refresh
+        setRecords((prevRecords) =>
+          prevRecords.map((r) =>
+            r.logistica_id === record.logistica_id
+              ? { ...r, data_saida: dateString }
+              : r,
+          ),
+        )
       } catch (error) {
         console.error('Error updating data_saida:', error)
       }
     },
-    [supabase, fetchData, formatDateForDB, showDispatched],
+    [supabase, formatDateForDB, setRecords],
   )
 
   // Update concluido status - updates logistica_entregas.concluido field
@@ -999,13 +987,19 @@ export const DashboardLogisticaTable: React.FC<
           .update({ concluido: value })
           .eq('id', record.logistica_id)
 
-        // Refresh data
-        await fetchData(showDispatched)
+        // Update local state instead of full refresh
+        setRecords((prevRecords) =>
+          prevRecords.map((r) =>
+            r.logistica_id === record.logistica_id
+              ? { ...r, concluido: value }
+              : r,
+          ),
+        )
       } catch (error) {
         console.error('Error updating concluido status:', error)
       }
     },
-    [supabase, fetchData, showDispatched],
+    [supabase, setRecords],
   )
 
   if (loading) {
@@ -1068,6 +1062,22 @@ export const DashboardLogisticaTable: React.FC<
       {/* Filter Bar */}
       <div className="mb-4 flex items-center gap-2">
         <Input
+          placeholder="FO"
+          className="w-[140px] rounded-none"
+          value={filters.numeroFo}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, numeroFo: e.target.value }))
+          }
+        />
+        <Input
+          placeholder="Guia"
+          className="w-[140px] rounded-none"
+          value={filters.guia}
+          onChange={(e) =>
+            setFilters((prev) => ({ ...prev, guia: e.target.value }))
+          }
+        />
+        <Input
           placeholder="Cliente"
           className="w-[200px] rounded-none"
           value={filters.cliente}
@@ -1089,22 +1099,6 @@ export const DashboardLogisticaTable: React.FC<
           value={filters.item}
           onChange={(e) =>
             setFilters((prev) => ({ ...prev, item: e.target.value }))
-          }
-        />
-        <Input
-          placeholder="FO"
-          className="w-[140px] rounded-none"
-          value={filters.numeroFo}
-          onChange={(e) =>
-            setFilters((prev) => ({ ...prev, numeroFo: e.target.value }))
-          }
-        />
-        <Input
-          placeholder="Guia"
-          className="w-[140px] rounded-none"
-          value={filters.guia}
-          onChange={(e) =>
-            setFilters((prev) => ({ ...prev, guia: e.target.value }))
           }
         />
 
@@ -1232,7 +1226,7 @@ export const DashboardLogisticaTable: React.FC<
                 </TableHead>
                 <TableHead
                   onClick={() => toggleSort('local_recolha')}
-                  className="border-border sticky top-0 z-10 cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                  className="border-border sticky top-0 z-10 w-[160px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
                 >
                   Local Recolha{' '}
                   {sortCol === 'local_recolha' &&
@@ -1244,7 +1238,7 @@ export const DashboardLogisticaTable: React.FC<
                 </TableHead>
                 <TableHead
                   onClick={() => toggleSort('local_entrega')}
-                  className="border-border sticky top-0 z-10 cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                  className="border-border sticky top-0 z-10 w-[160px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
                 >
                   Local Entrega{' '}
                   {sortCol === 'local_entrega' &&
@@ -1256,7 +1250,7 @@ export const DashboardLogisticaTable: React.FC<
                 </TableHead>
                 <TableHead
                   onClick={() => toggleSort('transportadora')}
-                  className="border-border sticky top-0 z-10 cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                  className="border-border sticky top-0 z-10 w-[180px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
                 >
                   Transportadora{' '}
                   {sortCol === 'transportadora' &&
@@ -1323,7 +1317,7 @@ export const DashboardLogisticaTable: React.FC<
                     </Tooltip>
                   </TooltipProvider>
                 </TableHead>
-                <TableHead className="border-border w-[100px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
+                <TableHead className="border-border sticky top-0 z-10 w-[100px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
                   AÇÕES
                 </TableHead>
               </TableRow>
@@ -1343,11 +1337,15 @@ export const DashboardLogisticaTable: React.FC<
                     <TableCell>
                       {(() => {
                         const clientId = record.id_cliente
-                        return (
+                        const clientName =
                           (clientId ? clienteLookup[clientId] : '') ||
                           record.cliente ||
                           '-'
-                        )
+
+                        // Truncate at 28 characters and add "..." if longer
+                        return clientName.length > 28
+                          ? `${clientName.substring(0, 28)}...`
+                          : clientName
                       })()}
                     </TableCell>
 
@@ -1435,22 +1433,39 @@ export const DashboardLogisticaTable: React.FC<
 
                     {/* Notas - Complex Popover with delivery contacts */}
                     <TableCell className="text-center">
-                      <NotasPopover
-                        value={record.notas || ''}
-                        contacto_entrega={record.contacto_entrega || ''}
-                        telefone_entrega={record.telefone_entrega || ''}
-                        data={record.data || null}
-                        onChange={(value) => {
-                          // This is for real-time preview, actual save happens in onSave
-                        }}
-                        onSave={async (fields) => {
-                          await handleNotasSave(record, fields)
-                        }}
-                        iconType="file"
-                        buttonSize="icon"
-                        className="aspect-square !h-8 !w-8 !max-w-8 !min-w-8 !rounded-none !p-0"
-                        centered={true}
-                      />
+                      <div className="flex items-center justify-center">
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div>
+                                <NotasPopover
+                                  value={record.notas || ''}
+                                  contacto_entrega={
+                                    record.contacto_entrega || ''
+                                  }
+                                  telefone_entrega={
+                                    record.telefone_entrega || ''
+                                  }
+                                  data={record.data || null}
+                                  onChange={(value) => {
+                                    // This is for real-time preview, actual save happens in onSave
+                                  }}
+                                  onSave={async (fields) => {
+                                    await handleNotasSave(record, fields)
+                                  }}
+                                  iconType="file"
+                                  buttonSize="icon"
+                                  className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                  centered={true}
+                                />
+                              </div>
+                            </TooltipTrigger>
+                            {record.notas && record.notas.trim() !== '' && (
+                              <TooltipContent>{record.notas}</TooltipContent>
+                            )}
+                          </Tooltip>
+                        </TooltipProvider>
+                      </div>
                     </TableCell>
 
                     {/* Concluído - Checkbox (always interactive) */}
