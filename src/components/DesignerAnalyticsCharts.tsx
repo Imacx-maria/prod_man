@@ -125,20 +125,20 @@ const DesignerAnalyticsCharts = ({
           paginacao,
           items_base!inner(
             id,
-            created_at,
+            data_in,
             complexidade,
             folha_obra_id,
             folhas_obras!inner(
               id,
               profile_id,
-              created_at,
+              data_in,
               profiles(id, first_name, last_name)
             )
           )
         `,
         )
-        .gte('items_base.created_at', startDate.toISOString())
-        .lte('items_base.created_at', endDate.toISOString())
+        .gte('items_base.data_in', startDate.toISOString())
+        .lte('items_base.data_in', endDate.toISOString())
         .not('items_base.complexidade', 'eq', 'OFFSET')
         .eq('paginacao', true)
         .not('data_saida', 'is', null) // Only include items with data_saida
@@ -168,13 +168,13 @@ const DesignerAnalyticsCharts = ({
         .select(
           `
           id,
-          created_at,
+          data_in,
           profile_id,
           profiles(id, first_name, last_name)
         `,
         )
-        .gte('created_at', startDate.toISOString())
-        .lte('created_at', endDate.toISOString())
+        .gte('data_in', startDate.toISOString())
+        .lte('data_in', endDate.toISOString())
         .not('profile_id', 'is', null)
 
       if (fosError) {
@@ -245,7 +245,7 @@ const DesignerAnalyticsCharts = ({
     // Process each designer item (all have data_saida since we filtered for it)
     designerItemsData.forEach((designerItem) => {
       const itemBase = designerItem.items_base
-      if (!itemBase || !itemBase.created_at || !designerItem.data_saida) return
+      if (!itemBase || !itemBase.data_in || !designerItem.data_saida) return
 
       // Use data_saida for the month grouping (when the work was completed)
       const completionDate = new Date(designerItem.data_saida)
@@ -255,9 +255,9 @@ const DesignerAnalyticsCharts = ({
       if (monthlyItemsMap.has(month)) {
         monthlyItemsMap.set(month, (monthlyItemsMap.get(month) || 0) + 1)
 
-        // Calculate completion time: items_base.created_at to data_saida
+        // Calculate completion time: items_base.data_in to data_saida
         const completionDays = calculateCompletionDays(
-          itemBase.created_at,
+          itemBase.data_in,
           designerItem.data_saida,
         )
 
@@ -376,10 +376,10 @@ const DesignerAnalyticsCharts = ({
 
       const designer = designerMap.get(designerName)!
 
-      // Add completion time: items_base.created_at to data_saida
-      if (designerItem.items_base?.created_at) {
+      // Add completion time: items_base.data_in to data_saida
+      if (designerItem.items_base?.data_in) {
         const completionTime = calculateCompletionDays(
-          designerItem.items_base.created_at,
+          designerItem.items_base.data_in,
           designerItem.data_saida,
         )
         designer.completionTimes.push(completionTime)
@@ -426,7 +426,7 @@ const DesignerAnalyticsCharts = ({
 
     fosData.forEach((fo) => {
       if (fo.profiles) {
-        const foDate = new Date(fo.created_at)
+        const foDate = new Date(fo.data_in)
         const month = format(foDate, 'MMM', { locale: pt })
         const designerName =
           `${fo.profiles.first_name} ${fo.profiles.last_name}`.trim()
@@ -468,10 +468,10 @@ const DesignerAnalyticsCharts = ({
             item.items_base?.complexidade === complexity &&
             complexity !== 'OFFSET' &&
             item.data_saida &&
-            item.items_base?.created_at,
+            item.items_base?.data_in,
         )
         .map((item) =>
-          calculateCompletionDays(item.items_base.created_at, item.data_saida),
+          calculateCompletionDays(item.items_base.data_in, item.data_saida),
         )
 
       avgComplexityTime[complexity] =
@@ -485,9 +485,9 @@ const DesignerAnalyticsCharts = ({
     // Calculate totals
     const totalItems = designerItemsData.length
     const allCompletionTimes = designerItemsData
-      .filter((item) => item.data_saida && item.items_base?.created_at)
+      .filter((item) => item.data_saida && item.items_base?.data_in)
       .map((item) =>
-        calculateCompletionDays(item.items_base.created_at, item.data_saida),
+        calculateCompletionDays(item.items_base.data_in, item.data_saida),
       )
 
     const avgGlobalCompletionTime =
@@ -525,7 +525,7 @@ const DesignerAnalyticsCharts = ({
 
   useEffect(() => {
     fetchAnalyticsData()
-  }, []) // fetchAnalyticsData - temporarily removed to prevent infinite loop
+  }, [fetchAnalyticsData])
 
   const handleRefresh = async () => {
     await fetchAnalyticsData()
@@ -566,7 +566,7 @@ const DesignerAnalyticsCharts = ({
             Análises & Gráficos Designer - Últimos 12 Meses
           </h2>
           <p className="text-muted-foreground leading-tight">
-            Itens concluídos, tempo de conclusão (created_at → data_saída) e
+            Itens concluídos, tempo de conclusão (data_in → data_saída) e
             análise por complexidade
           </p>
         </div>

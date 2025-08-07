@@ -1,89 +1,96 @@
-import React, { useState } from 'react';
-import { createBrowserClient } from '@/utils/supabase';
-import { CreatableCombobox, CreatableComboboxOption } from '@/components/ui/CreatableCombobox';
+import React, { useState } from 'react'
+import { createBrowserClient } from '@/utils/supabase'
+import {
+  CreatableCombobox,
+  CreatableComboboxOption,
+} from '@/components/ui/CreatableCombobox'
 
 export interface TransportadoraOption {
-  value: string;
-  label: string;
+  value: string
+  label: string
 }
 
 interface CreatableTransportadoraComboboxProps {
-  value: string;
-  onChange: (value: string) => void;
-  options: TransportadoraOption[];
-  onOptionsUpdate?: (newOptions: TransportadoraOption[]) => void;
-  placeholder?: string;
+  value: string
+  onChange: (value: string) => void
+  options: TransportadoraOption[]
+  onOptionsUpdate?: (newOptions: TransportadoraOption[]) => void
+  placeholder?: string
 }
 
-const CreatableTransportadoraCombobox: React.FC<CreatableTransportadoraComboboxProps> = ({
+const CreatableTransportadoraCombobox: React.FC<
+  CreatableTransportadoraComboboxProps
+> = ({
   value,
   onChange,
   options,
   onOptionsUpdate,
-  placeholder = "Selecionar transportadora..."
+  placeholder = 'Selecionar transportadora...',
 }) => {
-  const [isCreating, setIsCreating] = useState(false);
-  const supabase = createBrowserClient();
+  const [isCreating, setIsCreating] = useState(false)
+  const supabase = createBrowserClient()
 
-  const handleCreateNew = async (inputValue: string): Promise<CreatableComboboxOption | null> => {
-    if (!inputValue.trim()) return null;
-    
-    setIsCreating(true);
-    
+  const handleCreateNew = async (
+    inputValue: string,
+  ): Promise<CreatableComboboxOption | null> => {
+    if (!inputValue.trim()) return null
+
+    setIsCreating(true)
+
     try {
       // Insert new transportadora into Supabase
       const { data, error } = await supabase
-        .from('transportadoras')
+        .from('transportadora')
         .insert({
-          nome_transp: inputValue.trim()
+          name: inputValue.trim(),
         })
         .select('*')
-        .single();
+        .single()
 
       if (error) {
-        console.error('Error creating transportadora:', error);
-        return null;
+        console.error('Error creating transportadora:', error)
+        return null
       }
 
       if (data) {
         const newOption: TransportadoraOption = {
           value: data.id.toString(),
-          label: data.nome_transp
-        };
+          label: data.name,
+        }
 
         // Update the options list
-        const updatedOptions = [...options, newOption];
+        const updatedOptions = [...options, newOption]
         if (onOptionsUpdate) {
-          onOptionsUpdate(updatedOptions);
+          onOptionsUpdate(updatedOptions)
         }
 
         return {
           value: newOption.value,
-          label: newOption.label
-        };
+          label: newOption.label,
+        }
       }
 
-      return null;
+      return null
     } catch (error) {
-      console.error('Error creating transportadora:', error);
-      return null;
+      console.error('Error creating transportadora:', error)
+      return null
     } finally {
-      setIsCreating(false);
+      setIsCreating(false)
     }
-  };
+  }
 
   return (
     <CreatableCombobox
       value={value}
       onChange={onChange}
       onCreateNew={handleCreateNew}
-      options={options.map(opt => ({ value: opt.value, label: opt.label }))}
+      options={options.map((opt) => ({ value: opt.value, label: opt.label }))}
       placeholder={placeholder}
       searchPlaceholder="Procurar transportadora..."
       createMessage="Criar transportadora"
       loading={isCreating}
     />
-  );
-};
+  )
+}
 
-export default CreatableTransportadoraCombobox; 
+export default CreatableTransportadoraCombobox

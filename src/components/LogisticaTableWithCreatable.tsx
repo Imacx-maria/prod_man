@@ -39,6 +39,25 @@ import type {
   Armazem,
 } from '@/types/logistica'
 
+// Helper function for smart numeric sorting (handles mixed text/number fields)
+const parseNumericField = (
+  value: string | number | null | undefined,
+): number => {
+  if (value === null || value === undefined) return 0
+  if (typeof value === 'number') return value
+
+  const strValue = String(value).trim()
+  if (strValue === '') return 0
+
+  // Try to parse as number
+  const numValue = Number(strValue)
+  if (!isNaN(numValue)) return numValue
+
+  // For non-numeric values (letters), sort them after all numbers
+  // Use a high number + character code for consistent ordering
+  return 999999 + strValue.charCodeAt(0)
+}
+
 interface TableColumn {
   label: string
   width: string
@@ -124,7 +143,74 @@ export const LogisticaTableWithCreatable: React.FC<
   // State for table functionality
   const [sortColumn, setSortColumn] = useState<string>('')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc')
+  const [hasUserSorted, setHasUserSorted] = useState(false) // Track if user has manually sorted
   const [editRows, setEditRows] = useState<Record<string, any>>({})
+
+  // Helper functions for stable data access
+  const getItemValue = useCallback(
+    (row: LogisticaRecord, editRows: Record<string, any>) => {
+      // Priority: edit state -> direct description -> nested description
+      return (
+        editRows[row.id]?.item ||
+        row.descricao ||
+        row.items_base?.descricao ||
+        ''
+      )
+    },
+    [],
+  )
+
+  const getQuantityValue = useCallback(
+    (row: LogisticaRecord, editRows: Record<string, any>) => {
+      // Priority: edit state -> row quantity
+      const editValue = editRows[row.id]?.quantidade
+      if (editValue !== undefined) return editValue
+      return row.quantidade ?? ''
+    },
+    [],
+  )
+
+  const getGuiaValue = useCallback(
+    (row: LogisticaRecord, editRows: Record<string, any>) => {
+      return editRows[row.id]?.guia || row.guia || ''
+    },
+    [],
+  )
+
+  // Data Integrity Checker for development
+  const DataIntegrityChecker: React.FC<{
+    records: LogisticaRecord[]
+    editRows: Record<string, any>
+  }> = React.memo(({ records, editRows }) => {
+    React.useEffect(() => {
+      const missingData = records.filter((record) => {
+        const hasItem = !!(record.descricao || record.items_base?.descricao)
+        const hasQuantity =
+          record.quantidade !== null && record.quantidade !== undefined
+        return !hasItem || !hasQuantity
+      })
+
+      if (missingData.length > 0) {
+        console.group('🚨 Data Integrity Issues Detected:')
+        missingData.forEach((record, index) => {
+          console.log(`Record ${index}:`, {
+            id: record.id,
+            hasDirectDescricao: !!record.descricao,
+            hasNestedDescricao: !!record.items_base?.descricao,
+            quantidade: record.quantidade,
+            editState: editRows[record.id] || 'none',
+            itemValue: getItemValue(record, editRows),
+            quantityValue: getQuantityValue(record, editRows),
+          })
+        })
+        console.groupEnd()
+      }
+    }, [records, editRows])
+
+    return null
+  })
+
+  DataIntegrityChecker.displayName = 'DataIntegrityChecker'
 
   // Convert data to the format expected by creatable components
   const armazemOptions: ArmazemOption[] = useMemo(
@@ -208,6 +294,7 @@ export const LogisticaTableWithCreatable: React.FC<
   // Handle sorting - memoized to prevent recreation on renders
   const handleSort = useCallback(
     (field: string) => {
+      setHasUserSorted(true) // Mark that user has manually sorted
       if (sortColumn === field) {
         setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
       } else {
@@ -237,8 +324,10 @@ export const LogisticaTableWithCreatable: React.FC<
 
   // Sorting logic with optimized comparisons
   const sortedRecords = useMemo(() => {
-    // Only sort if a sort column is explicitly set, otherwise return records in original order
-    if (!sortColumn) return records
+    // Only sort if user has manually sorted
+    if (!hasUserSorted) {
+      return records // Return unsorted data
+    }
 
     // Get comparison function based on column type
     const getComparisonValue = (
@@ -247,9 +336,11 @@ export const LogisticaTableWithCreatable: React.FC<
     ): string | boolean | number => {
       switch (field) {
         case 'numero_orc':
-          return record.items_base?.folhas_obras?.numero_orc || ''
+          // Smart numeric sorting: numbers first, then letters
+          return parseNumericField(record.items_base?.folhas_obras?.numero_orc)
         case 'numero_fo':
-          return record.items_base?.folhas_obras?.numero_fo || ''
+          // Smart numeric sorting: numbers first, then letters
+          return parseNumericField(record.items_base?.folhas_obras?.numero_fo)
         case 'tipo':
           return record.items_base?.brindes ? 'Brindes' : 'Print'
         case 'cliente': {
@@ -327,17 +418,41 @@ export const LogisticaTableWithCreatable: React.FC<
     }
 
     return [...records].sort(compare)
-  }, [records, sortColumn, sortDirection, clienteLookup, transportadoraLookup])
+  }, [
+    records,
+    sortColumn,
+    sortDirection,
+    clienteLookup,
+    transportadoraLookup,
+    hasUserSorted,
+  ])
 
-  // Handle edit state updates
+  // Handle edit state updates - enhanced for data stability
   const handleEdit = useCallback((rowId: string, field: string, value: any) => {
-    setEditRows((prev) => ({
-      ...prev,
-      [rowId]: {
-        ...prev[rowId],
-        [field]: value,
-      },
-    }))
+    if (!rowId) {
+      console.warn('handleEdit called with missing rowId')
+      return
+    }
+
+    setEditRows((prev) => {
+      const currentRowEdit = prev[rowId] || {}
+
+      // Preserve critical fields when updating others
+      const preservedData = {
+        item: currentRowEdit.item,
+        quantidade: currentRowEdit.quantidade,
+        guia: currentRowEdit.guia,
+      }
+
+      return {
+        ...prev,
+        [rowId]: {
+          ...preservedData,
+          ...currentRowEdit,
+          [field]: value,
+        },
+      }
+    })
   }, [])
 
   // Handle row deletion
@@ -439,6 +554,9 @@ export const LogisticaTableWithCreatable: React.FC<
 
   return (
     <div className="bg-background rounded-none">
+      {process.env.NODE_ENV === 'development' && (
+        <DataIntegrityChecker records={sortedRecords} editRows={editRows} />
+      )}
       <RadioGroup
         value={sourceRowId || undefined}
         onValueChange={onSourceRowChange}
@@ -489,13 +607,16 @@ export const LogisticaTableWithCreatable: React.FC<
                   <TableCell className="text-sm">
                     <Input
                       className="h-10 border-0 text-sm outline-0 focus:border-0 focus:ring-0"
-                      value={editRows[row.id]?.guia || row.guia || ''}
+                      value={getGuiaValue(row, editRows)}
                       onChange={(e) =>
                         handleEdit(row.id, 'guia', e.target.value)
                       }
-                      onBlur={() =>
-                        onGuiaSave(row, editRows[row.id]?.guia || '')
-                      }
+                      onBlur={() => {
+                        const guiaValue = getGuiaValue(row, editRows)
+                        if (guiaValue !== (row.guia || '')) {
+                          onGuiaSave(row, guiaValue)
+                        }
+                      }}
                     />
                   </TableCell>
 
@@ -532,19 +653,20 @@ export const LogisticaTableWithCreatable: React.FC<
                   <TableCell className="text-sm">
                     <Input
                       className="h-10 border-0 text-sm outline-0 focus:border-0 focus:ring-0"
-                      value={
-                        editRows[row.id]?.item ||
-                        row.descricao ||
-                        row.items_base?.descricao ||
-                        ''
-                      }
+                      value={getItemValue(row, editRows)}
                       onChange={(e) =>
                         handleEdit(row.id, 'item', e.target.value)
                       }
-                      onBlur={() =>
-                        onItemSave &&
-                        onItemSave(row, editRows[row.id]?.item || '')
-                      }
+                      onBlur={() => {
+                        const itemValue = getItemValue(row, editRows)
+                        if (
+                          onItemSave &&
+                          itemValue !==
+                            (row.descricao || row.items_base?.descricao || '')
+                        ) {
+                          onItemSave(row, itemValue)
+                        }
+                      }}
                     />
                   </TableCell>
 
@@ -553,18 +675,19 @@ export const LogisticaTableWithCreatable: React.FC<
                     <Input
                       type="text"
                       className="h-10 border-0 text-right text-sm outline-0 focus:border-0 focus:ring-0"
-                      value={
-                        editRows[row.id]?.quantidade ?? row.quantidade ?? ''
-                      }
+                      value={getQuantityValue(row, editRows)}
                       onChange={(e) => {
                         const value =
                           e.target.value === '' ? null : Number(e.target.value)
                         handleEdit(row.id, 'quantidade', value)
                       }}
                       onBlur={() => {
-                        const value =
-                          editRows[row.id]?.quantidade ?? row.quantidade ?? null
-                        onQuantidadeSave(row, value)
+                        const currentValue = getQuantityValue(row, editRows)
+                        const numericValue =
+                          currentValue === '' ? null : Number(currentValue)
+                        if (numericValue !== row.quantidade) {
+                          onQuantidadeSave(row, numericValue)
+                        }
                       }}
                     />
                   </TableCell>

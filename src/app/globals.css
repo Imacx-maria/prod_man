@@ -13,11 +13,11 @@
 
 :root {
   --background: oklch(0.94 0.01 95.04);
-  --secondary-background: oklch(0.91 0.01 95.08);
+  --secondary-background: oklch(0.8947 0.0111 95.18);
   --foreground: oklch(0% 0 0);
   --main-foreground: oklch(0% 0 0);
   --main: oklch(84.08% 0.1725 84.2);
-  --border: oklch(0% 0 0);
+  --main-dark: hsl(46, 97%, 65%);
   --ring: oklch(0% 0 0);
   --overlay: oklch(0% 0 0 / 0.8);
   --shadow: 4px 4px 0px 0px var(--border);
@@ -86,10 +86,23 @@
   --color-secondary: var(--secondary-background);
   --color-secondary-foreground: var(--foreground);
   --color-destructive: #ef4444;
-  --color-destructive-foreground: #fff;
+  --color-destructive-foreground: #000;
   --color-accent: #fbbf24;
   --color-accent-foreground: #000;
   --color-orange: var(--orange);
+}
+
+/* Destructive button styling */
+.btn-destructive {
+  border: 2px solid #000 !important;
+  background-color: #ef4444 !important;
+  color: #000 !important;
+}
+
+.btn-destructive:hover {
+  background-color: #dc2626 !important;
+  color: #000 !important;
+  border: 2px solid #000 !important;
 }
 
 /* Custom Scrollbar Styles */

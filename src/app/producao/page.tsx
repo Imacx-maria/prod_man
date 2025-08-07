@@ -105,6 +105,7 @@ interface Job {
   saiu?: boolean | null // S
   fatura?: boolean | null // F
   created_at?: string | null
+  data_in?: string | null // Input/creation date
   cliente?: string | null
   id_cliente?: string | null
   data_concluido?: string | null
@@ -174,12 +175,31 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue
 }
 
+// Helper function for smart numeric sorting (handles mixed text/number fields)
+const parseNumericField = (
+  value: string | number | null | undefined,
+): number => {
+  if (value === null || value === undefined) return 0
+  if (typeof value === 'number') return value
+
+  const strValue = String(value).trim()
+  if (strValue === '') return 0
+
+  // Try to parse as number
+  const numValue = Number(strValue)
+  if (!isNaN(numValue)) return numValue
+
+  // For non-numeric values (letters), sort them after all numbers
+  // Use a high number + character code for consistent ordering
+  return 999999 + strValue.charCodeAt(0)
+}
+
 // Simple helper functions for performance (moved out of component to avoid SSR issues)
 const getPColor = (job: Job): string => {
   if (job.prioridade) return 'bg-red-500'
-  if (job.created_at) {
+  if (job.data_in) {
     const days =
-      (Date.now() - new Date(job.created_at).getTime()) / (1000 * 60 * 60 * 24)
+      (Date.now() - new Date(job.data_in).getTime()) / (1000 * 60 * 60 * 24)
     if (days > 3) return 'bg-[var(--blue-light)]'
   }
   return 'bg-green-500'
@@ -364,8 +384,11 @@ export default function ProducaoPage() {
     | 'corte'
   const [sortCol, setSortCol] = useState<SortableJobKey>('prioridade')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+
+  const [hasUserSorted, setHasUserSorted] = useState(false) // Track if user has manually sorted
   const toggleSort = useCallback(
     (c: SortableJobKey) => {
+      setHasUserSorted(true) // Mark that user has manually sorted
       if (sortCol === c) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
       else {
         setSortCol(c)
@@ -576,7 +599,7 @@ export default function ProducaoPage() {
           `
           id, numero_fo, numero_orc, nome_campanha, data_saida, 
           prioridade, notas, concluido, saiu, fatura, created_at, 
-          cliente, id_cliente, data_concluido, updated_at
+          data_in, cliente, id_cliente, data_concluido, updated_at
         `,
           { count: 'exact' },
         )
@@ -637,7 +660,7 @@ export default function ProducaoPage() {
         }
 
         // Order and pagination
-        query = query.order('created_at', { ascending: false })
+        query = query.order('data_in', { ascending: false })
 
         // Only apply pagination if we're not filtering by specific job IDs
         if (!jobIds) {
@@ -978,6 +1001,18 @@ export default function ProducaoPage() {
             )
             return [...filtered, ...itemsWithDesigner]
           })
+
+          // Update designer items state for the color calculations
+          if (designerData) {
+            setAllDesignerItems((prev) => {
+              // Replace designer items for these jobs to avoid duplicates
+              const filtered = prev.filter(
+                (designer) =>
+                  !itemsData.some((item) => item.id === designer.item_id),
+              )
+              return [...filtered, ...designerData]
+            })
+          }
         }
       } catch (error) {
         console.error('Error fetching items:', error)
@@ -1026,35 +1061,30 @@ export default function ProducaoPage() {
     async (jobIds: string[]) => {
       if (jobIds.length === 0) return
 
+      // Get item IDs for these jobs first (exclude pending items)
+      const jobItemIds = allItems
+        .filter(
+          (item) =>
+            jobIds.includes(item.folha_obra_id) && !item.id.startsWith('temp-'),
+        )
+        .map((item) => item.id)
+
+      // If no items are loaded yet, skip designer items fetch
+      // This prevents the race condition on initial page load
+      if (jobItemIds.length === 0) return
+
       setLoading((prev) => ({ ...prev, operacoes: true })) // Reuse loading state
       try {
         const { data: designerData, error } = await supabase
           .from('designer_items')
           .select('id, item_id, paginacao')
-          .in(
-            'item_id',
-            // Need to get item IDs for these jobs first (exclude pending items)
-            allItems
-              .filter(
-                (item) =>
-                  jobIds.includes(item.folha_obra_id) &&
-                  !item.id.startsWith('temp-'),
-              )
-              .map((item) => item.id),
-          )
+          .in('item_id', jobItemIds)
 
         if (error) throw error
 
         if (designerData) {
           setAllDesignerItems((prev) => {
             // Replace designer items for these jobs to avoid duplicates
-            const jobItemIds = allItems
-              .filter(
-                (item) =>
-                  jobIds.includes(item.folha_obra_id) &&
-                  !item.id.startsWith('temp-'),
-              )
-              .map((item) => item.id)
             const filtered = prev.filter(
               (designer) => !jobItemIds.includes(designer.item_id),
             )
@@ -1149,7 +1179,6 @@ export default function ProducaoPage() {
       if (jobIds.length > 0) {
         fetchItems(jobIds)
         fetchOperacoes(jobIds)
-        fetchDesignerItems(jobIds)
         fetchJobsSaiuStatus(jobIds)
         fetchJobsCompletionStatus(jobIds)
       }
@@ -1158,7 +1187,6 @@ export default function ProducaoPage() {
     jobs,
     fetchItems,
     fetchOperacoes,
-    fetchDesignerItems,
     fetchJobsSaiuStatus,
     fetchJobsCompletionStatus,
   ])
@@ -1246,17 +1274,24 @@ export default function ProducaoPage() {
 
   /* sort */
   const sorted = useMemo(() => {
+    // Only apply sorting if user has manually sorted
+    if (!hasUserSorted) {
+      return [...filtered]
+    }
+
     const arr = [...filtered]
     arr.sort((a, b) => {
       let A: any, B: any
       switch (sortCol) {
         case 'numero_orc':
-          A = a.numero_orc ?? ''
-          B = b.numero_orc ?? ''
+          // Smart numeric sorting: numbers first, then letters
+          A = parseNumericField(a.numero_orc)
+          B = parseNumericField(b.numero_orc)
           break
         case 'numero_fo':
-          A = a.numero_fo ?? ''
-          B = b.numero_fo ?? ''
+          // Smart numeric sorting: numbers first, then letters
+          A = parseNumericField(a.numero_fo)
+          B = parseNumericField(b.numero_fo)
           break
         case 'cliente':
           A = a.cliente ?? ''
@@ -1317,6 +1352,11 @@ export default function ProducaoPage() {
           A = aCorteCompleted
           B = bCorteCompleted
           break
+        case 'created_at':
+          // Use data_in (input date) instead of created_at for proper date sorting
+          A = a.data_in ? new Date(a.data_in).getTime() : 0
+          B = b.data_in ? new Date(b.data_in).getTime() : 0
+          break
         default:
           A = a.id
           B = b.id
@@ -1328,7 +1368,7 @@ export default function ProducaoPage() {
       return 0
     })
     return arr
-  }, [filtered, sortCol, sortDir, allItems, allOperacoes])
+  }, [filtered, sortCol, sortDir, allOperacoes, hasUserSorted])
 
   /* ---------- render ---------- */
   return (
@@ -1643,6 +1683,7 @@ export default function ProducaoPage() {
                           saiu: false,
                           fatura: false,
                           created_at: null,
+                          data_in: null,
                           cliente: '',
                           id_cliente: null,
                           data_concluido: null,
@@ -1864,7 +1905,7 @@ export default function ProducaoPage() {
                               className="hover:bg-[var(--main)]"
                             >
                               <TableCell className="w-[140px] text-center text-xs">
-                                {formatDatePortuguese(job.created_at)}
+                                {formatDatePortuguese(job.data_in)}
                               </TableCell>
                               <TableCell className="w-[90px] max-w-[90px]">
                                 <Input
@@ -2412,11 +2453,9 @@ export default function ProducaoPage() {
                                   title={
                                     job.prioridade
                                       ? 'Prioritário'
-                                      : job.created_at &&
+                                      : job.data_in &&
                                           (Date.now() -
-                                            new Date(
-                                              job.created_at,
-                                            ).getTime()) /
+                                            new Date(job.data_in).getTime()) /
                                             (1000 * 60 * 60 * 24) >
                                             3
                                         ? 'Aguardando há mais de 3 dias'
@@ -2769,7 +2808,7 @@ export default function ProducaoPage() {
                               className="hover:bg-[var(--main)]"
                             >
                               <TableCell className="w-[140px] text-center text-xs">
-                                {formatDatePortuguese(job.created_at)}
+                                {formatDatePortuguese(job.data_in)}
                               </TableCell>
                               <TableCell className="w-[90px] max-w-[90px]">
                                 <Input
@@ -3317,11 +3356,9 @@ export default function ProducaoPage() {
                                   title={
                                     job.prioridade
                                       ? 'Prioritário'
-                                      : job.created_at &&
+                                      : job.data_in &&
                                           (Date.now() -
-                                            new Date(
-                                              job.created_at,
-                                            ).getTime()) /
+                                            new Date(job.data_in).getTime()) /
                                             (1000 * 60 * 60 * 24) >
                                             3
                                         ? 'Aguardando há mais de 3 dias'
@@ -3739,7 +3776,7 @@ function JobDrawerContent({
           item_id: baseData.id,
           em_curso: true,
           duvidas: false,
-          maquete_enviada: false,
+          maquete_enviada1: false,
           paginacao: false,
         })
 

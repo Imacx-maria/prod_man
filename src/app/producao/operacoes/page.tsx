@@ -435,10 +435,9 @@ function OperacoesPageContent() {
   // Add the getPColor function for item priority
   const getPColor = (item: ProductionItem): string => {
     if (item.prioridade) return 'bg-red-500'
-    if (item.created_at) {
+    if (item.data_in) {
       const days =
-        (Date.now() - new Date(item.created_at).getTime()) /
-        (1000 * 60 * 60 * 24)
+        (Date.now() - new Date(item.data_in).getTime()) / (1000 * 60 * 60 * 24)
       if (days > 3) return 'bg-[var(--blue-light)]'
     }
     return 'bg-green-500'
@@ -1440,9 +1439,9 @@ function OperacoesPageContent() {
                           title={
                             item.prioridade
                               ? 'Prioritário'
-                              : item.created_at &&
+                              : item.data_in &&
                                   (Date.now() -
-                                    new Date(item.created_at).getTime()) /
+                                    new Date(item.data_in).getTime()) /
                                     (1000 * 60 * 60 * 24) >
                                     3
                                 ? 'Aguardando há mais de 3 dias'
@@ -1538,9 +1537,9 @@ function OperacoesPageContent() {
                             title={
                               item.prioridade
                                 ? 'Prioritário'
-                                : item.created_at &&
+                                : item.data_in &&
                                     (Date.now() -
-                                      new Date(item.created_at).getTime()) /
+                                      new Date(item.data_in).getTime()) /
                                       (1000 * 60 * 60 * 24) >
                                       3
                                   ? 'Aguardando há mais de 3 dias'
@@ -2524,7 +2523,17 @@ function OperationsTable({
       setQuantityValues(newQuantityValues)
       setQtPrintValues(newQtPrintValues)
     }
-  }, [displayOperations, materials, paletes, type]) // Removed isUpdating from deps
+  }, [
+    displayOperations,
+    materials,
+    paletes,
+    type,
+    isUpdating,
+    materialSelections,
+    paletteSelections,
+    qtPrintValues,
+    quantityValues,
+  ])
 
   // Calculate and report total quantity including pending operations
   useEffect(() => {

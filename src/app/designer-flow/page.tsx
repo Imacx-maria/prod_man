@@ -52,6 +52,7 @@ import {
   Copy,
   FileText,
   FilePlus,
+  ReceiptText,
 } from 'lucide-react'
 import { createBrowserClient } from '@/utils/supabase'
 import {
@@ -113,11 +114,35 @@ type DesignerItem = {
   item_id: string // designer_items.item_id
   em_curso: boolean | null
   duvidas: boolean | null
-  maquete_enviada: boolean | null
+  maquete_enviada1: boolean | null
+  aprovacao_recebida1: boolean | null
+  maquete_enviada2: boolean | null
+  aprovacao_recebida2: boolean | null
+  maquete_enviada3: boolean | null
+  aprovacao_recebida3: boolean | null
+  maquete_enviada4: boolean | null
+  aprovacao_recebida4: boolean | null
+  maquete_enviada5: boolean | null
+  aprovacao_recebida5: boolean | null
+  maquete_enviada6?: boolean | null
+  aprovacao_recebida6?: boolean | null
   paginacao: boolean | null
   data_in: string | null
+  data_em_curso: string | null
   data_duvidas: string | null
-  data_envio: string | null
+  data_maquete_enviada1: string | null
+  data_aprovacao_recebida1: string | null
+  data_maquete_enviada2: string | null
+  data_aprovacao_recebida2: string | null
+  data_maquete_enviada3: string | null
+  data_aprovacao_recebida3: string | null
+  data_maquete_enviada4: string | null
+  data_aprovacao_recebida4: string | null
+  data_maquete_enviada5: string | null
+  data_aprovacao_recebida5: string | null
+  data_maquete_enviada6?: string | null
+  data_aprovacao_recebida6?: string | null
+  data_paginacao: string | null
   data_saida: string | null
   path_trabalho: string | null
   updated_at: string | null
@@ -153,11 +178,35 @@ interface Item {
   complexidade?: string | null
   em_curso: boolean | null
   duvidas: boolean | null
-  maquete_enviada: boolean | null
+  maquete_enviada1: boolean | null
+  aprovacao_recebida1: boolean | null
+  maquete_enviada2: boolean | null
+  aprovacao_recebida2: boolean | null
+  maquete_enviada3: boolean | null
+  aprovacao_recebida3: boolean | null
+  maquete_enviada4: boolean | null
+  aprovacao_recebida4: boolean | null
+  maquete_enviada5: boolean | null
+  aprovacao_recebida5: boolean | null
+  maquete_enviada6: boolean | null
+  aprovacao_recebida6: boolean | null
   paginacao: boolean | null
   data_in: string | null
+  data_em_curso: string | null
   data_duvidas: string | null
-  data_envio: string | null
+  data_maquete_enviada1: string | null
+  data_aprovacao_recebida1: string | null
+  data_maquete_enviada2: string | null
+  data_aprovacao_recebida2: string | null
+  data_maquete_enviada3: string | null
+  data_aprovacao_recebida3: string | null
+  data_maquete_enviada4: string | null
+  data_aprovacao_recebida4: string | null
+  data_maquete_enviada5: string | null
+  data_aprovacao_recebida5: string | null
+  data_maquete_enviada6: string | null
+  data_aprovacao_recebida6: string | null
+  data_paginacao: string | null
   data_saida: string | null
   path_trabalho: string | null
   updated_at: string | null
@@ -179,6 +228,88 @@ const getPColor = (job: Job): string => {
     if (days > 3) return 'bg-[var(--blue-light)]'
   }
   return 'bg-green-500'
+}
+
+// Helper functions for timeline report
+const formatDate = (dateString: string | null): string => {
+  if (!dateString) return ''
+  const date = new Date(dateString)
+
+  // Check if it's a timestamp (has time component)
+  const hasTime = dateString.includes('T') || dateString.includes(' ')
+
+  if (hasTime) {
+    return date.toLocaleString('pt-PT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+  } else {
+    return date.toLocaleDateString('pt-PT', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    })
+  }
+}
+
+const calculateDaysBetween = (
+  startDate: string | null,
+  endDate: string | null,
+): string => {
+  if (!startDate || !endDate) return ''
+
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const diffTime = Math.abs(end.getTime() - start.getTime())
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+  return diffDays === 1 ? '1 dia' : `${diffDays} dias`
+}
+
+const findLastApprovalDate = (item: Item): string | null => {
+  // Check approval dates in reverse order (6, 5, 4, 3, 2, 1, then main)
+  if (item.aprovacao_recebida6 && item.data_aprovacao_recebida6) {
+    return item.data_aprovacao_recebida6
+  }
+  if (item.aprovacao_recebida5 && item.data_aprovacao_recebida5) {
+    return item.data_aprovacao_recebida5
+  }
+  if (item.aprovacao_recebida4 && item.data_aprovacao_recebida4) {
+    return item.data_aprovacao_recebida4
+  }
+  if (item.aprovacao_recebida3 && item.data_aprovacao_recebida3) {
+    return item.data_aprovacao_recebida3
+  }
+  if (item.aprovacao_recebida2 && item.data_aprovacao_recebida2) {
+    return item.data_aprovacao_recebida2
+  }
+  if (item.aprovacao_recebida1 && item.data_aprovacao_recebida1) {
+    return item.data_aprovacao_recebida1
+  }
+
+  return null
+}
+
+// Helper function for smart numeric sorting (handles mixed text/number fields)
+const parseNumericField = (
+  value: string | number | null | undefined,
+): number => {
+  if (value === null || value === undefined) return 0
+  if (typeof value === 'number') return value
+
+  const strValue = String(value).trim()
+  if (strValue === '') return 0
+
+  // Try to parse as number
+  const numValue = Number(strValue)
+  if (!isNaN(numValue)) return numValue
+
+  // For non-numeric values (letters), sort them after all numbers
+  // Use a high number + character code for consistent ordering
+  return 999999 + strValue.charCodeAt(0)
 }
 
 // 1. Extract fetchJobs and fetchAllItems to standalone functions
@@ -397,11 +528,31 @@ const fetchAllItems = async (
         item_id,
         em_curso,
         duvidas,
-        maquete_enviada,
+        maquete_enviada1,
+        aprovacao_recebida1,
+        maquete_enviada2,
+        aprovacao_recebida2,
+        maquete_enviada3,
+        aprovacao_recebida3,
+        maquete_enviada4,
+        aprovacao_recebida4,
+        maquete_enviada5,
+        aprovacao_recebida5,
         paginacao,
         data_in,
+        data_em_curso,
         data_duvidas,
-        data_envio,
+        data_maquete_enviada1,
+        data_aprovacao_recebida1,
+        data_maquete_enviada2,
+        data_aprovacao_recebida2,
+        data_maquete_enviada3,
+        data_aprovacao_recebida3,
+        data_maquete_enviada4,
+        data_aprovacao_recebida4,
+        data_maquete_enviada5,
+        data_aprovacao_recebida5,
+        data_paginacao,
         data_saida,
         path_trabalho,
         updated_at,
@@ -446,11 +597,35 @@ const fetchAllItems = async (
             complexidade: base.complexidade ?? null,
             em_curso: d.em_curso,
             duvidas: d.duvidas,
-            maquete_enviada: d.maquete_enviada,
+            maquete_enviada1: d.maquete_enviada1,
+            aprovacao_recebida1: d.aprovacao_recebida1,
+            maquete_enviada2: d.maquete_enviada2,
+            aprovacao_recebida2: d.aprovacao_recebida2,
+            maquete_enviada3: d.maquete_enviada3,
+            aprovacao_recebida3: d.aprovacao_recebida3,
+            maquete_enviada4: d.maquete_enviada4,
+            aprovacao_recebida4: d.aprovacao_recebida4,
+            maquete_enviada5: d.maquete_enviada5,
+            aprovacao_recebida5: d.aprovacao_recebida5,
+            maquete_enviada6: d.maquete_enviada6 ?? null,
+            aprovacao_recebida6: d.aprovacao_recebida6 ?? null,
             paginacao: d.paginacao,
             data_in: d.data_in,
+            data_em_curso: d.data_em_curso,
             data_duvidas: d.data_duvidas,
-            data_envio: d.data_envio,
+            data_maquete_enviada1: d.data_maquete_enviada1,
+            data_aprovacao_recebida1: d.data_aprovacao_recebida1,
+            data_maquete_enviada2: d.data_maquete_enviada2,
+            data_aprovacao_recebida2: d.data_aprovacao_recebida2,
+            data_maquete_enviada3: d.data_maquete_enviada3,
+            data_aprovacao_recebida3: d.data_aprovacao_recebida3,
+            data_maquete_enviada4: d.data_maquete_enviada4,
+            data_aprovacao_recebida4: d.data_aprovacao_recebida4,
+            data_maquete_enviada5: d.data_maquete_enviada5,
+            data_aprovacao_recebida5: d.data_aprovacao_recebida5,
+            data_maquete_enviada6: d.data_maquete_enviada6 ?? null,
+            data_aprovacao_recebida6: d.data_aprovacao_recebida6 ?? null,
+            data_paginacao: d.data_paginacao,
             data_saida: d.data_saida,
             path_trabalho: d.path_trabalho,
             updated_at: d.updated_at,
@@ -476,6 +651,7 @@ export default function DesignerFlow() {
   const [designers, setDesigners] = useState<Designer[]>([])
   const [sortColumn, setSortColumn] = useState<string>('prioridade')
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [hasUserSorted, setHasUserSorted] = useState(false) // Track if user has manually sorted
   const [openDrawerId, setOpenDrawerId] = useState<string | null>(null)
   const closeBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const triggerBtnRefs = useRef<Record<string, HTMLButtonElement | null>>({})
@@ -778,6 +954,7 @@ export default function DesignerFlow() {
 
   // Sorting logic
   const handleSort = (column: string) => {
+    setHasUserSorted(true) // Mark that user has manually sorted
     if (sortColumn === column) {
       setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'))
     } else {
@@ -787,6 +964,11 @@ export default function DesignerFlow() {
   }
 
   const getSortedJobs = (jobs: Job[]) => {
+    // Only apply sorting if user has manually sorted
+    if (!hasUserSorted) {
+      return [...jobs] // Return unsorted data
+    }
+
     const sorted = [...jobs].sort((a, b) => {
       let aValue: any = a[sortColumn as keyof Job]
       let bValue: any = b[sortColumn as keyof Job]
@@ -794,6 +976,11 @@ export default function DesignerFlow() {
       if (sortColumn === 'data_in' || sortColumn === 'data_saida') {
         aValue = aValue ? new Date(aValue).getTime() : 0
         bValue = bValue ? new Date(bValue).getTime() : 0
+      }
+      if (sortColumn === 'numero_fo') {
+        // Smart numeric sorting: numbers first, then letters
+        aValue = parseNumericField(aValue)
+        bValue = parseNumericField(bValue)
       }
       if (sortColumn === 'profile_id') {
         const aName =
@@ -862,11 +1049,35 @@ export default function DesignerFlow() {
           item_id,
           em_curso,
           duvidas,
-          maquete_enviada,
+          maquete_enviada1,
+          aprovacao_recebida1,
+          maquete_enviada2,
+          aprovacao_recebida2,
+          maquete_enviada3,
+          aprovacao_recebida3,
+          maquete_enviada4,
+          aprovacao_recebida4,
+          maquete_enviada5,
+          aprovacao_recebida5,
+          maquete_enviada6,
+          aprovacao_recebida6,
           paginacao,
           data_in,
+          data_em_curso,
           data_duvidas,
-          data_envio,
+          data_maquete_enviada1,
+          data_aprovacao_recebida1,
+          data_maquete_enviada2,
+          data_aprovacao_recebida2,
+          data_maquete_enviada3,
+          data_aprovacao_recebida3,
+          data_maquete_enviada4,
+          data_aprovacao_recebida4,
+          data_maquete_enviada5,
+          data_aprovacao_recebida5,
+          data_maquete_enviada6,
+          data_aprovacao_recebida6,
+          data_paginacao,
           data_saida,
           path_trabalho,
           updated_at,
@@ -911,11 +1122,35 @@ export default function DesignerFlow() {
               complexidade: base.complexidade ?? null,
               em_curso: d.em_curso,
               duvidas: d.duvidas,
-              maquete_enviada: d.maquete_enviada,
+              maquete_enviada1: d.maquete_enviada1,
+              aprovacao_recebida1: d.aprovacao_recebida1,
+              maquete_enviada2: d.maquete_enviada2,
+              aprovacao_recebida2: d.aprovacao_recebida2,
+              maquete_enviada3: d.maquete_enviada3,
+              aprovacao_recebida3: d.aprovacao_recebida3,
+              maquete_enviada4: d.maquete_enviada4,
+              aprovacao_recebida4: d.aprovacao_recebida4,
+              maquete_enviada5: d.maquete_enviada5,
+              aprovacao_recebida5: d.aprovacao_recebida5,
+              maquete_enviada6: d.maquete_enviada6 ?? null,
+              aprovacao_recebida6: d.aprovacao_recebida6 ?? null,
               paginacao: d.paginacao,
               data_in: d.data_in,
+              data_em_curso: d.data_em_curso,
               data_duvidas: d.data_duvidas,
-              data_envio: d.data_envio,
+              data_maquete_enviada1: d.data_maquete_enviada1,
+              data_aprovacao_recebida1: d.data_aprovacao_recebida1,
+              data_maquete_enviada2: d.data_maquete_enviada2,
+              data_aprovacao_recebida2: d.data_aprovacao_recebida2,
+              data_maquete_enviada3: d.data_maquete_enviada3,
+              data_aprovacao_recebida3: d.data_aprovacao_recebida3,
+              data_maquete_enviada4: d.data_maquete_enviada4,
+              data_aprovacao_recebida4: d.data_aprovacao_recebida4,
+              data_maquete_enviada5: d.data_maquete_enviada5,
+              data_aprovacao_recebida5: d.data_aprovacao_recebida5,
+              data_maquete_enviada6: d.data_maquete_enviada6 ?? null,
+              data_aprovacao_recebida6: d.data_aprovacao_recebida6 ?? null,
+              data_paginacao: d.data_paginacao,
               data_saida: d.data_saida,
               path_trabalho: d.path_trabalho,
               updated_at: d.updated_at,
@@ -951,7 +1186,18 @@ export default function DesignerFlow() {
       if (
         column === 'em_curso' ||
         column === 'duvidas' ||
-        column === 'maquete_enviada' ||
+        column === 'maquete_enviada1' ||
+        column === 'aprovacao_recebida1' ||
+        column === 'maquete_enviada2' ||
+        column === 'aprovacao_recebida2' ||
+        column === 'maquete_enviada3' ||
+        column === 'aprovacao_recebida3' ||
+        column === 'maquete_enviada4' ||
+        column === 'aprovacao_recebida4' ||
+        column === 'maquete_enviada5' ||
+        column === 'aprovacao_recebida5' ||
+        column === 'maquete_enviada6' ||
+        column === 'aprovacao_recebida6' ||
         column === 'paginacao'
       ) {
         const aValue = !!a[column]
@@ -1989,7 +2235,7 @@ export default function DesignerFlow() {
                         <TableHeader>
                           <TableRow className="sticky top-0 z-10 bg-[var(--orange)]">
                             <TableHead
-                              className="border-border w-2/3 cursor-pointer border-b-2 font-bold uppercase select-none"
+                              className="border-border w-[60%] cursor-pointer border-b-2 font-bold uppercase select-none"
                               onClick={() => {
                                 setDrawerSort((prev) => {
                                   const current = prev[job.id]
@@ -2024,7 +2270,7 @@ export default function DesignerFlow() {
                                 ))}
                             </TableHead>
                             <TableHead
-                              className="border-border w-[29ch] cursor-pointer border-b-2 font-bold uppercase select-none"
+                              className="border-border w-[30%] cursor-pointer border-b-2 font-bold uppercase select-none"
                               onClick={() => {
                                 setDrawerSort((prev) => {
                                   const current = prev[job.id]
@@ -2128,41 +2374,7 @@ export default function DesignerFlow() {
                                   <ArrowDown className="ml-1 inline h-3 w-3" />
                                 ))}
                             </TableHead>
-                            <TableHead
-                              className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
-                              onClick={() => {
-                                setDrawerSort((prev) => {
-                                  const current = prev[job.id]
-                                  if (current?.column === 'em_curso') {
-                                    return {
-                                      ...prev,
-                                      [job.id]: {
-                                        column: 'em_curso',
-                                        direction:
-                                          current.direction === 'asc'
-                                            ? 'desc'
-                                            : 'asc',
-                                      },
-                                    }
-                                  }
-                                  return {
-                                    ...prev,
-                                    [job.id]: {
-                                      column: 'em_curso',
-                                      direction: 'asc',
-                                    },
-                                  }
-                                })
-                              }}
-                            >
-                              EC
-                              {drawerSort[job.id]?.column === 'em_curso' &&
-                                (drawerSort[job.id]?.direction === 'asc' ? (
-                                  <ArrowUp className="ml-1 inline h-3 w-3" />
-                                ) : (
-                                  <ArrowDown className="ml-1 inline h-3 w-3" />
-                                ))}
-                            </TableHead>
+
                             <TableHead
                               className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
                               onClick={() => {
@@ -2203,11 +2415,11 @@ export default function DesignerFlow() {
                               onClick={() => {
                                 setDrawerSort((prev) => {
                                   const current = prev[job.id]
-                                  if (current?.column === 'maquete_enviada') {
+                                  if (current?.column === 'maquete_enviada1') {
                                     return {
                                       ...prev,
                                       [job.id]: {
-                                        column: 'maquete_enviada',
+                                        column: 'maquete_enviada1',
                                         direction:
                                           current.direction === 'asc'
                                             ? 'desc'
@@ -2218,16 +2430,426 @@ export default function DesignerFlow() {
                                   return {
                                     ...prev,
                                     [job.id]: {
-                                      column: 'maquete_enviada',
+                                      column: 'maquete_enviada1',
                                       direction: 'asc',
                                     },
                                   }
                                 })
                               }}
                             >
-                              M
+                              M1
                               {drawerSort[job.id]?.column ===
-                                'maquete_enviada' &&
+                                'maquete_enviada1' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </TableHead>
+                            <TableHead
+                              className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (
+                                    current?.column === 'aprovacao_recebida1'
+                                  ) {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'aprovacao_recebida1',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'aprovacao_recebida1',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
+                              A1
+                              {drawerSort[job.id]?.column ===
+                                'aprovacao_recebida1' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </TableHead>
+                            <TableHead
+                              className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (current?.column === 'maquete_enviada2') {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'maquete_enviada2',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'maquete_enviada2',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
+                              M2
+                              {drawerSort[job.id]?.column ===
+                                'maquete_enviada2' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </TableHead>
+                            <TableHead
+                              className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (
+                                    current?.column === 'aprovacao_recebida2'
+                                  ) {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'aprovacao_recebida2',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'aprovacao_recebida2',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
+                              A2
+                              {drawerSort[job.id]?.column ===
+                                'aprovacao_recebida2' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </TableHead>
+                            <TableHead
+                              className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (current?.column === 'maquete_enviada3') {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'maquete_enviada3',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'maquete_enviada3',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
+                              M3
+                              {drawerSort[job.id]?.column ===
+                                'maquete_enviada3' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </TableHead>
+                            <TableHead
+                              className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (
+                                    current?.column === 'aprovacao_recebida3'
+                                  ) {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'aprovacao_recebida3',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'aprovacao_recebida3',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
+                              A3
+                              {drawerSort[job.id]?.column ===
+                                'aprovacao_recebida3' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </TableHead>
+                            <TableHead
+                              className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (current?.column === 'maquete_enviada4') {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'maquete_enviada4',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'maquete_enviada4',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
+                              M4
+                              {drawerSort[job.id]?.column ===
+                                'maquete_enviada4' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </TableHead>
+                            <TableHead
+                              className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (
+                                    current?.column === 'aprovacao_recebida4'
+                                  ) {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'aprovacao_recebida4',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'aprovacao_recebida4',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
+                              A4
+                              {drawerSort[job.id]?.column ===
+                                'aprovacao_recebida4' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </TableHead>
+                            <TableHead
+                              className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (current?.column === 'maquete_enviada5') {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'maquete_enviada5',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'maquete_enviada5',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
+                              M5
+                              {drawerSort[job.id]?.column ===
+                                'maquete_enviada5' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </TableHead>
+                            <TableHead
+                              className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (
+                                    current?.column === 'aprovacao_recebida5'
+                                  ) {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'aprovacao_recebida5',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'aprovacao_recebida5',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
+                              A5
+                              {drawerSort[job.id]?.column ===
+                                'aprovacao_recebida5' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </TableHead>
+                            {/* M6 - Maquete 6 */}
+                            <TableHead
+                              className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (current?.column === 'maquete_enviada6') {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'maquete_enviada6',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'maquete_enviada6',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
+                              M6
+                              {drawerSort[job.id]?.column ===
+                                'maquete_enviada6' &&
+                                (drawerSort[job.id]?.direction === 'asc' ? (
+                                  <ArrowUp className="ml-1 inline h-3 w-3" />
+                                ) : (
+                                  <ArrowDown className="ml-1 inline h-3 w-3" />
+                                ))}
+                            </TableHead>
+                            {/* A6 - Aprovação 6 */}
+                            <TableHead
+                              className="border-border w-auto cursor-pointer border-b-2 text-center font-bold whitespace-nowrap uppercase select-none"
+                              onClick={() => {
+                                setDrawerSort((prev) => {
+                                  const current = prev[job.id]
+                                  if (
+                                    current?.column === 'aprovacao_recebida6'
+                                  ) {
+                                    return {
+                                      ...prev,
+                                      [job.id]: {
+                                        column: 'aprovacao_recebida6',
+                                        direction:
+                                          current.direction === 'asc'
+                                            ? 'desc'
+                                            : 'asc',
+                                      },
+                                    }
+                                  }
+                                  return {
+                                    ...prev,
+                                    [job.id]: {
+                                      column: 'aprovacao_recebida6',
+                                      direction: 'asc',
+                                    },
+                                  }
+                                })
+                              }}
+                            >
+                              A6
+                              {drawerSort[job.id]?.column ===
+                                'aprovacao_recebida6' &&
                                 (drawerSort[job.id]?.direction === 'asc' ? (
                                   <ArrowUp className="ml-1 inline h-3 w-3" />
                                 ) : (
@@ -2280,7 +2902,7 @@ export default function DesignerFlow() {
                         <TableBody>
                           {loadingItems ? (
                             <TableRow>
-                              <TableCell colSpan={9}>
+                              <TableCell colSpan={20}>
                                 Carregando itens...
                               </TableCell>
                             </TableRow>
@@ -2414,177 +3036,823 @@ export default function DesignerFlow() {
                                     loading={isLoadingComplexidades}
                                   />
                                 </TableCell>
-                                <TableCell className="text-center align-middle">
-                                  <Checkbox
-                                    checked={!!item.em_curso}
-                                    onCheckedChange={async (checked) => {
-                                      if (!item.designer_item_id) {
-                                        return
-                                      }
-                                      setDrawerItems((prev) => {
-                                        const updated = [
-                                          ...(prev[job.id] || []),
-                                        ]
-                                        updated[idx] = {
-                                          ...updated[idx],
-                                          em_curso: !!checked,
-                                          duvidas: false,
-                                          maquete_enviada: false,
-                                          paginacao: false,
-                                        }
-                                        return { ...prev, [job.id]: updated }
-                                      })
 
-                                      // Update in database
-                                      try {
-                                        const supabase = createBrowserClient()
-                                        await supabase
-                                          .from('designer_items')
-                                          .update({
-                                            em_curso: !!checked,
-                                            duvidas: false,
-                                            maquete_enviada: false,
-                                            paginacao: false,
-                                            data_in: !!checked
-                                              ? new Date().toISOString()
-                                              : null,
-                                          })
-                                          .eq('id', item.designer_item_id)
-                                      } catch (err) {
-                                        console.error(
-                                          'Error updating item status:',
-                                          err,
-                                        )
-                                      }
-                                    }}
-                                  />
+                                <TableCell className="text-center align-middle">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--secondary-background)]"
+                                          checked={!!item.duvidas}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                duvidas: !!checked,
+                                                data_duvidas: !!checked
+                                                  ? new Date().toISOString()
+                                                  : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
+
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  duvidas: !!checked,
+                                                  data_duvidas: !!checked
+                                                    ? new Date().toISOString()
+                                                    : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>Dúvidas</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 </TableCell>
                                 <TableCell className="text-center align-middle">
-                                  <Checkbox
-                                    checked={!!item.duvidas}
-                                    onCheckedChange={async (checked) => {
-                                      if (!item.designer_item_id) {
-                                        return
-                                      }
-                                      setDrawerItems((prev) => {
-                                        const updated = [
-                                          ...(prev[job.id] || []),
-                                        ]
-                                        updated[idx] = {
-                                          ...updated[idx],
-                                          em_curso: false,
-                                          duvidas: !!checked,
-                                          maquete_enviada: false,
-                                          paginacao: false,
-                                        }
-                                        return { ...prev, [job.id]: updated }
-                                      })
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--main-dark)] hover:bg-[oklch(73.44%_0.1224_84.2)]"
+                                          checked={!!item.maquete_enviada1}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                maquete_enviada1: !!checked,
+                                                data_maquete_enviada1: !!checked
+                                                  ? new Date().toISOString()
+                                                  : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
 
-                                      // Update in database
-                                      try {
-                                        const supabase = createBrowserClient()
-                                        await supabase
-                                          .from('designer_items')
-                                          .update({
-                                            em_curso: false,
-                                            duvidas: !!checked,
-                                            maquete_enviada: false,
-                                            paginacao: false,
-                                            data_duvidas: !!checked
-                                              ? new Date().toISOString()
-                                              : null,
-                                          })
-                                          .eq('id', item.designer_item_id)
-                                      } catch (err) {
-                                        console.error(
-                                          'Error updating item status:',
-                                          err,
-                                        )
-                                      }
-                                    }}
-                                  />
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  maquete_enviada1: !!checked,
+                                                  data_maquete_enviada1:
+                                                    !!checked
+                                                      ? new Date().toISOString()
+                                                      : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Maquete enviada 1
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 </TableCell>
                                 <TableCell className="text-center align-middle">
-                                  <Checkbox
-                                    checked={!!item.maquete_enviada}
-                                    onCheckedChange={async (checked) => {
-                                      if (!item.designer_item_id) {
-                                        return
-                                      }
-                                      setDrawerItems((prev) => {
-                                        const updated = [
-                                          ...(prev[job.id] || []),
-                                        ]
-                                        updated[idx] = {
-                                          ...updated[idx],
-                                          em_curso: false,
-                                          duvidas: false,
-                                          maquete_enviada: !!checked,
-                                          paginacao: false,
-                                        }
-                                        return { ...prev, [job.id]: updated }
-                                      })
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--main-dark)] hover:bg-[oklch(73.44%_0.1224_84.2)]"
+                                          checked={!!item.aprovacao_recebida1}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                aprovacao_recebida1: !!checked,
+                                                data_aprovacao_recebida1:
+                                                  !!checked
+                                                    ? new Date().toISOString()
+                                                    : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
 
-                                      // Update in database
-                                      try {
-                                        const supabase = createBrowserClient()
-                                        await supabase
-                                          .from('designer_items')
-                                          .update({
-                                            em_curso: false,
-                                            duvidas: false,
-                                            maquete_enviada: !!checked,
-                                            paginacao: false,
-                                            data_envio: !!checked
-                                              ? new Date().toISOString()
-                                              : null,
-                                          })
-                                          .eq('id', item.designer_item_id)
-                                      } catch (err) {
-                                        console.error(
-                                          'Error updating item status:',
-                                          err,
-                                        )
-                                      }
-                                    }}
-                                  />
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  aprovacao_recebida1:
+                                                    !!checked,
+                                                  data_aprovacao_recebida1:
+                                                    !!checked
+                                                      ? new Date().toISOString()
+                                                      : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Aprovação recebida 1
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 </TableCell>
                                 <TableCell className="text-center align-middle">
-                                  <Checkbox
-                                    checked={!!item.paginacao}
-                                    onCheckedChange={async (checked) => {
-                                      if (!item.designer_item_id) {
-                                        return
-                                      }
-                                      if (checked) {
-                                        // Always open the path dialog, do not set paginacao yet
-                                        setPathInput(item.path_trabalho || '')
-                                        setPathDialog({
-                                          jobId: job.id,
-                                          itemId: item.id,
-                                          idx,
-                                        })
-                                      } else {
-                                        // If unchecked, allow immediate update
-                                        setDrawerItems((prev) => {
-                                          const updated = [
-                                            ...(prev[job.id] || []),
-                                          ]
-                                          updated[idx] = {
-                                            ...updated[idx],
-                                            paginacao: false,
-                                          }
-                                          return { ...prev, [job.id]: updated }
-                                        })
-                                        // Update only paginacao in DB, do NOT clear path_trabalho
-                                        const supabase = createBrowserClient()
-                                        const { error } = await supabase
-                                          .from('designer_items')
-                                          .update({ paginacao: false })
-                                          .eq('item_id', item.id)
-                                      }
-                                    }}
-                                  />
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--secondary-background)]"
+                                          checked={!!item.maquete_enviada2}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                maquete_enviada2: !!checked,
+                                                data_maquete_enviada2: !!checked
+                                                  ? new Date().toISOString()
+                                                  : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
+
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  maquete_enviada2: !!checked,
+                                                  data_maquete_enviada2:
+                                                    !!checked
+                                                      ? new Date().toISOString()
+                                                      : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Maquete enviada 2
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </TableCell>
+                                <TableCell className="text-center align-middle">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--secondary-background)]"
+                                          checked={!!item.aprovacao_recebida2}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                aprovacao_recebida2: !!checked,
+                                                data_aprovacao_recebida2:
+                                                  !!checked
+                                                    ? new Date().toISOString()
+                                                    : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
+
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  aprovacao_recebida2:
+                                                    !!checked,
+                                                  data_aprovacao_recebida2:
+                                                    !!checked
+                                                      ? new Date().toISOString()
+                                                      : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Aprovação recebida 2
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </TableCell>
+                                <TableCell className="text-center align-middle">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--main-dark)] hover:bg-[oklch(73.44%_0.1224_84.2)]"
+                                          checked={!!item.maquete_enviada3}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                maquete_enviada3: !!checked,
+                                                data_maquete_enviada3: !!checked
+                                                  ? new Date().toISOString()
+                                                  : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
+
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  maquete_enviada3: !!checked,
+                                                  data_maquete_enviada3:
+                                                    !!checked
+                                                      ? new Date().toISOString()
+                                                      : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Maquete enviada 3
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </TableCell>
+                                <TableCell className="text-center align-middle">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--main-dark)] hover:bg-[oklch(73.44%_0.1224_84.2)]"
+                                          checked={!!item.aprovacao_recebida3}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                aprovacao_recebida3: !!checked,
+                                                data_aprovacao_recebida3:
+                                                  !!checked
+                                                    ? new Date().toISOString()
+                                                    : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
+
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  aprovacao_recebida3:
+                                                    !!checked,
+                                                  data_aprovacao_recebida3:
+                                                    !!checked
+                                                      ? new Date().toISOString()
+                                                      : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Aprovação recebida 3
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </TableCell>
+                                <TableCell className="text-center align-middle">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--secondary-background)]"
+                                          checked={!!item.maquete_enviada4}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                maquete_enviada4: !!checked,
+                                                data_maquete_enviada4: !!checked
+                                                  ? new Date().toISOString()
+                                                  : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
+
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  maquete_enviada4: !!checked,
+                                                  data_maquete_enviada4:
+                                                    !!checked
+                                                      ? new Date().toISOString()
+                                                      : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Maquete enviada 4
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </TableCell>
+                                <TableCell className="text-center align-middle">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--secondary-background)]"
+                                          checked={!!item.aprovacao_recebida4}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                aprovacao_recebida4: !!checked,
+                                                data_aprovacao_recebida4:
+                                                  !!checked
+                                                    ? new Date().toISOString()
+                                                    : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
+
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  aprovacao_recebida4:
+                                                    !!checked,
+                                                  data_aprovacao_recebida4:
+                                                    !!checked
+                                                      ? new Date().toISOString()
+                                                      : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Aprovação recebida 4
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </TableCell>
+                                <TableCell className="text-center align-middle">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--main-dark)] hover:bg-[oklch(73.44%_0.1224_84.2)]"
+                                          checked={!!item.maquete_enviada5}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                maquete_enviada5: !!checked,
+                                                data_maquete_enviada5: !!checked
+                                                  ? new Date().toISOString()
+                                                  : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
+
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  maquete_enviada5: !!checked,
+                                                  data_maquete_enviada5:
+                                                    !!checked
+                                                      ? new Date().toISOString()
+                                                      : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Maquete enviada 5
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </TableCell>
+                                <TableCell className="text-center align-middle">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--main-dark)] hover:bg-[oklch(73.44%_0.1224_84.2)]"
+                                          checked={!!item.aprovacao_recebida5}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                aprovacao_recebida5: !!checked,
+                                                data_aprovacao_recebida5:
+                                                  !!checked
+                                                    ? new Date().toISOString()
+                                                    : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
+
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  aprovacao_recebida5:
+                                                    !!checked,
+                                                  data_aprovacao_recebida5:
+                                                    !!checked
+                                                      ? new Date().toISOString()
+                                                      : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Aprovação recebida 5
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </TableCell>
+                                {/* M6 - Maquete 6 */}
+                                <TableCell className="text-center align-middle">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--secondary-background)]"
+                                          checked={!!item.maquete_enviada6}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                maquete_enviada6: !!checked,
+                                                data_maquete_enviada6: !!checked
+                                                  ? new Date().toISOString()
+                                                  : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
+
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  maquete_enviada6: !!checked,
+                                                  data_maquete_enviada6:
+                                                    !!checked
+                                                      ? new Date().toISOString()
+                                                      : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Maquete enviada 6
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </TableCell>
+                                {/* A6 - Aprovação 6 */}
+                                <TableCell className="text-center align-middle">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--secondary-background)]"
+                                          checked={!!item.aprovacao_recebida6}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            setDrawerItems((prev) => {
+                                              const updated = [
+                                                ...(prev[job.id] || []),
+                                              ]
+                                              updated[idx] = {
+                                                ...updated[idx],
+                                                aprovacao_recebida6: !!checked,
+                                                data_aprovacao_recebida6:
+                                                  !!checked
+                                                    ? new Date().toISOString()
+                                                    : null,
+                                              }
+                                              return {
+                                                ...prev,
+                                                [job.id]: updated,
+                                              }
+                                            })
+
+                                            // Update in database
+                                            try {
+                                              const supabase =
+                                                createBrowserClient()
+                                              await supabase
+                                                .from('designer_items')
+                                                .update({
+                                                  aprovacao_recebida6:
+                                                    !!checked,
+                                                  data_aprovacao_recebida6:
+                                                    !!checked
+                                                      ? new Date().toISOString()
+                                                      : null,
+                                                })
+                                                .eq('id', item.designer_item_id)
+                                            } catch (err) {
+                                              console.error(
+                                                'Error updating item status:',
+                                                err,
+                                              )
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>
+                                        Aprovação recebida 6
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                </TableCell>
+                                <TableCell className="text-center align-middle">
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Checkbox
+                                          className="bg-[var(--main-dark)] hover:bg-[oklch(73.44%_0.1224_84.2)]"
+                                          checked={!!item.paginacao}
+                                          onCheckedChange={async (checked) => {
+                                            if (!item.designer_item_id) {
+                                              return
+                                            }
+                                            if (checked) {
+                                              // Always open the path dialog, do not set paginacao yet
+                                              setPathInput(
+                                                item.path_trabalho || '',
+                                              )
+                                              setPathDialog({
+                                                jobId: job.id,
+                                                itemId: item.id,
+                                                idx,
+                                              })
+                                            } else {
+                                              // If unchecked, allow immediate update
+                                              setDrawerItems((prev) => {
+                                                const updated = [
+                                                  ...(prev[job.id] || []),
+                                                ]
+                                                updated[idx] = {
+                                                  ...updated[idx],
+                                                  paginacao: false,
+                                                  data_paginacao: null,
+                                                }
+                                                return {
+                                                  ...prev,
+                                                  [job.id]: updated,
+                                                }
+                                              })
+                                              // Update paginacao and clear data_paginacao in DB, do NOT clear path_trabalho
+                                              try {
+                                                const supabase =
+                                                  createBrowserClient()
+                                                await supabase
+                                                  .from('designer_items')
+                                                  .update({
+                                                    paginacao: false,
+                                                    data_paginacao: null,
+                                                  })
+                                                  .eq(
+                                                    'id',
+                                                    item.designer_item_id,
+                                                  )
+                                              } catch (err) {
+                                                console.error(
+                                                  'Error updating paginacao status:',
+                                                  err,
+                                                )
+                                              }
+                                            }
+                                          }}
+                                        />
+                                      </TooltipTrigger>
+                                      <TooltipContent>Paginação</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 </TableCell>
                                 <TableCell className="text-center align-middle">
                                   <Popover modal={false}>
@@ -2592,7 +3860,7 @@ export default function DesignerFlow() {
                                       <Button
                                         variant="ghost"
                                         size="icon"
-                                        className="h-8 w-8"
+                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
                                         aria-label="Ver ou editar path"
                                       >
                                         {item.path_trabalho ? (
@@ -2642,7 +3910,7 @@ export default function DesignerFlow() {
                                             await supabase
                                               .from('designer_items')
                                               .update(updates)
-                                              .eq('item_id', item.id)
+                                              .eq('id', item.designer_item_id)
 
                                             // Update local state if data_saida was set
                                             if (newPath.trim()) {
@@ -2668,7 +3936,7 @@ export default function DesignerFlow() {
                                   </Popover>
                                 </TableCell>
                                 <TableCell className="flex justify-center gap-2">
-                                  <Button
+                                  {/* <Button
                                     variant="outline"
                                     size="icon"
                                     aria-label="Copiar"
@@ -2700,8 +3968,8 @@ export default function DesignerFlow() {
                                             item_id: baseData.id,
                                             em_curso: item.em_curso,
                                             duvidas: item.duvidas,
-                                            maquete_enviada:
-                                              item.maquete_enviada,
+                                            maquete_enviada1:
+                                              item.maquete_enviada1,
                                             paginacao: item.paginacao,
                                           })
                                       if (designerError) {
@@ -2715,7 +3983,373 @@ export default function DesignerFlow() {
                                     }}
                                   >
                                     <Copy className="h-4 w-4" />
-                                  </Button>
+                                  </Button> */}
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Button
+                                        variant="outline"
+                                        size="icon"
+                                        aria-label="Relatório do item"
+                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                      >
+                                        <ReceiptText className="h-4 w-4" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent
+                                      className="max-h-[80vh] w-80 overflow-y-auto border-0 bg-[var(--main)] outline outline-2"
+                                      align="start"
+                                      side="left"
+                                      sideOffset={10}
+                                      avoidCollisions={true}
+                                      collisionPadding={20}
+                                    >
+                                      <div className="space-y-4">
+                                        {/* Header */}
+                                        <div className="border-b pb-2">
+                                          <h4 className="text-sm font-semibold">
+                                            {item.descricao ||
+                                              'Item sem descrição'}
+                                          </h4>
+                                          <p className="text-muted-foreground text-xs">
+                                            Quantidade:{' '}
+                                            {item.quantidade || 'N/A'}
+                                          </p>
+                                        </div>
+
+                                        {/* Timeline */}
+                                        <div className="space-y-2">
+                                          <h5 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                                            Timeline
+                                          </h5>
+
+                                          {/* Data In */}
+                                          {job.data_in && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                📅 Data In:
+                                              </span>{' '}
+                                              {formatDate(job.data_in)}
+                                            </div>
+                                          )}
+
+                                          {/* Dúvidas */}
+                                          {item.duvidas && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                ❓ Dúvidas:
+                                              </span>{' '}
+                                              {item.data_duvidas
+                                                ? formatDate(item.data_duvidas)
+                                                : 'Sem data'}
+                                            </div>
+                                          )}
+
+                                          {/* Maquete Enviada 1 */}
+                                          {item.maquete_enviada1 && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                📤 Maquete Enviada 1:
+                                              </span>{' '}
+                                              {item.data_maquete_enviada1
+                                                ? formatDate(
+                                                    item.data_maquete_enviada1,
+                                                  )
+                                                : 'Sem data'}
+                                            </div>
+                                          )}
+
+                                          {/* Aprovação Recebida 1 */}
+                                          {item.aprovacao_recebida1 && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                ✅ Aprovação/Feedback Recebido
+                                                1:
+                                              </span>{' '}
+                                              {item.data_aprovacao_recebida1
+                                                ? formatDate(
+                                                    item.data_aprovacao_recebida1,
+                                                  )
+                                                : 'Sem data'}
+                                              {item.data_maquete_enviada1 &&
+                                                item.data_aprovacao_recebida1 && (
+                                                  <span className="ml-1 text-green-600">
+                                                    (
+                                                    {calculateDaysBetween(
+                                                      item.data_maquete_enviada1,
+                                                      item.data_aprovacao_recebida1,
+                                                    )}
+                                                    )
+                                                  </span>
+                                                )}
+                                            </div>
+                                          )}
+
+                                          {/* Maquete Enviada 2 */}
+                                          {item.maquete_enviada2 && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                📤 Maquete Enviada 2:
+                                              </span>{' '}
+                                              {item.data_maquete_enviada2
+                                                ? formatDate(
+                                                    item.data_maquete_enviada2,
+                                                  )
+                                                : 'Sem data'}
+                                            </div>
+                                          )}
+
+                                          {/* Aprovação Recebida 2 */}
+                                          {item.aprovacao_recebida2 && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                ✅ Aprovação/Feedback Recebido
+                                                2:
+                                              </span>{' '}
+                                              {item.data_aprovacao_recebida2
+                                                ? formatDate(
+                                                    item.data_aprovacao_recebida2,
+                                                  )
+                                                : 'Sem data'}
+                                              {item.data_maquete_enviada2 &&
+                                                item.data_aprovacao_recebida2 && (
+                                                  <span className="ml-1 text-green-600">
+                                                    (
+                                                    {calculateDaysBetween(
+                                                      item.data_maquete_enviada2,
+                                                      item.data_aprovacao_recebida2,
+                                                    )}
+                                                    )
+                                                  </span>
+                                                )}
+                                            </div>
+                                          )}
+
+                                          {/* Maquete Enviada 3 */}
+                                          {item.maquete_enviada3 && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                📤 Maquete Enviada 3:
+                                              </span>{' '}
+                                              {item.data_maquete_enviada3
+                                                ? formatDate(
+                                                    item.data_maquete_enviada3,
+                                                  )
+                                                : 'Sem data'}
+                                            </div>
+                                          )}
+
+                                          {/* Aprovação Recebida 3 */}
+                                          {item.aprovacao_recebida3 && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                ✅ Aprovação/Feedback Recebido
+                                                3:
+                                              </span>{' '}
+                                              {item.data_aprovacao_recebida3
+                                                ? formatDate(
+                                                    item.data_aprovacao_recebida3,
+                                                  )
+                                                : 'Sem data'}
+                                              {item.data_maquete_enviada3 &&
+                                                item.data_aprovacao_recebida3 && (
+                                                  <span className="ml-1 text-green-600">
+                                                    (
+                                                    {calculateDaysBetween(
+                                                      item.data_maquete_enviada3,
+                                                      item.data_aprovacao_recebida3,
+                                                    )}
+                                                    )
+                                                  </span>
+                                                )}
+                                            </div>
+                                          )}
+
+                                          {/* Maquete Enviada 4 */}
+                                          {item.maquete_enviada4 && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                📤 Maquete Enviada 4:
+                                              </span>{' '}
+                                              {item.data_maquete_enviada4
+                                                ? formatDate(
+                                                    item.data_maquete_enviada4,
+                                                  )
+                                                : 'Sem data'}
+                                            </div>
+                                          )}
+
+                                          {/* Aprovação Recebida 4 */}
+                                          {item.aprovacao_recebida4 && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                ✅ Aprovação/Feedback Recebido
+                                                4:
+                                              </span>{' '}
+                                              {item.data_aprovacao_recebida4
+                                                ? formatDate(
+                                                    item.data_aprovacao_recebida4,
+                                                  )
+                                                : 'Sem data'}
+                                              {item.data_maquete_enviada4 &&
+                                                item.data_aprovacao_recebida4 && (
+                                                  <span className="ml-1 text-green-600">
+                                                    (
+                                                    {calculateDaysBetween(
+                                                      item.data_maquete_enviada4,
+                                                      item.data_aprovacao_recebida4,
+                                                    )}
+                                                    )
+                                                  </span>
+                                                )}
+                                            </div>
+                                          )}
+
+                                          {/* Maquete Enviada 5 */}
+                                          {item.maquete_enviada5 && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                📤 Maquete Enviada 5:
+                                              </span>{' '}
+                                              {item.data_maquete_enviada5
+                                                ? formatDate(
+                                                    item.data_maquete_enviada5,
+                                                  )
+                                                : 'Sem data'}
+                                            </div>
+                                          )}
+
+                                          {/* Aprovação Recebida 5 */}
+                                          {item.aprovacao_recebida5 && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                ✅ Aprovação/Feedback Recebido
+                                                5:
+                                              </span>{' '}
+                                              {item.data_aprovacao_recebida5
+                                                ? formatDate(
+                                                    item.data_aprovacao_recebida5,
+                                                  )
+                                                : 'Sem data'}
+                                              {item.data_maquete_enviada5 &&
+                                                item.data_aprovacao_recebida5 && (
+                                                  <span className="ml-1 text-green-600">
+                                                    (
+                                                    {calculateDaysBetween(
+                                                      item.data_maquete_enviada5,
+                                                      item.data_aprovacao_recebida5,
+                                                    )}
+                                                    )
+                                                  </span>
+                                                )}
+                                            </div>
+                                          )}
+
+                                          {/* Maquete Enviada 6 */}
+                                          {item.maquete_enviada6 && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                📤 Maquete Enviada 6:
+                                              </span>{' '}
+                                              {item.data_maquete_enviada6
+                                                ? formatDate(
+                                                    item.data_maquete_enviada6,
+                                                  )
+                                                : 'Sem data'}
+                                            </div>
+                                          )}
+
+                                          {/* Aprovação Recebida 6 */}
+                                          {item.aprovacao_recebida6 && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                ✅ Aprovação/Feedback Recebido
+                                                6:
+                                              </span>{' '}
+                                              {item.data_aprovacao_recebida6
+                                                ? formatDate(
+                                                    item.data_aprovacao_recebida6,
+                                                  )
+                                                : 'Sem data'}
+                                              {item.data_maquete_enviada6 &&
+                                                item.data_aprovacao_recebida6 && (
+                                                  <span className="ml-1 text-green-600">
+                                                    (
+                                                    {calculateDaysBetween(
+                                                      item.data_maquete_enviada6,
+                                                      item.data_aprovacao_recebida6,
+                                                    )}
+                                                    )
+                                                  </span>
+                                                )}
+                                            </div>
+                                          )}
+
+                                          {/* Paginação */}
+                                          {item.paginacao && (
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                📄 Paginação:
+                                              </span>{' '}
+                                              {item.data_paginacao
+                                                ? formatDate(
+                                                    item.data_paginacao,
+                                                  )
+                                                : 'Sem data'}
+                                              {(() => {
+                                                const lastApprovalDate =
+                                                  findLastApprovalDate(item)
+                                                return lastApprovalDate &&
+                                                  item.data_paginacao ? (
+                                                  <span className="ml-1 text-blue-600">
+                                                    (
+                                                    {calculateDaysBetween(
+                                                      lastApprovalDate,
+                                                      item.data_paginacao,
+                                                    )}
+                                                    )
+                                                  </span>
+                                                ) : null
+                                              })()}
+                                            </div>
+                                          )}
+                                        </div>
+
+                                        {/* Duration */}
+                                        {job.data_in && item.data_paginacao && (
+                                          <div className="mt-4 border-t pt-4">
+                                            <h5 className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
+                                              Duração
+                                            </h5>
+                                            <div className="text-xs">
+                                              <span className="font-medium">
+                                                ⏱️ Duração Total:
+                                              </span>{' '}
+                                              <span className="text-blue-600">
+                                                {calculateDaysBetween(
+                                                  job.data_in,
+                                                  item.data_paginacao,
+                                                )}
+                                              </span>
+                                            </div>
+                                            {item.data_duvidas &&
+                                              item.data_paginacao && (
+                                                <div className="mt-1 text-xs">
+                                                  <span className="font-medium">
+                                                    ⏱️ Dúvidas até Paginação:
+                                                  </span>{' '}
+                                                  <span className="text-orange-600">
+                                                    {calculateDaysBetween(
+                                                      item.data_duvidas,
+                                                      item.data_paginacao,
+                                                    )}
+                                                  </span>
+                                                </div>
+                                              )}
+                                          </div>
+                                        )}
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
                                   <Button
                                     variant="destructive"
                                     size="icon"
@@ -2736,7 +4370,7 @@ export default function DesignerFlow() {
                             ))
                           ) : (
                             <TableRow>
-                              <TableCell colSpan={9}>
+                              <TableCell colSpan={20}>
                                 Nenhum item encontrado.
                               </TableCell>
                             </TableRow>
@@ -2792,28 +4426,33 @@ export default function DesignerFlow() {
                             if (!itemId || !pathInput.trim()) {
                               return
                             }
+
+                            // Get the designer_item_id from current drawerItems
+                            const currentItems = drawerItems[jobId] || []
+                            const currentItem = currentItems[idx]
+                            if (!currentItem?.designer_item_id) {
+                              console.error('Designer item ID not found')
+                              return
+                            }
+
                             const supabase = createBrowserClient()
                             await supabase
                               .from('designer_items')
                               .update({
-                                em_curso: false,
-                                duvidas: false,
-                                maquete_enviada: false,
                                 paginacao: true,
                                 path_trabalho: pathInput,
+                                data_paginacao: new Date().toISOString(),
                                 data_saida: new Date().toISOString(),
                               })
-                              .eq('item_id', itemId)
+                              .eq('id', currentItem.designer_item_id)
                             setDrawerItems((prev) => {
                               const updated = [...(prev[jobId] || [])]
                               if (updated[idx]) {
                                 updated[idx] = {
                                   ...updated[idx],
-                                  em_curso: false,
-                                  duvidas: false,
-                                  maquete_enviada: false,
                                   paginacao: true,
                                   path_trabalho: pathInput,
+                                  data_paginacao: new Date().toISOString(),
                                   data_saida: new Date().toISOString(),
                                 }
                               }
@@ -2866,11 +4505,20 @@ export default function DesignerFlow() {
                 </Button>
                 <Button
                   variant="destructive"
-                  className="font-base border-destructive rounded-base border-2 shadow-sm"
+                  className="btn-destructive rounded-none"
                   onClick={async () => {
                     const { jobId, itemId, idx } = deleteDialog
 
                     if (!itemId) {
+                      setDeleteDialog(null)
+                      return
+                    }
+
+                    // Get the designer_item_id from current drawerItems
+                    const currentItems = drawerItems[jobId] || []
+                    const currentItem = currentItems[idx]
+                    if (!currentItem?.designer_item_id) {
+                      console.error('Designer item ID not found')
                       setDeleteDialog(null)
                       return
                     }
@@ -2881,7 +4529,7 @@ export default function DesignerFlow() {
                     await supabase
                       .from('designer_items')
                       .delete()
-                      .eq('item_id', itemId)
+                      .eq('id', currentItem.designer_item_id)
 
                     // Then delete from items_base
                     await supabase.from('items_base').delete().eq('id', itemId)

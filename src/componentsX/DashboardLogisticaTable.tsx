@@ -22,6 +22,25 @@ import { ArrowUp, ArrowDown, RefreshCcw, Eye, EyeOff, X } from 'lucide-react'
 import DatePicker from '@/components/ui/DatePicker'
 import { createBrowserClient } from '@/utils/supabase'
 
+// Helper function for smart numeric sorting (handles mixed text/number fields)
+const parseNumericField = (
+  value: string | number | null | undefined,
+): number => {
+  if (value === null || value === undefined) return 0
+  if (typeof value === 'number') return value
+
+  const strValue = String(value).trim()
+  if (strValue === '') return 0
+
+  // Try to parse as number
+  const numValue = Number(strValue)
+  if (!isNaN(numValue)) return numValue
+
+  // For non-numeric values (letters), sort them after all numbers
+  // Use a high number + character code for consistent ordering
+  return 999999 + strValue.charCodeAt(0)
+}
+
 interface DashboardLogisticaRecord {
   // From folhas_obras
   folha_obra_id: string
@@ -83,7 +102,6 @@ type SortableLogisticaKey =
   | 'cliente'
   | 'nome_campanha'
   | 'item'
-  | 'codigo'
   | 'guia'
   | 'transportadora'
   | 'data_concluido'
@@ -105,16 +123,18 @@ export const DashboardLogisticaTable: React.FC<
     cliente: '',
     nomeCampanha: '',
     item: '',
-    codigo: '',
+    numeroFo: '',
   })
 
   // Updated sorting state to match main production table pattern
   const [sortCol, setSortCol] = useState<SortableLogisticaKey>('numero_fo')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+  const [hasUserSorted, setHasUserSorted] = useState(false) // Track if user has manually sorted
 
   // Toggle sort function following the same pattern as main production table
   const toggleSort = useCallback(
     (c: SortableLogisticaKey) => {
+      setHasUserSorted(true) // Mark that user has manually sorted
       if (sortCol === c) setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
       else {
         setSortCol(c)
@@ -378,24 +398,30 @@ export const DashboardLogisticaTable: React.FC<
           ?.toLowerCase()
           .includes(filters.item.toLowerCase())
 
-      // Código filter
-      const codigoMatch =
-        !filters.codigo ||
-        record.codigo?.toLowerCase().includes(filters.codigo.toLowerCase())
+      // FO filter
+      const foMatch =
+        !filters.numeroFo ||
+        record.numero_fo?.toLowerCase().includes(filters.numeroFo.toLowerCase())
 
-      return clienteMatch && campanhaMatch && itemMatch && codigoMatch
+      return clienteMatch && campanhaMatch && itemMatch && foMatch
     })
   }, [records, filters, clienteLookup])
 
   // Updated sorting logic following the same pattern as main production table
   const sorted = useMemo(() => {
+    // Only apply sorting if user has manually sorted
+    if (!hasUserSorted) {
+      return [...filteredRecords] // Return unsorted data
+    }
+
     const arr = [...filteredRecords]
     arr.sort((a, b) => {
       let A: any, B: any
       switch (sortCol) {
         case 'numero_fo':
-          A = a.numero_fo ?? ''
-          B = b.numero_fo ?? ''
+          // Smart numeric sorting: numbers first, then letters
+          A = parseNumericField(a.numero_fo)
+          B = parseNumericField(b.numero_fo)
           break
         case 'cliente': {
           const clientIdA = a.id_cliente
@@ -411,10 +437,6 @@ export const DashboardLogisticaTable: React.FC<
         case 'item':
           A = a.item_descricao ?? ''
           B = b.item_descricao ?? ''
-          break
-        case 'codigo':
-          A = a.codigo ?? ''
-          B = b.codigo ?? ''
           break
         case 'guia':
           A = a.guia ?? ''
@@ -454,7 +476,14 @@ export const DashboardLogisticaTable: React.FC<
       return 0
     })
     return arr
-  }, [filteredRecords, sortCol, sortDir, clienteLookup, transportadoraLookup])
+  }, [
+    filteredRecords,
+    sortCol,
+    sortDir,
+    clienteLookup,
+    transportadoraLookup,
+    hasUserSorted,
+  ])
 
   // Clear filters function
   const clearFilters = useCallback(() => {
@@ -462,7 +491,7 @@ export const DashboardLogisticaTable: React.FC<
       cliente: '',
       nomeCampanha: '',
       item: '',
-      codigo: '',
+      numeroFo: '',
     })
   }, [])
 
@@ -493,7 +522,7 @@ export const DashboardLogisticaTable: React.FC<
         console.error('Error updating saiu status:', error)
       }
     },
-    [supabase, fetchData],
+    [supabase, fetchData, showDispatched],
   )
 
   // Update data_saida status - now updates logistica_entregas.data_saida field
@@ -520,7 +549,7 @@ export const DashboardLogisticaTable: React.FC<
         console.error('Error updating data_saida:', error)
       }
     },
-    [supabase, fetchData, formatDateForDB],
+    [supabase, fetchData, formatDateForDB, showDispatched],
   )
 
   if (loading) {
@@ -607,11 +636,11 @@ export const DashboardLogisticaTable: React.FC<
           }
         />
         <Input
-          placeholder="Código"
+          placeholder="FO"
           className="w-[140px] rounded-none"
-          value={filters.codigo}
+          value={filters.numeroFo}
           onChange={(e) =>
-            setFilters((prev) => ({ ...prev, codigo: e.target.value }))
+            setFilters((prev) => ({ ...prev, numeroFo: e.target.value }))
           }
         />
         <TooltipProvider>
@@ -685,11 +714,11 @@ export const DashboardLogisticaTable: React.FC<
                     ))}
                 </TableHead>
                 <TableHead
-                  onClick={() => toggleSort('codigo')}
+                  onClick={() => toggleSort('numero_fo')}
                   className="border-border sticky top-0 z-10 cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
                 >
-                  Código{' '}
-                  {sortCol === 'codigo' &&
+                  FO{' '}
+                  {sortCol === 'numero_fo' &&
                     (sortDir === 'asc' ? (
                       <ArrowUp className="ml-1 inline h-3 w-3" />
                     ) : (
@@ -798,7 +827,7 @@ export const DashboardLogisticaTable: React.FC<
                   </TableCell>
                   <TableCell>{record.nome_campanha || '-'}</TableCell>
                   <TableCell>{record.item_descricao || '-'}</TableCell>
-                  <TableCell>{record.codigo || '-'}</TableCell>
+                  <TableCell>{record.numero_fo || '-'}</TableCell>
                   <TableCell>{record.guia || '-'}</TableCell>
                   <TableCell>
                     {(() => {
