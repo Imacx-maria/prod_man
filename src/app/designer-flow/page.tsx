@@ -982,6 +982,22 @@ export default function DesignerFlow() {
         aValue = parseNumericField(aValue)
         bValue = parseNumericField(bValue)
       }
+      if (sortColumn === 'status') {
+        const calcPercent = (job: Job): number => {
+          const jobItems = allItems.filter(
+            (item) =>
+              item.folha_obra_id === job.id && item.id && item.designer_item_id,
+          )
+          const total = jobItems.length
+          const done = jobItems.filter((item) => item.paginacao).length
+          return total > 0 ? Math.round((done / total) * 100) : 0
+        }
+        const aPercent = calcPercent(a)
+        const bPercent = calcPercent(b)
+        return sortDirection === 'asc'
+          ? aPercent - bPercent
+          : bPercent - aPercent
+      }
       if (sortColumn === 'profile_id') {
         const aName =
           designers.find((d) => d.value === a.profile_id)?.label || ''
@@ -992,18 +1008,9 @@ export default function DesignerFlow() {
           : bName.localeCompare(aName)
       }
       if (sortColumn === 'prioridade') {
-        // true > false
-        return sortDirection === 'asc'
-          ? aValue === bValue
-            ? 0
-            : aValue
-              ? -1
-              : 1
-          : aValue === bValue
-            ? 0
-            : aValue
-              ? 1
-              : -1
+        const aNum = aValue ? 1 : 0
+        const bNum = bValue ? 1 : 0
+        return sortDirection === 'asc' ? aNum - bNum : bNum - aNum
       }
       if (typeof aValue === 'string' && typeof bValue === 'string') {
         return sortDirection === 'asc'
@@ -1532,8 +1539,17 @@ export default function DesignerFlow() {
                             <ArrowDown className="ml-1 inline h-3 w-3" />
                           ))}
                       </TableHead>
-                      <TableHead className="border-border sticky top-0 z-10 w-[180px] border-b-2 bg-[var(--orange)] font-bold uppercase">
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[180px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSort('status')}
+                      >
                         Status
+                        {sortColumn === 'status' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
                       </TableHead>
                       <TableHead
                         className="border-border sticky top-0 z-10 w-[36px] cursor-pointer border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
@@ -1838,8 +1854,17 @@ export default function DesignerFlow() {
                             <ArrowDown className="ml-1 inline h-3 w-3" />
                           ))}
                       </TableHead>
-                      <TableHead className="border-border sticky top-0 z-10 w-[180px] border-b-2 bg-[var(--orange)] font-bold uppercase">
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[180px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSort('status')}
+                      >
                         Status
+                        {sortColumn === 'status' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
                       </TableHead>
                       <TableHead
                         className="border-border sticky top-0 z-10 w-[36px] cursor-pointer border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
