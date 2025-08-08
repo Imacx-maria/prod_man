@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createBrowserClient } from '@/utils/supabase'
 import {
   BarChart,
@@ -96,21 +96,23 @@ const DesignerAnalyticsCharts = ({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchAnalyticsData = async () => {
+  const fetchAnalyticsData = useCallback(async () => {
     setLoading(true)
     setError(null)
 
     try {
       const supabase = createBrowserClient()
 
-      // Calculate date range for the last 12 months
+      // Calculate date range for the last 12 months (use DATE strings for date columns)
       const now = new Date()
-      const startDate = startOfMonth(subMonths(now, 11)) // 12 months ago including current month
+      const startDate = startOfMonth(subMonths(now, 11))
       const endDate = endOfMonth(now)
+      const startDateStr = startDate.toISOString().split('T')[0]
+      const endDateStr = endDate.toISOString().split('T')[0]
 
       console.log('Fetching analytics data for last 12 months:', {
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
+        startDate: startDateStr,
+        endDate: endDateStr,
       })
 
       // Get all designer items with related data (only items with data_saida)
@@ -121,11 +123,11 @@ const DesignerAnalyticsCharts = ({
           id,
           item_id,
           data_in,
-          data_saida,
+          data_paginacao,
           paginacao,
           items_base!inner(
             id,
-            data_in,
+            data_conc,
             complexidade,
             folha_obra_id,
             folhas_obras!inner(
@@ -137,11 +139,10 @@ const DesignerAnalyticsCharts = ({
           )
         `,
         )
-        .gte('items_base.data_in', startDate.toISOString())
-        .lte('items_base.data_in', endDate.toISOString())
-        .not('items_base.complexidade', 'eq', 'OFFSET')
+        .gte('data_paginacao', startDateStr)
+        .lte('data_paginacao', endDateStr)
         .eq('paginacao', true)
-        .not('data_saida', 'is', null) // Only include items with data_saida
+        .not('data_paginacao', 'is', null) // Only include items with data_paginacao
 
       if (designerError) {
         console.error('Error fetching designer items:', designerError)
@@ -197,7 +198,7 @@ const DesignerAnalyticsCharts = ({
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
 
   const calculateCompletionDays = (
     startDate: string,
@@ -242,23 +243,24 @@ const DesignerAnalyticsCharts = ({
       monthlyCompletionTimes.set(month.label, [])
     })
 
-    // Process each designer item (all have data_saida since we filtered for it)
+    // Process each designer item (use data_paginacao as completion date)
     designerItemsData.forEach((designerItem) => {
       const itemBase = designerItem.items_base
-      if (!itemBase || !itemBase.data_in || !designerItem.data_saida) return
+      if (!itemBase || !itemBase.data_conc || !designerItem.data_paginacao)
+        return
 
-      // Use data_saida for the month grouping (when the work was completed)
-      const completionDate = new Date(designerItem.data_saida)
+      // Use data_paginacao for the month grouping (when the work was completed)
+      const completionDate = new Date(designerItem.data_paginacao)
       const month = format(completionDate, 'MMM', { locale: pt })
 
       // Count all items by completion month
       if (monthlyItemsMap.has(month)) {
         monthlyItemsMap.set(month, (monthlyItemsMap.get(month) || 0) + 1)
 
-        // Calculate completion time: items_base.data_in to data_saida
+        // Calculate completion time: items_base.data_conc to data_paginacao
         const completionDays = calculateCompletionDays(
-          itemBase.data_in,
-          designerItem.data_saida,
+          itemBase.data_conc,
+          designerItem.data_paginacao,
         )
 
         const times = monthlyCompletionTimes.get(month) || []
@@ -304,11 +306,11 @@ const DesignerAnalyticsCharts = ({
 
     designerItemsData.forEach((designerItem) => {
       const itemBase = designerItem.items_base
-      if (!itemBase || !itemBase.complexidade || !designerItem.data_saida)
+      if (!itemBase || !itemBase.complexidade || !designerItem.data_paginacao)
         return
 
       if (itemBase.complexidade !== 'OFFSET') {
-        const completionDate = new Date(designerItem.data_saida)
+        const completionDate = new Date(designerItem.data_paginacao)
         const month = format(completionDate, 'MMM', { locale: pt })
         const complexityMap = monthlyComplexityMap.get(month)
         if (complexityMap) {
@@ -377,10 +379,10 @@ const DesignerAnalyticsCharts = ({
       const designer = designerMap.get(designerName)!
 
       // Add completion time: items_base.data_in to data_saida
-      if (designerItem.items_base?.data_in) {
+      if (designerItem.items_base?.data_conc) {
         const completionTime = calculateCompletionDays(
-          designerItem.items_base.data_in,
-          designerItem.data_saida,
+          designerItem.items_base.data_conc,
+          designerItem.data_paginacao,
         )
         designer.completionTimes.push(completionTime)
       }
@@ -485,9 +487,9 @@ const DesignerAnalyticsCharts = ({
     // Calculate totals
     const totalItems = designerItemsData.length
     const allCompletionTimes = designerItemsData
-      .filter((item) => item.data_saida && item.items_base?.data_in)
+      .filter((item) => item.data_paginacao && item.items_base?.data_conc)
       .map((item) =>
-        calculateCompletionDays(item.items_base.data_in, item.data_saida),
+        calculateCompletionDays(item.items_base.data_conc, item.data_paginacao),
       )
 
     const avgGlobalCompletionTime =

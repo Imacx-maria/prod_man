@@ -2922,15 +2922,9 @@ export default function DesignerFlow() {
                                     value={item.descricao}
                                     onChange={(e) => {
                                       const newValue = e.target.value
-                                      setDrawerItems((prev) => {
-                                        const updated = [
-                                          ...(prev[job.id] || []),
-                                        ]
-                                        updated[idx] = {
-                                          ...updated[idx],
-                                          descricao: newValue,
-                                        }
-                                        return { ...prev, [job.id]: updated }
+                                      updateItemInState({
+                                        designerItemId: item.designer_item_id,
+                                        updates: { descricao: newValue },
                                       })
                                       debouncedUpdateDescricao(
                                         item.id,
@@ -3010,21 +3004,15 @@ export default function DesignerFlow() {
                                             .eq('id', item.designer_item_id)
 
                                           // Update local state
-                                          setDrawerItems((prev) => {
-                                            const updated = [
-                                              ...(prev[job.id] || []),
-                                            ]
-                                            updated[idx] = {
-                                              ...updated[idx],
+                                          updateItemInState({
+                                            designerItemId:
+                                              item.designer_item_id,
+                                            updates: {
                                               paginacao: true,
                                               path_trabalho: 'P:',
                                               data_saida:
                                                 new Date().toISOString(),
-                                            }
-                                            return {
-                                              ...prev,
-                                              [job.id]: updated,
-                                            }
+                                            },
                                           })
                                         }
                                       } catch (error) {
@@ -3048,21 +3036,15 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 duvidas: !!checked,
                                                 data_duvidas: !!checked
                                                   ? new Date().toISOString()
                                                   : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3102,21 +3084,15 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 maquete_enviada1: !!checked,
                                                 data_maquete_enviada1: !!checked
                                                   ? new Date().toISOString()
                                                   : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3159,22 +3135,16 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 aprovacao_recebida1: !!checked,
                                                 data_aprovacao_recebida1:
                                                   !!checked
                                                     ? new Date().toISOString()
                                                     : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3218,21 +3188,15 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 maquete_enviada2: !!checked,
                                                 data_maquete_enviada2: !!checked
                                                   ? new Date().toISOString()
                                                   : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3275,22 +3239,16 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 aprovacao_recebida2: !!checked,
                                                 data_aprovacao_recebida2:
                                                   !!checked
                                                     ? new Date().toISOString()
                                                     : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3334,21 +3292,15 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 maquete_enviada3: !!checked,
                                                 data_maquete_enviada3: !!checked
                                                   ? new Date().toISOString()
                                                   : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3391,22 +3343,16 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 aprovacao_recebida3: !!checked,
                                                 data_aprovacao_recebida3:
                                                   !!checked
                                                     ? new Date().toISOString()
                                                     : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3450,21 +3396,15 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 maquete_enviada4: !!checked,
                                                 data_maquete_enviada4: !!checked
                                                   ? new Date().toISOString()
                                                   : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3507,22 +3447,16 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 aprovacao_recebida4: !!checked,
                                                 data_aprovacao_recebida4:
                                                   !!checked
                                                     ? new Date().toISOString()
                                                     : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3566,21 +3500,15 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 maquete_enviada5: !!checked,
                                                 data_maquete_enviada5: !!checked
                                                   ? new Date().toISOString()
                                                   : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3623,22 +3551,16 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 aprovacao_recebida5: !!checked,
                                                 data_aprovacao_recebida5:
                                                   !!checked
                                                     ? new Date().toISOString()
                                                     : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3683,21 +3605,15 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 maquete_enviada6: !!checked,
                                                 data_maquete_enviada6: !!checked
                                                   ? new Date().toISOString()
                                                   : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3741,22 +3657,16 @@ export default function DesignerFlow() {
                                             if (!item.designer_item_id) {
                                               return
                                             }
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 aprovacao_recebida6: !!checked,
                                                 data_aprovacao_recebida6:
                                                   !!checked
                                                     ? new Date().toISOString()
                                                     : null,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
 
                                             // Update in database
@@ -3812,19 +3722,13 @@ export default function DesignerFlow() {
                                               })
                                             } else {
                                               // If unchecked, allow immediate update
-                                              setDrawerItems((prev) => {
-                                                const updated = [
-                                                  ...(prev[job.id] || []),
-                                                ]
-                                                updated[idx] = {
-                                                  ...updated[idx],
+                                              updateItemInState({
+                                                designerItemId:
+                                                  item.designer_item_id,
+                                                updates: {
                                                   paginacao: false,
                                                   data_paginacao: null,
-                                                }
-                                                return {
-                                                  ...prev,
-                                                  [job.id]: updated,
-                                                }
+                                                },
                                               })
                                               // Update paginacao and clear data_paginacao in DB, do NOT clear path_trabalho
                                               try {
@@ -3879,18 +3783,12 @@ export default function DesignerFlow() {
                                           className="min-h-[40px]"
                                           onChange={(e) => {
                                             const newValue = e.target.value
-                                            setDrawerItems((prev) => {
-                                              const updated = [
-                                                ...(prev[job.id] || []),
-                                              ]
-                                              updated[idx] = {
-                                                ...updated[idx],
+                                            updateItemInState({
+                                              designerItemId:
+                                                item.designer_item_id,
+                                              updates: {
                                                 path_trabalho: newValue,
-                                              }
-                                              return {
-                                                ...prev,
-                                                [job.id]: updated,
-                                              }
+                                              },
                                             })
                                           }}
                                           onBlur={async (e) => {
@@ -3914,19 +3812,13 @@ export default function DesignerFlow() {
 
                                             // Update local state if data_saida was set
                                             if (newPath.trim()) {
-                                              setDrawerItems((prev) => {
-                                                const updated = [
-                                                  ...(prev[job.id] || []),
-                                                ]
-                                                updated[idx] = {
-                                                  ...updated[idx],
+                                              updateItemInState({
+                                                designerItemId:
+                                                  item.designer_item_id,
+                                                updates: {
                                                   data_saida:
                                                     updates.data_saida,
-                                                }
-                                                return {
-                                                  ...prev,
-                                                  [job.id]: updated,
-                                                }
+                                                },
                                               })
                                             }
                                           }}
@@ -4445,18 +4337,14 @@ export default function DesignerFlow() {
                                 data_saida: new Date().toISOString(),
                               })
                               .eq('id', currentItem.designer_item_id)
-                            setDrawerItems((prev) => {
-                              const updated = [...(prev[jobId] || [])]
-                              if (updated[idx]) {
-                                updated[idx] = {
-                                  ...updated[idx],
-                                  paginacao: true,
-                                  path_trabalho: pathInput,
-                                  data_paginacao: new Date().toISOString(),
-                                  data_saida: new Date().toISOString(),
-                                }
-                              }
-                              return { ...prev, [jobId]: updated }
+                            updateItemInState({
+                              designerItemId: currentItem.designer_item_id,
+                              updates: {
+                                paginacao: true,
+                                path_trabalho: pathInput,
+                                data_paginacao: new Date().toISOString(),
+                                data_saida: new Date().toISOString(),
+                              },
                             })
                             await fetchJobs(setJobs, {
                               selectedDesigner,
