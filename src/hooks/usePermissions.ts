@@ -36,7 +36,9 @@ export const usePermissions = () => {
     async (userId: string, attempt = 0) => {
       // Prevent concurrent fetches
       if (fetchingRef.current) {
-        console.log('🔒 Permissions fetch already in progress, skipping')
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🔒 Permissions fetch already in progress, skipping')
+        }
         return
       }
 
@@ -45,9 +47,11 @@ export const usePermissions = () => {
         setLoading(true)
         setError(null)
 
-        console.log(
-          `🔍 Fetching permissions for user ${userId} (attempt ${attempt + 1})`,
-        )
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(
+            `🔍 Fetching permissions for user ${userId} (attempt ${attempt + 1})`,
+          )
+        }
 
         // First, get the user's profile and role
         const { data: profile, error: profileError } = await supabase
@@ -71,9 +75,11 @@ export const usePermissions = () => {
           // Retry logic for profile fetch
           if (attempt < 2 && profileError?.code !== 'PGRST116') {
             // Don't retry if no rows found
-            console.log(
-              `⏳ Retrying profile fetch in 1 second (attempt ${attempt + 1})`,
-            )
+            if (process.env.NODE_ENV !== 'production') {
+              console.log(
+                `⏳ Retrying profile fetch in 1 second (attempt ${attempt + 1})`,
+              )
+            }
             setTimeout(() => {
               if (lastUserIdRef.current === userId) {
                 fetchUserPermissions(userId, attempt + 1)
@@ -88,11 +94,17 @@ export const usePermissions = () => {
 
         setUserProfile(profile)
 
-        console.log('🔍 usePermissions Debug:')
-        console.log('- User ID:', userId)
-        console.log('- Profile:', profile)
-        console.log('- Role name:', profile.roles?.name)
-        console.log('- Role ID:', profile.role_id)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🔍 usePermissions Debug:')
+
+          console.log('- User ID:', userId)
+
+          console.log('- Profile:', profile)
+
+          console.log('- Role name:', profile.roles?.name)
+
+          console.log('- Role ID:', profile.role_id)
+        }
 
         // Then get the role's permissions
         const { data: rolePermissions, error: permissionsError } =
@@ -107,9 +119,11 @@ export const usePermissions = () => {
 
           // Retry logic for permissions fetch
           if (attempt < 2) {
-            console.log(
-              `⏳ Retrying permissions fetch in 1 second (attempt ${attempt + 1})`,
-            )
+            if (process.env.NODE_ENV !== 'production') {
+              console.log(
+                `⏳ Retrying permissions fetch in 1 second (attempt ${attempt + 1})`,
+              )
+            }
             setTimeout(() => {
               if (lastUserIdRef.current === userId) {
                 fetchUserPermissions(userId, attempt + 1)
@@ -122,20 +136,28 @@ export const usePermissions = () => {
           return
         }
 
-        console.log('✅ Permissions loaded successfully:')
-        console.log('- Permission count:', rolePermissions?.length || 0)
-        console.log(
-          '- Production permissions:',
-          rolePermissions?.filter((p) => p.page_path.startsWith('/producao')),
-        )
-        console.log(
-          '- Definicoes permissions:',
-          rolePermissions?.filter((p) => p.page_path.startsWith('/definicoes')),
-        )
-        console.log(
-          '- All permission paths:',
-          rolePermissions?.map((p) => p.page_path),
-        )
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('✅ Permissions loaded successfully:')
+
+          console.log('- Permission count:', rolePermissions?.length || 0)
+
+          console.log(
+            '- Production permissions:',
+            rolePermissions?.filter((p) => p.page_path.startsWith('/producao')),
+          )
+
+          console.log(
+            '- Definicoes permissions:',
+            rolePermissions?.filter((p) =>
+              p.page_path.startsWith('/definicoes'),
+            ),
+          )
+
+          console.log(
+            '- All permission paths:',
+            rolePermissions?.map((p) => p.page_path),
+          )
+        }
 
         setPermissions(rolePermissions || [])
         setRetryCount(0) // Reset retry count on success
@@ -175,12 +197,16 @@ export const usePermissions = () => {
   useEffect(() => {
     // Wait for auth to be initialized
     if (!initialized) {
-      console.log('⏳ Waiting for auth to initialize...')
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('⏳ Waiting for auth to initialize...')
+      }
       return
     }
 
     if (!user) {
-      console.log('👤 No user found, clearing permissions')
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('👤 No user found, clearing permissions')
+      }
       setPermissions([])
       setUserProfile(null)
       setLoading(false)
@@ -196,14 +222,18 @@ export const usePermissions = () => {
       permissions.length > 0 &&
       !loading
     ) {
-      console.log('✅ Using cached permissions for user:', user.id)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('✅ Using cached permissions for user:', user.id)
+      }
       setLoading(false)
       return
     }
 
     // Check if this is a different user
     if (lastUserIdRef.current !== user.id) {
-      console.log('🔄 New user detected, fetching permissions:', user.id)
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('🔄 New user detected, fetching permissions:', user.id)
+      }
       lastUserIdRef.current = user.id
       setPermissions([])
       setUserProfile(null)
@@ -217,7 +247,9 @@ export const usePermissions = () => {
     // Add a timeout to prevent infinite loading state
     const timeoutId = setTimeout(() => {
       if (loading && !userProfile) {
-        console.warn('⚠️ Permissions loading timeout, forcing completion')
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('⚠️ Permissions loading timeout, forcing completion')
+        }
         setLoading(false)
         setError('Permissions loading timeout')
       }
@@ -239,7 +271,9 @@ export const usePermissions = () => {
   useEffect(() => {
     const handleRefreshPermissions = () => {
       if (user?.id) {
-        console.log('🔄 Refreshing permissions on demand')
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🔄 Refreshing permissions on demand')
+        }
         lastUserIdRef.current = null // Force refresh
         setPermissions([])
         setUserProfile(null)
@@ -249,7 +283,9 @@ export const usePermissions = () => {
     }
 
     const handleClearPermissions = () => {
-      console.log('🧹 Clearing permissions cache')
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('🧹 Clearing permissions cache')
+      }
       lastUserIdRef.current = null
       setPermissions([])
       setUserProfile(null)
@@ -276,12 +312,16 @@ export const usePermissions = () => {
     // 2. User has a role but no permissions set up
     // In this case, let's check if they're an ADMIN or have a valid role
     if (!permissions || permissions.length === 0) {
-      console.warn(
-        '🛡️ No permissions found for user, checking role-based fallback',
-      )
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn(
+          '🛡️ No permissions found for user, checking role-based fallback',
+        )
+      }
       // Allow access for ADMIN role or if it's a basic page
       if (userProfile.roles?.name === 'ADMIN') {
-        console.log('🛡️ Admin fallback: allowing access')
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🛡️ Admin fallback: allowing access')
+        }
         return true
       }
       // Allow access to basic authenticated pages
@@ -303,7 +343,9 @@ export const usePermissions = () => {
           pagePath.startsWith('/gestao') ||
           pagePath === '/designer-flow')
       ) {
-        console.log('🛡️ PRODUCAO role fallback: allowing access to', pagePath)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🛡️ PRODUCAO role fallback: allowing access to', pagePath)
+        }
         return true
       }
       return false

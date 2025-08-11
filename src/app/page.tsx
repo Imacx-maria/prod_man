@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers'
 import { createServerClient } from '@/utils/supabase'
+import { debugWarn } from '@/utils/devLogger'
 import AccessibleWrapper from '@/components/AccessibleWrapper'
 import React, { Suspense } from 'react'
 import Header from '@/components/Header'
@@ -47,7 +48,7 @@ const getHolidays = async (): Promise<Holiday[]> => {
     .limit(50) // Reasonable limit for holidays
 
   if (error || !data) {
-    console.warn('Failed to fetch holidays:', error?.message)
+    debugWarn('Failed to fetch holidays:', error?.message)
     // fallback test holidays
     return [
       { id: 'test-1', holiday_date: '2024-12-25', description: 'Christmas' },

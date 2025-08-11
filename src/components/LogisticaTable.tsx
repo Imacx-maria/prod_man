@@ -31,6 +31,7 @@ import type {
   Transportadora,
   Armazem,
 } from '@/types/logistica'
+import { debugLog, debugWarn } from '@/utils/devLogger'
 
 // Helper function for smart numeric sorting (handles mixed text/number fields)
 const parseNumericField = (
@@ -175,9 +176,9 @@ export const LogisticaTable: React.FC<LogisticaTableProps> = ({
       })
 
       if (missingData.length > 0) {
-        console.group('🚨 Data Integrity Issues Detected:')
+        debugLog('🚨 Data Integrity Issues Detected:')
         missingData.forEach((record, index) => {
-          console.log(`Record ${index}:`, {
+          debugLog(`Record ${index}:`, {
             id: record.id,
             hasDirectDescricao: !!record.descricao,
             hasNestedDescricao: !!record.items_base?.descricao,
@@ -187,7 +188,6 @@ export const LogisticaTable: React.FC<LogisticaTableProps> = ({
             quantityValue: getQuantityValue(record, editRows),
           })
         })
-        console.groupEnd()
       }
     }, [records, editRows])
 
@@ -397,32 +397,35 @@ export const LogisticaTable: React.FC<LogisticaTableProps> = ({
   ])
 
   // Handle edit state with memoization - enhanced for data stability
-  const handleEdit = useCallback((rowId: string, field: string, value: any) => {
-    if (!rowId) {
-      console.warn('handleEdit called with missing rowId')
-      return
-    }
-
-    setEditRows((prev) => {
-      const currentRowEdit = prev[rowId] || {}
-
-      // Preserve critical fields when updating others
-      const preservedData = {
-        item: currentRowEdit.item,
-        quantidade: currentRowEdit.quantidade,
-        guia: currentRowEdit.guia,
+  const handleEdit = useCallback(
+    (rowId: string, field: string, value: unknown) => {
+      if (!rowId) {
+        debugWarn('handleEdit called with missing rowId')
+        return
       }
 
-      return {
-        ...prev,
-        [rowId]: {
-          ...preservedData,
-          ...currentRowEdit,
-          [field]: value,
-        },
-      }
-    })
-  }, [])
+      setEditRows((prev) => {
+        const currentRowEdit = prev[rowId] || {}
+
+        // Preserve critical fields when updating others
+        const preservedData = {
+          item: currentRowEdit.item,
+          quantidade: currentRowEdit.quantidade,
+          guia: currentRowEdit.guia,
+        }
+
+        return {
+          ...prev,
+          [rowId]: {
+            ...preservedData,
+            ...currentRowEdit,
+            [field]: value,
+          },
+        }
+      })
+    },
+    [],
+  )
 
   // Memoize table headers to prevent unnecessary re-renders
   const tableHeader = useMemo(
@@ -507,7 +510,7 @@ export const LogisticaTable: React.FC<LogisticaTableProps> = ({
 
   // Debug function to check data
   const debugRow = (row: LogisticaRecord) => {
-    console.log('Row data:', {
+    debugLog('Row data:', {
       id: row.id,
       fo: row.items_base?.folhas_obras?.numero_fo,
       orc: row.items_base?.folhas_obras?.numero_orc,
@@ -777,7 +780,7 @@ export const LogisticaTable: React.FC<LogisticaTableProps> = ({
                       variant="secondary"
                       className="flex aspect-square size-10 items-center justify-center !p-0"
                       onClick={() => {
-                        console.log('Duplicate button clicked for row:', row)
+                        debugLog('Duplicate button clicked for row:', row)
                         onDuplicateRow(row)
                       }}
                     >

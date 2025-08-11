@@ -33,6 +33,7 @@ import {
   TooltipContent,
 } from '@/components/ui/tooltip'
 import { exportLogisticaToExcel } from '@/utils/exportLogisticaToExcel'
+import { debugLog } from '@/utils/devLogger'
 
 // Shared interfaces with other components
 import type {
@@ -137,7 +138,7 @@ export const LogisticaDrawer: React.FC<LogisticaDrawerProps> = ({
   onClientesUpdate,
 }) => {
   // Debug: Log main props on render
-  console.log('LogisticaDrawer props:', {
+  debugLog('LogisticaDrawer props:', {
     open,
     selectedDate,
     loading,
@@ -305,7 +306,7 @@ export const LogisticaDrawer: React.FC<LogisticaDrawerProps> = ({
                       aria-label="Exportar para Excel"
                       onClick={() => {
                         // Debug: Confirm export button is clicked
-                        console.log('Export button clicked')
+                        debugLog('Export button clicked')
                         // Prepare the export data in the required format
                         const exportRows = records.map((row) => {
                           const clienteObj = clientes.find(
@@ -355,7 +356,7 @@ export const LogisticaDrawer: React.FC<LogisticaDrawerProps> = ({
                           }
                         })
                         // Debug: Log exportRows and selectedDate
-                        console.log(
+                        debugLog(
                           'Exporting rows:',
                           exportRows,
                           'Selected date:',
@@ -365,8 +366,8 @@ export const LogisticaDrawer: React.FC<LogisticaDrawerProps> = ({
                           'Transportadoras:',
                           transportadoras,
                         )
-                        console.log('Sample cliente with address:', clientes[0])
-                        console.log(
+                        debugLog('Sample cliente with address:', clientes[0])
+                        debugLog(
                           'Sample export row local recolha/entrega:',
                           exportRows[0]?.local_recolha,
                           exportRows[0]?.local_entrega,

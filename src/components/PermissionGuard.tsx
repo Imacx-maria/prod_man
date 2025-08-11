@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { debugLog, debugWarn } from '@/utils/devLogger'
 import { useRouter, usePathname } from 'next/navigation'
 import { usePermissionsContext } from '@/providers/PermissionsProvider'
 import { Loader2 } from 'lucide-react'
@@ -23,7 +24,7 @@ export default function PermissionGuard({
   const pathToCheck = requiredPath || pathname
 
   useEffect(() => {
-    console.log('🛡️ PermissionGuard Debug:', {
+    debugLog('🛡️ PermissionGuard Debug:', {
       loading,
       userProfile: userProfile?.roles?.name || 'No role',
       pathToCheck,
@@ -34,7 +35,7 @@ export default function PermissionGuard({
 
     // Additional debug for permissions
     if (userProfile) {
-      console.log('🛡️ User Details:', {
+      debugLog('🛡️ User Details:', {
         userId: userProfile.user_id,
         roleId: userProfile.role_id,
         roleName: userProfile.roles?.name,
@@ -43,13 +44,13 @@ export default function PermissionGuard({
 
     // Wait for permissions to load completely
     if (loading) {
-      console.log('🛡️ Still loading, waiting...')
+      debugLog('🛡️ Still loading, waiting...')
       return
     }
 
     // Only redirect to login if we're certain user is not authenticated after loading
     if (!loading && !userProfile) {
-      console.warn(
+      debugWarn(
         `🛡️ PermissionGuard: No user profile after loading completed, redirecting to login`,
       )
       router.push('/login')
@@ -58,12 +59,12 @@ export default function PermissionGuard({
 
     // Check permissions only after we have user profile
     if (userProfile && !canAccessPage(pathToCheck)) {
-      console.warn(
+      debugWarn(
         `🛡️ PermissionGuard: Access denied to ${pathToCheck} for user with role ${userProfile.roles?.name}`,
       )
       router.push(fallbackPath)
     } else if (userProfile) {
-      console.log(`🛡️ PermissionGuard: Access granted to ${pathToCheck}`)
+      debugLog(`🛡️ PermissionGuard: Access granted to ${pathToCheck}`)
     }
   }, [loading, userProfile, pathToCheck, canAccessPage, router, fallbackPath])
 

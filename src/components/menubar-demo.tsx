@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
+import { debugLog } from '@/utils/devLogger'
 import {
   Menubar,
   MenubarContent,
@@ -143,17 +144,17 @@ export default function MenubarDemo() {
   // Listen for permissions loaded event to force re-render
   useEffect(() => {
     const handlePermissionsLoaded = (event: CustomEvent) => {
-      console.log('🎯 Menu received permissionsLoaded event:', event.detail)
+      debugLog('🎯 Menu received permissionsLoaded event:', event.detail)
       setForceRender((prev) => prev + 1)
     }
 
     const handleRefreshPermissions = () => {
-      console.log('🔄 Menu received refreshPermissions event')
+      debugLog('🔄 Menu received refreshPermissions event')
       setForceRender((prev) => prev + 1)
     }
 
     const handleClearPermissions = () => {
-      console.log('🧹 Menu received clearPermissions event')
+      debugLog('🧹 Menu received clearPermissions event')
       setForceRender((prev) => prev + 1)
     }
 
@@ -177,27 +178,17 @@ export default function MenubarDemo() {
   // Debug navigation
   useEffect(() => {
     if (!loading && userProfile) {
-      console.log('🔍 Navigation Debug (render #' + forceRender + '):')
-      console.log('- User Role:', userProfile.roles?.name)
-      console.log(
-        '- User Permissions:',
-        permissions?.length || 0,
-        'permissions',
-      )
-      console.log('- Can access /producao:', canAccessPage('/producao'))
-      console.log(
+      debugLog('🔍 Navigation Debug (render #' + forceRender + '):')
+      debugLog('- User Role:', userProfile.roles?.name)
+      debugLog('- User Permissions:', permissions?.length || 0, 'permissions')
+      debugLog('- Can access /producao:', canAccessPage('/producao'))
+      debugLog(
         '- Can access /producao/operacoes:',
         canAccessPage('/producao/operacoes'),
       )
-      console.log(
-        '- Can access armazens:',
-        canAccessPage('/definicoes/armazens'),
-      )
-      console.log(
-        '- Can access clientes:',
-        canAccessPage('/definicoes/clientes'),
-      )
-      console.log(
+      debugLog('- Can access armazens:', canAccessPage('/definicoes/armazens'))
+      debugLog('- Can access clientes:', canAccessPage('/definicoes/clientes'))
+      debugLog(
         '- Can access utilizadores:',
         canAccessPage('/definicoes/utilizadores'),
       )
@@ -238,7 +229,7 @@ export default function MenubarDemo() {
 
   // If we have a user profile but no visible menu items, show a fallback menu
   if (userProfile && visibleMenuItems.length === 0) {
-    console.log(
+    debugLog(
       '⚠️ User profile loaded but no accessible menu items, showing fallback menu',
     )
     return (

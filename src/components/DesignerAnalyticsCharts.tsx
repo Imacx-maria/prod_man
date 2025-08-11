@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button'
 import { RotateCw, TrendingUp, Users, Clock, Layers } from 'lucide-react'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { pt } from 'date-fns/locale'
+import { debugLog } from '@/utils/devLogger'
 
 // Types for our data
 interface MonthlyData {
@@ -110,12 +111,12 @@ const DesignerAnalyticsCharts = ({
       const startDateStr = startDate.toISOString().split('T')[0]
       const endDateStr = endDate.toISOString().split('T')[0]
 
-      console.log('Fetching analytics data for last 12 months:', {
+      debugLog('Fetching analytics data for last 12 months:', {
         startDate: startDateStr,
         endDate: endDateStr,
       })
 
-      // Get all designer items with related data (only items with data_saida)
+      // Get all designer items with related data (only items with data_paginacao)
       const { data: designerItemsData, error: designerError } = await supabase
         .from('designer_items')
         .select(
@@ -127,7 +128,6 @@ const DesignerAnalyticsCharts = ({
           paginacao,
           items_base!inner(
             id,
-            data_conc,
             complexidade,
             folha_obra_id,
             folhas_obras!inner(
@@ -149,15 +149,11 @@ const DesignerAnalyticsCharts = ({
         throw designerError
       }
 
-      console.log(
-        'Designer items data:',
-        designerItemsData?.length || 0,
-        'items',
-      )
+      debugLog('Designer items data:', designerItemsData?.length || 0, 'items')
 
       // If no data found, show appropriate message
       if (!designerItemsData || designerItemsData.length === 0) {
-        console.log('No completed items found in the last 12 months')
+        debugLog('No completed items found in the last 12 months')
         setError(`Nenhum item concluído encontrado nos últimos 12 meses.`)
         setLoading(false)
         return
@@ -183,7 +179,7 @@ const DesignerAnalyticsCharts = ({
         throw fosError
       }
 
-      console.log('FOs data:', fosData?.length || 0, 'FOs')
+      debugLog('FOs data:', fosData?.length || 0, 'FOs')
 
       // Process the data
       const processedData = processAnalyticsData(
@@ -222,7 +218,7 @@ const DesignerAnalyticsCharts = ({
     designerItemsData: any[],
     fosData: any[],
   ): AnalyticsData => {
-    console.log('Processing analytics data...')
+    debugLog('Processing analytics data...')
 
     // Create month labels for the last 12 months
     const now = new Date()
@@ -234,7 +230,18 @@ const DesignerAnalyticsCharts = ({
       }
     })
 
-    // 1. Process monthly items count based on data_saida completion date
+    // Helper to normalize possible array/object shapes from Supabase nested selects
+    const getBase = (designerItem: any) =>
+      Array.isArray(designerItem.items_base)
+        ? designerItem.items_base[0]
+        : designerItem.items_base
+
+    const getFolhaObra = (itemBase: any) =>
+      itemBase && Array.isArray(itemBase.folhas_obras)
+        ? itemBase.folhas_obras[0]
+        : itemBase?.folhas_obras
+
+    // 1. Process monthly items count based on data_paginacao completion date
     const monthlyItemsMap = new Map<string, number>()
     const monthlyCompletionTimes = new Map<string, number[]>()
 
@@ -245,21 +252,24 @@ const DesignerAnalyticsCharts = ({
 
     // Process each designer item (use data_paginacao as completion date)
     designerItemsData.forEach((designerItem) => {
-      const itemBase = designerItem.items_base
-      if (!itemBase || !itemBase.data_conc || !designerItem.data_paginacao)
-        return
+      const itemBase = getBase(designerItem)
+      const folhaObra = getFolhaObra(itemBase)
+      if (!itemBase || !folhaObra || !designerItem.data_paginacao) return
+
+      // Optionally exclude OFFSET from monthly count to match subtitle
+      if (itemBase.complexidade === 'OFFSET') return
 
       // Use data_paginacao for the month grouping (when the work was completed)
       const completionDate = new Date(designerItem.data_paginacao)
       const month = format(completionDate, 'MMM', { locale: pt })
 
-      // Count all items by completion month
+      // Count items by completion month
       if (monthlyItemsMap.has(month)) {
         monthlyItemsMap.set(month, (monthlyItemsMap.get(month) || 0) + 1)
 
-        // Calculate completion time: items_base.data_conc to data_paginacao
+        // Calculate completion time: FO.data_in to designer_items.data_paginacao
         const completionDays = calculateCompletionDays(
-          itemBase.data_conc,
+          folhaObra.data_in,
           designerItem.data_paginacao,
         )
 
@@ -295,7 +305,7 @@ const DesignerAnalyticsCharts = ({
       ),
     ]
 
-    console.log('Complexity types found:', complexityTypes)
+    debugLog('Complexity types found:', complexityTypes)
 
     const monthlyComplexityMap = new Map<string, Map<string, number>>()
     months.forEach((month) => {
@@ -305,7 +315,7 @@ const DesignerAnalyticsCharts = ({
     })
 
     designerItemsData.forEach((designerItem) => {
-      const itemBase = designerItem.items_base
+      const itemBase = getBase(designerItem)
       if (!itemBase || !itemBase.complexidade || !designerItem.data_paginacao)
         return
 
@@ -362,8 +372,9 @@ const DesignerAnalyticsCharts = ({
 
     // Add completion times and complexity counts from designer items
     designerItemsData.forEach((designerItem) => {
-      const folhaObra = designerItem.items_base?.folhas_obras
-      if (!folhaObra?.profiles || !designerItem.data_saida) return
+      const itemBase = getBase(designerItem)
+      const folhaObra = getFolhaObra(itemBase)
+      if (!folhaObra?.profiles || !designerItem.data_paginacao) return
 
       const designerName =
         `${folhaObra.profiles.first_name} ${folhaObra.profiles.last_name}`.trim()
@@ -378,10 +389,10 @@ const DesignerAnalyticsCharts = ({
 
       const designer = designerMap.get(designerName)!
 
-      // Add completion time: items_base.data_in to data_saida
-      if (designerItem.items_base?.data_conc) {
+      // Add completion time: FO.data_in to data_paginacao
+      if (folhaObra?.data_in) {
         const completionTime = calculateCompletionDays(
-          designerItem.items_base.data_conc,
+          folhaObra.data_in,
           designerItem.data_paginacao,
         )
         designer.completionTimes.push(completionTime)
@@ -465,16 +476,23 @@ const DesignerAnalyticsCharts = ({
     const avgComplexityTime: { [key: string]: number } = {}
     complexityTypes.forEach((complexity) => {
       const times = designerItemsData
+        .map((it) => ({
+          base: getBase(it),
+          folha: getFolhaObra(getBase(it)),
+          di: it,
+        }))
         .filter(
-          (item) =>
-            item.items_base?.complexidade === complexity &&
+          ({ base, di }) =>
+            base?.complexidade === complexity &&
             complexity !== 'OFFSET' &&
-            item.data_saida &&
-            item.items_base?.data_in,
+            di.data_paginacao,
         )
-        .map((item) =>
-          calculateCompletionDays(item.items_base.data_in, item.data_saida),
+        .map(({ folha, di }) =>
+          folha?.data_in
+            ? calculateCompletionDays(folha.data_in, di.data_paginacao)
+            : 0,
         )
+        .filter((n) => n > 0)
 
       avgComplexityTime[complexity] =
         times.length > 0
@@ -487,9 +505,14 @@ const DesignerAnalyticsCharts = ({
     // Calculate totals
     const totalItems = designerItemsData.length
     const allCompletionTimes = designerItemsData
-      .filter((item) => item.data_paginacao && item.items_base?.data_conc)
-      .map((item) =>
-        calculateCompletionDays(item.items_base.data_conc, item.data_paginacao),
+      .map((it) => ({
+        base: getBase(it),
+        folha: getFolhaObra(getBase(it)),
+        di: it,
+      }))
+      .filter(({ folha, di }) => folha?.data_in && di.data_paginacao)
+      .map(({ folha, di }) =>
+        calculateCompletionDays(folha.data_in, di.data_paginacao),
       )
 
     const avgGlobalCompletionTime =
@@ -502,7 +525,7 @@ const DesignerAnalyticsCharts = ({
 
     const totalFOs = fosData.length
 
-    console.log('Processed data summary:', {
+    debugLog('Processed data summary:', {
       totalItems,
       avgGlobalCompletionTime,
       totalFOs,

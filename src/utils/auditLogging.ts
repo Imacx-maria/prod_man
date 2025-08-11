@@ -44,7 +44,10 @@ const resolveOperatorName = async (
       return `${operator.first_name} ${operator.last_name}`
     }
   } catch (error) {
-    console.warn('⚠️ Failed to resolve operator name for ID:', operatorId)
+    // Non-error diagnostic only in development
+
+    process.env.NODE_ENV !== 'production' &&
+      console.warn('⚠️ Failed to resolve operator name for ID:', operatorId)
   }
 
   return `Operador ${operatorId.substring(0, 8)}...`
@@ -57,7 +60,10 @@ const logOperationCreation = async (
   operationData: any,
 ) => {
   try {
-    console.log('📝 AUDIT: Logging operation creation:', operationId)
+    // Dev-only diagnostic
+
+    process.env.NODE_ENV !== 'production' &&
+      console.log('📝 AUDIT: Logging operation creation:', operationId)
 
     const user = await getCurrentUser(supabase)
 
@@ -80,7 +86,10 @@ const logOperationCreation = async (
     if (error) {
       console.error('❌ AUDIT: Failed to log operation creation:', error)
     } else {
-      console.log('✅ AUDIT: Operation creation logged successfully')
+      // Dev-only diagnostic
+
+      process.env.NODE_ENV !== 'production' &&
+        console.log('✅ AUDIT: Operation creation logged successfully')
     }
   } catch (error) {
     console.error(
@@ -100,9 +109,12 @@ const logFieldUpdate = async (
   operationContext?: any,
 ) => {
   try {
-    console.log(
-      `📝 AUDIT: Logging field update - ${fieldName}: "${oldValue}" → "${newValue}"`,
-    )
+    // Dev-only diagnostic
+
+    process.env.NODE_ENV !== 'production' &&
+      console.log(
+        `📝 AUDIT: Logging field update - ${fieldName}: "${oldValue}" → "${newValue}"`,
+      )
 
     const user = await getCurrentUser(supabase)
 
@@ -114,7 +126,10 @@ const logFieldUpdate = async (
 
     // Skip if no actual change
     if (oldValueStr === newValueStr) {
-      console.log('📝 AUDIT: No change detected, skipping log')
+      // Dev-only diagnostic
+
+      process.env.NODE_ENV !== 'production' &&
+        console.log('📝 AUDIT: No change detected, skipping log')
       return
     }
 
@@ -147,7 +162,10 @@ const logFieldUpdate = async (
     if (error) {
       console.error('❌ AUDIT: Failed to log field update:', error)
     } else {
-      console.log('✅ AUDIT: Field update logged successfully')
+      // Dev-only diagnostic
+
+      process.env.NODE_ENV !== 'production' &&
+        console.log('✅ AUDIT: Field update logged successfully')
     }
   } catch (error) {
     console.error('❌ AUDIT: Unexpected error logging field update:', error)
@@ -161,7 +179,10 @@ const logOperationDeletion = async (
   operationData: any,
 ) => {
   try {
-    console.log('📝 AUDIT: Logging operation deletion:', operationId)
+    // Dev-only diagnostic
+
+    process.env.NODE_ENV !== 'production' &&
+      console.log('📝 AUDIT: Logging operation deletion:', operationId)
 
     const user = await getCurrentUser(supabase)
 
@@ -184,7 +205,10 @@ const logOperationDeletion = async (
     if (error) {
       console.error('❌ AUDIT: Failed to log operation deletion:', error)
     } else {
-      console.log('✅ AUDIT: Operation deletion logged successfully')
+      // Dev-only diagnostic
+
+      process.env.NODE_ENV !== 'production' &&
+        console.log('✅ AUDIT: Operation deletion logged successfully')
     }
   } catch (error) {
     console.error(
@@ -197,7 +221,10 @@ const logOperationDeletion = async (
 // 4. Fetch enhanced audit logs with all details
 const fetchEnhancedAuditLogs = async (supabase: any) => {
   try {
-    console.log('🔍 Fetching enhanced audit logs...')
+    // Dev-only diagnostic
+
+    process.env.NODE_ENV !== 'production' &&
+      console.log('🔍 Fetching enhanced audit logs...')
 
     const { data: auditData, error } = await supabase
       .from('producao_operacoes_audit')
@@ -264,7 +291,10 @@ const fetchEnhancedAuditLogs = async (supabase: any) => {
       }),
     )
 
-    console.log('✅ Enhanced audit logs fetched:', enhancedLogs.length)
+    // Dev-only diagnostic
+
+    process.env.NODE_ENV !== 'production' &&
+      console.log('✅ Enhanced audit logs fetched:', enhancedLogs.length)
     return enhancedLogs
   } catch (error) {
     console.error('❌ Error fetching enhanced audit logs:', error)

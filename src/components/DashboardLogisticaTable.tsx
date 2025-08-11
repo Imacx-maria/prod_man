@@ -39,6 +39,7 @@ import CreatableTransportadoraCombobox, {
   TransportadoraOption,
 } from '@/components/CreatableTransportadoraCombobox'
 import NotasPopover from '@/components/ui/NotasPopover'
+import { debugLog } from '@/utils/devLogger'
 
 // Value-based debounce hook for filters
 function useDebounce<T>(value: T, delay: number): T {
@@ -334,8 +335,8 @@ export const DashboardLogisticaTable: React.FC<
           return
         }
 
-        console.log('Fetched logistics data:', logisticsData)
-        console.log('Logistics count:', logisticsData?.length || 0)
+        debugLog('Fetched logistics data:', logisticsData)
+        debugLog('Logistics count:', logisticsData?.length || 0)
 
         // Fetch clientes
         const { data: clientesData, error: clientesError } = await supabase
@@ -425,8 +426,8 @@ export const DashboardLogisticaTable: React.FC<
           }
         })
 
-        console.log('Processed flat records:', filteredRecords)
-        console.log('Flat records count:', filteredRecords.length)
+        debugLog('Processed flat records:', filteredRecords)
+        debugLog('Flat records count:', filteredRecords.length)
 
         setRecords(filteredRecords)
         setClientes(
@@ -654,10 +655,13 @@ export const DashboardLogisticaTable: React.FC<
   }, [fetchData, onRefresh, showDispatched])
 
   // Editing helper functions
-  const startEditing = useCallback((recordId: string, currentValues: any) => {
-    setEditingRows((prev) => ({ ...prev, [recordId]: true }))
-    setEditValues((prev) => ({ ...prev, [recordId]: currentValues }))
-  }, [])
+  const startEditing = useCallback(
+    (recordId: string, currentValues: Record<string, unknown>) => {
+      setEditingRows((prev) => ({ ...prev, [recordId]: true }))
+      setEditValues((prev) => ({ ...prev, [recordId]: currentValues }))
+    },
+    [],
+  )
 
   const cancelEditing = useCallback((recordId: string) => {
     setEditingRows((prev) => ({ ...prev, [recordId]: false }))
@@ -668,7 +672,7 @@ export const DashboardLogisticaTable: React.FC<
   }, [])
 
   const updateEditValue = useCallback(
-    (recordId: string, field: string, value: any) => {
+    (recordId: string, field: string, value: unknown) => {
       setEditValues((prev) => ({
         ...prev,
         [recordId]: { ...prev[recordId], [field]: value },

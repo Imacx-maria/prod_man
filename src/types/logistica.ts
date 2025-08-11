@@ -19,6 +19,7 @@ export interface ItemBase {
 
 export interface LogisticaRecord {
   id: string
+  item_id: string
   data: string
   guia?: string
   local_recolha?: string
@@ -31,6 +32,7 @@ export interface LogisticaRecord {
   concluido?: boolean
   data_concluido?: string
   data_saida?: string // Added field for departure date
+  is_entrega?: boolean
   items_base?: ItemBase
   contacto?: string
   telefone?: string

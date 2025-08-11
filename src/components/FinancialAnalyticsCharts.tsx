@@ -742,17 +742,17 @@ export default function FinancialAnalyticsCharts({
     )
 
     // Debug logging for main page comparison
-    console.log('📊 Main Visão Geral Debug:')
-    console.log(
+    debugLog('📊 Main Visão Geral Debug:')
+    debugLog(
       'Total vendas liquidas records:',
       financialData.vendasLiquidas.length,
     )
-    console.log(
+    debugLog(
       'Year-to-date vendas liquidas (filtered):',
       yearToDateVendasLiquidas.length,
     )
-    console.log('Total Vendas Ano:', totalVendasAno)
-    console.log(
+    debugLog('Total Vendas Ano:', totalVendasAno)
+    debugLog(
       'Sample year-to-date records:',
       yearToDateVendasLiquidas.slice(0, 3),
     )
@@ -886,7 +886,7 @@ export default function FinancialAnalyticsCharts({
       // Parse MM/YYYY format
       const dateParts = dateStr.split('/')
       if (dateParts.length !== 2) {
-        console.warn('⚠️ Invalid MM/YYYY date format:', dateStr)
+        debugWarn('⚠️ Invalid MM/YYYY date format:', dateStr)
         return
       }
 
@@ -911,7 +911,7 @@ export default function FinancialAnalyticsCharts({
       const monthLabel = monthNames[monthNum - 1]
 
       if (!monthLabel) {
-        console.warn('⚠️ Invalid month number:', monthNum, 'in', dateStr)
+        debugWarn('⚠️ Invalid month number:', monthNum, 'in', dateStr)
         return
       }
 
@@ -984,7 +984,7 @@ export default function FinancialAnalyticsCharts({
       // Parse MM/YYYY format
       const dateParts = dateStr.split('/')
       if (dateParts.length !== 2) {
-        console.warn('⚠️ Invalid MM/YYYY date format:', dateStr)
+        debugWarn('⚠️ Invalid MM/YYYY date format:', dateStr)
         return
       }
 
@@ -1009,7 +1009,7 @@ export default function FinancialAnalyticsCharts({
       const monthLabel = monthNames[monthNum - 1]
 
       if (!monthLabel) {
-        console.warn('⚠️ Invalid month number:', monthNum, 'in', dateStr)
+        debugWarn('⚠️ Invalid month number:', monthNum, 'in', dateStr)
         return
       }
 
@@ -1086,7 +1086,7 @@ export default function FinancialAnalyticsCharts({
       // Parse MM/YYYY format
       const dateParts = dateStr.split('/')
       if (dateParts.length !== 2) {
-        console.warn('⚠️ Invalid MM/YYYY date format:', dateStr)
+        debugWarn('⚠️ Invalid MM/YYYY date format:', dateStr)
         return
       }
 
@@ -1111,7 +1111,7 @@ export default function FinancialAnalyticsCharts({
       const monthLabel = monthNames[monthNum - 1]
 
       if (!monthLabel) {
-        console.warn('⚠️ Invalid month number:', monthNum, 'in', dateStr)
+        debugWarn('⚠️ Invalid month number:', monthNum, 'in', dateStr)
         return
       }
 
@@ -1185,7 +1185,10 @@ export default function FinancialAnalyticsCharts({
       // Parse MM/YYYY format
       const dateParts = dateStr.split('/')
       if (dateParts.length !== 2) {
-        console.warn('⚠️ Invalid MM/YYYY date format:', dateStr)
+        // Dev-only diagnostic
+
+        process.env.NODE_ENV !== 'production' &&
+          console.warn('⚠️ Invalid MM/YYYY date format:', dateStr)
         return
       }
 
@@ -1210,7 +1213,10 @@ export default function FinancialAnalyticsCharts({
       const monthLabel = monthNames[monthNum - 1]
 
       if (!monthLabel) {
-        console.warn('⚠️ Invalid month number:', monthNum, 'in', dateStr)
+        // Dev-only diagnostic
+
+        process.env.NODE_ENV !== 'production' &&
+          console.warn('⚠️ Invalid month number:', monthNum, 'in', dateStr)
         return
       }
 

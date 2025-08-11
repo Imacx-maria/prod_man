@@ -44,12 +44,14 @@ export const exportLogisticaToExcel = ({
   clientes = [],
   armazens = [],
 }: ExportLogisticaOptions): void => {
-  // Debug: Log received arguments
-  console.log('exportLogisticaToExcel called with:', {
-    filteredRecords,
-    selectedDate,
-    clientes,
-  })
+  // Dev-only diagnostic
+  if (process.env.NODE_ENV !== 'production') {
+    console.log('exportLogisticaToExcel called with:', {
+      filteredRecords,
+      selectedDate,
+      clientes,
+    })
+  }
 
   const workbook = new ExcelJS.Workbook()
   const worksheet = workbook.addWorksheet('Logistica')
@@ -104,10 +106,14 @@ export const exportLogisticaToExcel = ({
   })
 
   // Compute localRecolha/localEntrega for sorting
-  const getLocalRecolha = (row: any) => {
+  const getLocalRecolha = (
+    row: ExportLogisticaRow & Record<string, unknown>,
+  ) => {
     if (!armazens.length) return ''
     const recolhaObj = armazens.find(
-      (a) => a.value === ((row as any)['id_local_recolha'] || ''),
+      (a) =>
+        a.value ===
+        ((row as Record<string, unknown>)['id_local_recolha'] || ''),
     )
     if (recolhaObj) {
       const moradaLinha = [recolhaObj.morada, recolhaObj.codigo_pos]
@@ -117,10 +123,14 @@ export const exportLogisticaToExcel = ({
     }
     return ''
   }
-  const getLocalEntrega = (row: any) => {
+  const getLocalEntrega = (
+    row: ExportLogisticaRow & Record<string, unknown>,
+  ) => {
     if (!armazens.length) return ''
     const entregaObj = armazens.find(
-      (a) => a.value === ((row as any)['id_local_entrega'] || ''),
+      (a) =>
+        a.value ===
+        ((row as Record<string, unknown>)['id_local_entrega'] || ''),
     )
     if (entregaObj) {
       const moradaLinha = [entregaObj.morada, entregaObj.codigo_pos]

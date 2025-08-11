@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react'
+import { debugLog, debugWarn } from '@/utils/devLogger'
 import { format } from 'date-fns'
 import { pt } from 'date-fns/locale'
 import { Button } from '@/components/ui/button'
@@ -209,7 +210,7 @@ const getAuthenticatedUserProfileId = async (supabase: any) => {
       throw new Error('No authenticated user found')
     }
 
-    console.log('👤 Authenticated user (auth.users.id):', user.id)
+    debugLog('👤 Authenticated user (auth.users.id):', user.id)
 
     // Find the profile in the profiles table
     const { data: profile, error: profileError } = await supabase
@@ -223,7 +224,7 @@ const getAuthenticatedUserProfileId = async (supabase: any) => {
       throw new Error(`Profile not found for authenticated user ${user.id}`)
     }
 
-    console.log(
+    debugLog(
       '✅ Authenticated user profile:',
       profile.first_name,
       profile.last_name,
@@ -243,7 +244,7 @@ const logOperationCreation = async (
   operationData: any,
 ) => {
   try {
-    console.log('📝 AUDIT: Logging operation creation:', operationId)
+    debugLog('📝 AUDIT: Logging operation creation:', operationId)
 
     const changedByProfileId = await getAuthenticatedUserProfileId(supabase)
 
@@ -270,7 +271,7 @@ const logOperationCreation = async (
     if (error) {
       console.error('❌ AUDIT: Failed to log operation creation:', error)
     } else {
-      console.log('✅ AUDIT: Operation creation logged successfully')
+      debugLog('✅ AUDIT: Operation creation logged successfully')
     }
   } catch (error) {
     console.error(
@@ -289,7 +290,7 @@ const logFieldUpdate = async (
   newValue: any,
 ) => {
   try {
-    console.log(
+    debugLog(
       `📝 AUDIT: Logging field update - ${fieldName}: "${oldValue}" → "${newValue}"`,
     )
 
@@ -301,7 +302,7 @@ const logFieldUpdate = async (
       newValue !== null && newValue !== undefined ? String(newValue) : null
 
     if (oldValueStr === newValueStr) {
-      console.log('📝 AUDIT: No change detected, skipping log')
+      debugLog('📝 AUDIT: No change detected, skipping log')
       return
     }
 
@@ -332,7 +333,7 @@ const logFieldUpdate = async (
     if (error) {
       console.error('❌ AUDIT: Failed to log field update:', error)
     } else {
-      console.log('✅ AUDIT: Field update logged successfully')
+      debugLog('✅ AUDIT: Field update logged successfully')
     }
   } catch (error) {
     console.error('❌ AUDIT: Unexpected error logging field update:', error)
@@ -346,7 +347,7 @@ const logOperationDeletion = async (
   operationData: any,
 ) => {
   try {
-    console.log('📝 AUDIT: Logging operation deletion:', operationId)
+    debugLog('📝 AUDIT: Logging operation deletion:', operationId)
 
     const changedByProfileId = await getAuthenticatedUserProfileId(supabase)
 
@@ -373,7 +374,7 @@ const logOperationDeletion = async (
     if (error) {
       console.error('❌ AUDIT: Failed to log operation deletion:', error)
     } else {
-      console.log('✅ AUDIT: Operation deletion logged successfully')
+      debugLog('✅ AUDIT: Operation deletion logged successfully')
     }
   } catch (error) {
     console.error(
@@ -433,7 +434,9 @@ function OperacoesPageContent() {
   )
 
   // Add the getPColor function for item priority
-  const getPColor = (item: ProductionItem): string => {
+  const getPColor = (
+    item: ProductionItem & { data_in?: string | null },
+  ): string => {
     if (item.prioridade) return 'bg-red-500'
     if (item.data_in) {
       const days =
@@ -478,7 +481,7 @@ function OperacoesPageContent() {
     setError(null)
 
     try {
-      console.log('Starting to fetch production items...')
+      debugLog('Starting to fetch production items...')
 
       // First, let's try a simple query to test basic access to items_base
       const { data: testData, error: testError } = await supabase
@@ -491,14 +494,14 @@ function OperacoesPageContent() {
         throw new Error(`Database access error: ${testError.message}`)
       }
 
-      console.log(
+      debugLog(
         'Basic items_base access successful, found records:',
         testData?.length || 0,
       )
 
       // If there are no items at all, return empty result
       if (!testData || testData.length === 0) {
-        console.log('No items found in items_base table')
+        debugLog('No items found in items_base table')
         setItems([])
         return
       }
@@ -540,12 +543,12 @@ function OperacoesPageContent() {
         )
       }
 
-      console.log('Items query result:', itemsData)
-      console.log('Number of items retrieved:', itemsData?.length || 0)
+      debugLog('Items query result:', itemsData)
+      debugLog('Number of items retrieved:', itemsData?.length || 0)
 
       // Check if we got any data
       if (!itemsData) {
-        console.log('Query returned null/undefined data')
+        debugLog('Query returned null/undefined data')
         setItems([])
         return
       }
@@ -564,7 +567,7 @@ function OperacoesPageContent() {
           : item.logistica_entregas,
       }))
 
-      console.log('Transformed items:', transformedItems.length)
+      debugLog('Transformed items:', transformedItems.length)
 
       // Filter items that meet all conditions and don't have completed operations:
       const filteredItems = transformedItems.filter((item) => {
@@ -572,12 +575,14 @@ function OperacoesPageContent() {
 
         if (item.logistica_entregas) {
           if (Array.isArray(item.logistica_entregas)) {
-            hasLogisticaEntregasNotConcluida = (
-              item.logistica_entregas as any[]
-            ).some((entrega: any) => entrega.concluido === false)
+            hasLogisticaEntregasNotConcluida = item.logistica_entregas.some(
+              (entrega: { concluido?: boolean | null }) =>
+                entrega.concluido === false,
+            )
           } else {
             hasLogisticaEntregasNotConcluida =
-              (item.logistica_entregas as any).concluido === false
+              (item.logistica_entregas as { concluido?: boolean | null })
+                .concluido === false
           }
         }
 
@@ -626,7 +631,7 @@ function OperacoesPageContent() {
         }
       }
 
-      console.log(
+      debugLog(
         'Items without completed operations:',
         itemsWithoutCompleted.length,
       )
@@ -643,7 +648,7 @@ function OperacoesPageContent() {
 
   // Debug function to help troubleshoot issues
   const runDebugCheck = useCallback(async () => {
-    console.log('Running debug check...')
+    debugLog('Running debug check...')
     const debug: any = {}
 
     try {
@@ -688,8 +693,11 @@ function OperacoesPageContent() {
             (item: any) =>
               item.designer_items &&
               (Array.isArray(item.designer_items)
-                ? item.designer_items.some((d: any) => d.paginacao === true)
-                : (item.designer_items as any)?.paginacao === true),
+                ? item.designer_items.some(
+                    (d: { paginacao?: boolean | null }) => d.paginacao === true,
+                  )
+                : (item.designer_items as { paginacao?: boolean | null })
+                    ?.paginacao === true),
           ) || []
 
         debug.items_with_paginacao = itemsWithPaginacao.length
@@ -720,7 +728,7 @@ function OperacoesPageContent() {
     setError(null)
 
     try {
-      console.log('Starting to fetch completed production items...')
+      debugLog('Starting to fetch completed production items...')
 
       // Calculate date 3 months ago
       const threeMonthsAgo = new Date()
@@ -744,7 +752,7 @@ function OperacoesPageContent() {
       }
 
       if (!completedOperations || completedOperations.length === 0) {
-        console.log('No completed operations found in last 3 months')
+        debugLog('No completed operations found in last 3 months')
         setCompletedItems([])
         return
       }
@@ -806,10 +814,7 @@ function OperacoesPageContent() {
           : item.logistica_entregas,
       }))
 
-      console.log(
-        'Completed items retrieved:',
-        transformedCompletedItems.length,
-      )
+      debugLog('Completed items retrieved:', transformedCompletedItems.length)
       setCompletedItems(transformedCompletedItems)
     } catch (error: any) {
       console.error('Error fetching completed items:', error)
@@ -827,7 +832,7 @@ function OperacoesPageContent() {
     setError(null)
 
     try {
-      console.log('🔍 Fetching audit logs...')
+      debugLog('🔍 Fetching audit logs...')
 
       // Get audit data
       const { data: auditData, error } = await supabase
@@ -872,7 +877,7 @@ function OperacoesPageContent() {
         throw new Error(`Failed to fetch audit logs: ${error.message}`)
       }
 
-      console.log('📋 Raw audit data:', auditData)
+      debugLog('📋 Raw audit data:', auditData)
 
       // Get all unique operator IDs that need names
       const operatorIds = new Set<string>()
@@ -890,7 +895,7 @@ function OperacoesPageContent() {
         }
       })
 
-      console.log('👥 Operator IDs to resolve:', Array.from(operatorIds))
+      debugLog('👥 Operator IDs to resolve:', Array.from(operatorIds))
 
       // Get operator names
       let operatorNames = new Map<string, string>()
@@ -900,7 +905,7 @@ function OperacoesPageContent() {
           .select('id, first_name, last_name')
           .in('id', Array.from(operatorIds))
 
-        console.log('📋 Profile data:', profiles)
+        debugLog('📋 Profile data:', profiles)
 
         if (!profilesError && profiles) {
           profiles.forEach((profile: any) => {
@@ -912,7 +917,7 @@ function OperacoesPageContent() {
         }
       }
 
-      console.log('🗺️ Operator names map:', Object.fromEntries(operatorNames))
+      debugLog('🗺️ Operator names map:', Object.fromEntries(operatorNames))
 
       // Enhance the logs
       const enhancedLogs =
@@ -954,7 +959,7 @@ function OperacoesPageContent() {
           return enhanced
         }) || []
 
-      console.log('✅ Enhanced logs:', enhancedLogs)
+      debugLog('✅ Enhanced logs:', enhancedLogs)
       setAuditLogs(enhancedLogs)
     } catch (error: any) {
       console.error('❌ Error fetching audit logs:', error)
@@ -1091,10 +1096,21 @@ function OperacoesPageContent() {
           aVal = a.quantidade || 0
           bVal = b.quantidade || 0
           break
-        case 'prioridade':
-          aVal = a.prioridade || false
-          bVal = b.prioridade || false
+        case 'prioridade': {
+          const weight = (it: ProductionItem & { data_in?: string | null }) => {
+            if (it.prioridade) return 2 // red: highest
+            if (it.data_in) {
+              const days =
+                (Date.now() - new Date(it.data_in).getTime()) /
+                (1000 * 60 * 60 * 24)
+              if (days > 3) return 1 // blue: middle
+            }
+            return 0 // green: lowest
+          }
+          aVal = weight(a as any)
+          bVal = weight(b as any)
           break
+        }
         default:
           aVal = a.id
           bVal = b.id
@@ -1439,9 +1455,13 @@ function OperacoesPageContent() {
                           title={
                             item.prioridade
                               ? 'Prioritário'
-                              : item.data_in &&
+                              : (item as { data_in?: string | null }).data_in &&
                                   (Date.now() -
-                                    new Date(item.data_in).getTime()) /
+                                    new Date(
+                                      (
+                                        item as { data_in?: string | null }
+                                      ).data_in!,
+                                    ).getTime()) /
                                     (1000 * 60 * 60 * 24) >
                                     3
                                 ? 'Aguardando há mais de 3 dias'
@@ -1537,9 +1557,14 @@ function OperacoesPageContent() {
                             title={
                               item.prioridade
                                 ? 'Prioritário'
-                                : item.data_in &&
+                                : (item as { data_in?: string | null })
+                                      .data_in &&
                                     (Date.now() -
-                                      new Date(item.data_in).getTime()) /
+                                      new Date(
+                                        (
+                                          item as { data_in?: string | null }
+                                        ).data_in!,
+                                      ).getTime()) /
                                       (1000 * 60 * 60 * 24) >
                                       3
                                   ? 'Aguardando há mais de 3 dias'
@@ -2106,21 +2131,15 @@ function ItemDrawerContent({
           .eq('item_id', item.id)
           .eq('Tipo_Op', 'Impressao_Flexiveis')
 
-      console.log(
-        '🔍 Fetching Impressao_Flexiveis operations for item:',
-        item.id,
-      )
-      console.log(
-        '🔍 Impressao_Flexiveis operations found:',
-        operationsFlexiveis,
-      )
+      debugLog('🔍 Fetching Impressao_Flexiveis operations for item:', item.id)
+      debugLog('🔍 Impressao_Flexiveis operations found:', operationsFlexiveis)
 
       if (!errorFlexiveis && operationsFlexiveis) {
         const hasCompletedFlexiveis = operationsFlexiveis.some(
           (op: any) => op.concluido === true,
         )
         setIsItemCompletedFlexiveis(hasCompletedFlexiveis)
-        console.log(
+        debugLog(
           '✅ Impressao_Flexiveis completed status:',
           hasCompletedFlexiveis,
         )
@@ -2129,7 +2148,7 @@ function ItemDrawerContent({
           (op: any) => op.tem_corte === true,
         )
         setHasTemCorteFlexiveis(hasTemCorte)
-        console.log('✅ Impressao_Flexiveis tem_corte status:', hasTemCorte)
+        debugLog('✅ Impressao_Flexiveis tem_corte status:', hasTemCorte)
       } else if (errorFlexiveis) {
         console.error(
           '❌ Error fetching Impressao_Flexiveis operations:',
@@ -2713,8 +2732,8 @@ function OperationsTable({
       isPending: true, // Flag to identify as pending operation
     }
 
-    console.log(`📋 Duplicating operation:`, sourceOperation)
-    console.log(`✨ Created duplicate:`, duplicatedOp)
+    debugLog(`📋 Duplicating operation:`, sourceOperation)
+    debugLog(`✨ Created duplicate:`, duplicatedOp)
 
     // Add to pending operations (local state only)
     setPendingOperations((prev) => ({
@@ -2857,7 +2876,7 @@ function OperationsTable({
 
       // Skip if no change
       if (oldValue === value) {
-        console.log('No change detected, skipping update')
+        debugLog('No change detected, skipping update')
         return
       }
 
@@ -2964,7 +2983,7 @@ function OperationsTable({
     operationId: string,
     paletteId: string,
   ) => {
-    console.log(
+    debugLog(
       `🎨 Palette selection: operation=${operationId}, palette=${paletteId}`,
     )
 
@@ -2999,11 +3018,11 @@ function OperationsTable({
     // Find the selected palette
     const selectedPalette = paletes.find((p) => p.id === paletteId)
     if (!selectedPalette) {
-      console.log(`❌ Palette not found: ${paletteId}`)
+      debugLog(`❌ Palette not found: ${paletteId}`)
       return
     }
 
-    console.log(`✅ Found palette:`, selectedPalette)
+    debugLog(`✅ Found palette:`, selectedPalette)
 
     // Update palette selection in local state immediately
     setPaletteSelections((prev) => ({
@@ -3018,7 +3037,7 @@ function OperationsTable({
 
       // If the palette has a reference, also update material for pending operation
       if (selectedPalette.ref_cartao) {
-        console.log(
+        debugLog(
           `🔍 Looking for material with ref_cartao: ${selectedPalette.ref_cartao}`,
         )
 
@@ -3030,10 +3049,10 @@ function OperationsTable({
             m.tipo === materialTipo,
         )
 
-        console.log(`🎯 Found matching material:`, matchingMaterial)
+        debugLog(`🎯 Found matching material:`, matchingMaterial)
 
         if (matchingMaterial) {
-          console.log(
+          debugLog(
             `🎯 Auto-filling material for pending operation:`,
             matchingMaterial,
           )
@@ -3058,7 +3077,7 @@ function OperationsTable({
       }
     } else {
       // For saved operations, save to database
-      console.log(`💾 Saving palette to database: ${selectedPalette.no_palete}`)
+      debugLog(`💾 Saving palette to database: ${selectedPalette.no_palete}`)
       // updateOperation will automatically sync to Corte if this is an Impressão operation
       await updateOperation(operationId, 'N_Pal', selectedPalette.no_palete)
 
@@ -3074,7 +3093,7 @@ function OperationsTable({
         )
 
         if (matchingMaterial) {
-          console.log(`🎯 Auto-filling material:`, matchingMaterial)
+          debugLog(`🎯 Auto-filling material:`, matchingMaterial)
           // Update the operation's material_id - this will trigger onRefresh and auto-update the material combos
           // This will also automatically sync to Corte if this is an Impressão operation
           await updateOperation(operationId, 'material_id', matchingMaterial.id)
@@ -3090,14 +3109,12 @@ function OperationsTable({
             },
           }))
         } else {
-          console.log(
+          debugLog(
             `❌ No matching material found for reference: ${selectedPalette.ref_cartao} with tipo: ${materialTipo}`,
           )
         }
       } else {
-        console.log(
-          `ℹ️ Palette has no ref_cartao: ${selectedPalette.no_palete}`,
-        )
+        debugLog(`ℹ️ Palette has no ref_cartao: ${selectedPalette.no_palete}`)
       }
     }
   }
@@ -3132,7 +3149,7 @@ function OperationsTable({
 
       if (fetchError) {
         if (fetchError.code === 'PGRST116') {
-          console.log('Operation not found, probably already deleted')
+          debugLog('Operation not found, probably already deleted')
           onRefresh()
           return
         }
@@ -3268,7 +3285,7 @@ function OperationsTable({
                     const tipoOp =
                       type === 'corte' ? 'Corte' : 'Impressao_Flexiveis'
 
-                    console.log(
+                    debugLog(
                       `🔄 Updating ${tipoOp} operations for item ${itemId}:`,
                       updateData,
                     )
@@ -3287,7 +3304,7 @@ function OperationsTable({
                       .eq('Tipo_Op', tipoOp)
                       .select()
 
-                    console.log(`✅ Update result for ${tipoOp}:`, {
+                    debugLog(`✅ Update result for ${tipoOp}:`, {
                       error,
                       data,
                     })
@@ -3312,7 +3329,7 @@ function OperationsTable({
                                     changed_by: user.id,
                                     changed_at: new Date().toISOString(),
                                   })
-                                console.log(
+                                debugLog(
                                   `📝 Audit: Logged bulk completion change for operation ${op.id}`,
                                 )
                               } catch (auditError) {
@@ -3328,7 +3345,7 @@ function OperationsTable({
 
                         // Execute audit logging in background
                         Promise.all(auditPromises).catch((err) => {
-                          console.warn(
+                          debugWarn(
                             '⚠️ Some audit log entries failed (non-critical):',
                             err,
                           )
@@ -3454,7 +3471,7 @@ function OperationsTable({
               {displayOperations.map((operation) => (
                 <TableRow
                   key={operation.id}
-                  className={`${(operation as any).isPending ? 'border-l-4 border-l-yellow-400 bg-yellow-50' : ''}`}
+                  className={`${(operation as { isPending?: boolean }).isPending ? 'border-l-4 border-l-yellow-400 bg-yellow-50' : ''}`}
                 >
                   <TableCell className="w-[150px] min-w-[150px] p-2 text-sm">
                     <DatePicker
@@ -3468,7 +3485,7 @@ function OperationsTable({
                           ? date.toISOString().split('T')[0]
                           : null
                         // For pending operations, update locally only
-                        if ((operation as any).isPending) {
+                        if ((operation as { isPending?: boolean }).isPending) {
                           updatePendingOperation(
                             operation.id,
                             'data_operacao',
@@ -3491,7 +3508,7 @@ function OperationsTable({
                       value={operation.operador_id || ''}
                       onValueChange={(value) => {
                         // For pending operations, update locally only
-                        if ((operation as any).isPending) {
+                        if ((operation as { isPending?: boolean }).isPending) {
                           updatePendingOperation(
                             operation.id,
                             'operador_id',
@@ -3560,7 +3577,7 @@ function OperationsTable({
                         )
 
                         // For pending operations, update locally only
-                        if ((operation as any).isPending) {
+                        if ((operation as { isPending?: boolean }).isPending) {
                           updatePendingOperation(
                             operation.id,
                             machineField,
@@ -3833,7 +3850,9 @@ function OperationsTable({
                             value
                           ) {
                             // For pending operations, update locally only
-                            if ((operation as any).isPending) {
+                            if (
+                              (operation as { isPending?: boolean }).isPending
+                            ) {
                               updatePendingOperation(
                                 operation.id,
                                 'material_id',
@@ -3969,7 +3988,9 @@ function OperationsTable({
                             delete qtPrintUpdateTimers.current[operation.id]
                           }
 
-                          if ((operation as any).isPending) {
+                          if (
+                            (operation as { isPending?: boolean }).isPending
+                          ) {
                             updatePendingOperation(
                               operation.id,
                               'QT_print',
@@ -4013,7 +4034,9 @@ function OperationsTable({
                         // Set new timer to update after 500ms of no typing
                         quantityUpdateTimers.current[operation.id] = setTimeout(
                           () => {
-                            if ((operation as any).isPending) {
+                            if (
+                              (operation as { isPending?: boolean }).isPending
+                            ) {
                               updatePendingOperation(
                                 operation.id,
                                 quantityField,
@@ -4043,7 +4066,7 @@ function OperationsTable({
                           delete quantityUpdateTimers.current[operation.id]
                         }
 
-                        if ((operation as any).isPending) {
+                        if ((operation as { isPending?: boolean }).isPending) {
                           updatePendingOperation(
                             operation.id,
                             quantityField,
@@ -4066,10 +4089,14 @@ function OperationsTable({
                                 type === 'impressao' ||
                                 type === 'impressao_flexiveis'
                                   ? (operation.notas_imp ?? '')
-                                  : ((operation as any).notas ?? '')
+                                  : ((operation as { notas?: string }).notas ??
+                                    '')
                               }
                               onSave={async (newNotas) => {
-                                if ((operation as any).isPending) {
+                                if (
+                                  (operation as { isPending?: boolean })
+                                    .isPending
+                                ) {
                                   updatePendingOperation(
                                     operation.id,
                                     notesField,
@@ -4098,23 +4125,25 @@ function OperationsTable({
                         </TooltipTrigger>
                         {(type === 'impressao' || type === 'impressao_flexiveis'
                           ? operation.notas_imp
-                          : (operation as any).notas) &&
+                          : (operation as { notas?: string }).notas) &&
                           (type === 'impressao' ||
                           type === 'impressao_flexiveis'
                             ? operation.notas_imp?.trim()
-                            : (operation as any).notas?.trim()) !== '' && (
+                            : (
+                                operation as { notas?: string }
+                              ).notas?.trim()) !== '' && (
                             <TooltipContent>
                               {type === 'impressao' ||
                               type === 'impressao_flexiveis'
                                 ? operation.notas_imp
-                                : (operation as any).notas}
+                                : (operation as { notas?: string }).notas}
                             </TooltipContent>
                           )}
                       </Tooltip>
                     </TooltipProvider>
                   </TableCell>
                   <TableCell className="w-[130px] min-w-[130px] p-2 text-sm">
-                    {(operation as any).isPending ? (
+                    {(operation as { isPending?: boolean }).isPending ? (
                       // For pending operations: Duplicate, Accept and Cancel buttons
                       <div className="flex justify-center gap-1">
                         <TooltipProvider>

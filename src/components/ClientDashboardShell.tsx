@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect } from 'react'
+import { debugLog } from '@/utils/devLogger'
 import dynamic from 'next/dynamic'
 
 interface Holiday {
@@ -26,7 +27,7 @@ const ClientDashboardShell: React.FC<ClientDashboardShellProps> = ({
       sessionStorage.getItem('just_logged_in') === 'true'
 
     if (isFromLogin) {
-      console.log('🔄 Detected fresh login, forcing permissions refresh')
+      debugLog('🔄 Detected fresh login, forcing permissions refresh')
 
       // Clear the login flag
       sessionStorage.removeItem('just_logged_in')

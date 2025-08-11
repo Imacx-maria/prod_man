@@ -284,9 +284,11 @@ export default function StocksPage() {
                 )
 
                 if (hasFocusedElement) {
-                  console.log(
-                    'Preventing aria-hidden on main wrapper due to focused element',
-                  )
+                  if (process.env.NODE_ENV !== 'production') {
+                    console.log(
+                      'Preventing aria-hidden on main wrapper due to focused element',
+                    )
+                  }
                   element.removeAttribute('aria-hidden')
                 }
               }
@@ -702,7 +704,19 @@ export default function StocksPage() {
 
   // Sort helper for entries table
   const sortedStocks = [...filteredStocks].sort((a, b) => {
-    const getValue = (stock: any, col: string) => {
+    const getValue = (
+      stock: {
+        data: string
+        materiais?: { referencia?: string | null }
+        fornecedores?: { nome_forn?: string | null }
+        quantidade?: number
+        vl_m2?: number | string | null
+        preco_unitario?: number | null
+        valor_total?: number | null
+        n_palet?: string | null
+      },
+      col: string,
+    ) => {
       switch (col) {
         case 'data':
           return new Date(stock.data).getTime()
@@ -715,7 +729,7 @@ export default function StocksPage() {
         case 'quantidade':
           return stock.quantidade
         case 'vl_m2':
-          return (stock as any).vl_m2 || 0
+          return Number(stock.vl_m2) || 0
         case 'preco_unitario':
           return stock.preco_unitario || 0
         case 'valor_total':
@@ -943,7 +957,7 @@ export default function StocksPage() {
       no_guia_forn: stock.no_guia_forn || '',
       quantidade: stock.quantidade.toString(),
       quantidade_disponivel: stock.quantidade_disponivel.toString(),
-      vl_m2: (stock as any).vl_m2 || '',
+      vl_m2: (stock as { vl_m2?: number | string | null }).vl_m2 || '',
       preco_unitario: stock.preco_unitario?.toString() || '',
       valor_total: stock.valor_total?.toString() || '',
       notas: stock.notas || '',
@@ -1317,7 +1331,7 @@ export default function StocksPage() {
         Material: formatMaterialName(stock.materiais),
         Fornecedor: stock.fornecedores?.nome_forn || '',
         Quantidade: stock.quantidade || 0,
-        VL_m2: (stock as any).vl_m2 || '',
+        VL_m2: (stock as { vl_m2?: number | string | null }).vl_m2 || '',
         'Preço Unitário': stock.preco_unitario || 0,
         'Valor Total': stock.valor_total || 0,
         'Nº Palete': stock.n_palet || '',
@@ -2202,7 +2216,7 @@ export default function StocksPage() {
                             {stock.quantidade}
                           </TableCell>
                           <TableCell className="text-right">
-                            {(stock as any).vl_m2 || '-'}
+                            {stock.vl_m2 ?? '-'}
                           </TableCell>
                           <TableCell className="text-right">
                             {formatPrice(stock.preco_unitario)}

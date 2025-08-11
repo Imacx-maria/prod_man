@@ -1,13 +1,5 @@
 import React, { useState, useCallback } from 'react'
-import {
-  Eye,
-  CheckCircle2,
-  Trash2,
-  ArrowUp,
-  ArrowDown,
-  Plus,
-  Copy,
-} from 'lucide-react'
+import { Trash2, ArrowUp, ArrowDown, Copy } from 'lucide-react'
 import DatePicker from '@/components/ui/DatePicker'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -19,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
+// Removed unused Textarea import
 import SimpleNotasPopover from '@/components/ui/SimpleNotasPopover'
 import {
   Table,
@@ -38,7 +30,8 @@ import {
 import type { ProductionOperationWithRelations } from '@/types/producao'
 import { useTableData } from '../hooks/useTableData'
 import { useMaterialsCascading } from '../hooks/useMaterialsCascading'
-import type { MaterialData } from '../hooks/useMaterialsCascading'
+// Removed unused MaterialData type import
+import { debugLog } from '@/utils/devLogger'
 
 interface OperationsTableProps {
   operations: ProductionOperationWithRelations[]
@@ -49,7 +42,7 @@ interface OperationsTableProps {
   sortColumn: string
   sortDirection: 'asc' | 'desc'
   onSort: (column: string) => void
-  onFieldChange?: (operationId: string, field: string, value: any) => void
+  onFieldChange?: (operationId: string, field: string, value: unknown) => void
 }
 
 // Interface for tracking material selections per operation
@@ -96,7 +89,7 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({
 
   // State to track input field values per operation row
   const [fieldValues, setFieldValues] = useState<{
-    [operationId: string]: { [field: string]: any }
+    [operationId: string]: { [field: string]: unknown }
   }>({})
 
   // Initialize material selections with existing data when operations change
@@ -104,7 +97,7 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({
     const newSelections: MaterialSelections = {}
 
     operations.forEach((operation) => {
-      const materialId = (operation as any).material_id
+      const materialId = operation.material_id
       if (materialId) {
         // Find the material data based on the stored material_id
         const foundMaterial = materialsData.find(
@@ -123,14 +116,15 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({
     setMaterialSelections(newSelections)
 
     // Initialize field values with existing data
-    const newFieldValues: { [operationId: string]: { [field: string]: any } } =
-      {}
+    const newFieldValues: {
+      [operationId: string]: { [field: string]: unknown }
+    } = {}
     operations.forEach((operation) => {
       newFieldValues[operation.id] = {
-        num_placas_print: (operation as any).num_placas_print || 0,
-        num_placas_corte: (operation as any).num_placas_corte || 0,
-        observacoes: (operation as any).observacoes || '',
-        no_interno: (operation as any).no_interno || '',
+        num_placas_print: operation.num_placas_print ?? 0,
+        num_placas_corte: operation.num_placas_corte ?? 0,
+        observacoes: operation.observacoes ?? '',
+        no_interno: operation.no_interno ?? '',
       }
     })
     setFieldValues(newFieldValues)
@@ -204,7 +198,7 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({
 
   // Handler for input field changes (maintains local state)
   const handleInputFieldChange = useCallback(
-    (operationId: string, field: string, value: any) => {
+    (operationId: string, field: string, value: unknown) => {
       // Update local state immediately
       setFieldValues((prev) => ({
         ...prev,
@@ -234,9 +228,8 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({
   }
 
   const handleComplete = (operation: ProductionOperationWithRelations) => {
-    if (window.confirm(`Concluir operação ${operation.no_interno}?`)) {
-      onComplete(operation.id)
-    }
+    // Non-destructive: proceed without confirmation
+    onComplete(operation.id)
   }
 
   const handleDelete = (operation: ProductionOperationWithRelations) => {
@@ -525,8 +518,7 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({
                             : new Date()
                         }
                         onSelect={(date) => {
-                          // Handle date change
-                          console.log('Date selected:', date)
+                          debugLog('Date selected:', date)
                         }}
                         placeholder="Data"
                         buttonClassName="w-full h-10 text-sm"
@@ -559,7 +551,7 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({
                     </TableCell>
                     <TableCell>
                       <Select
-                        value={(operation as any).maquina || ''}
+                        value={operation.maquina || ''}
                         onValueChange={(value) =>
                           onFieldChange?.(operation.id, 'maquina_id', value)
                         }
@@ -582,11 +574,11 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({
                     <TableCell>
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-medium">
-                          {(operation as any).descricao}
+                          {operation.descricao}
                         </div>
-                        {(operation as any).codigo && (
+                        {operation.codigo && (
                           <div className="truncate font-mono text-xs text-gray-500">
-                            {(operation as any).codigo}
+                            {operation.codigo}
                           </div>
                         )}
                       </div>
@@ -713,7 +705,7 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({
                         min="0"
                         value={
                           fieldValues[operation.id]?.num_placas_print ??
-                          (operation as any).num_placas_print ??
+                          operation.num_placas_print ??
                           0
                         }
                         onChange={(e) =>
@@ -735,7 +727,7 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({
                         min="0"
                         value={
                           fieldValues[operation.id]?.num_placas_corte ??
-                          (operation as any).num_placas_corte ??
+                          operation.num_placas_corte ??
                           0
                         }
                         onChange={(e) =>
@@ -751,7 +743,7 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({
                       <SimpleNotasPopover
                         value={
                           fieldValues[operation.id]?.observacoes ??
-                          (operation as any).observacoes ??
+                          operation.observacoes ??
                           ''
                         }
                         onSave={(value: string) => {
@@ -784,7 +776,7 @@ export const OperationsTable: React.FC<OperationsTableProps> = ({
                         variant="secondary"
                         className="flex aspect-square size-10 items-center justify-center !p-0"
                         onClick={() => {
-                          console.log(
+                          debugLog(
                             'Duplicate button clicked for operation:',
                             operation,
                           )

@@ -38,6 +38,7 @@ import type {
   Transportadora,
   Armazem,
 } from '@/types/logistica'
+import { debugLog, debugWarn } from '@/utils/devLogger'
 
 // Helper function for smart numeric sorting (handles mixed text/number fields)
 const parseNumericField = (
@@ -191,9 +192,9 @@ export const LogisticaTableWithCreatable: React.FC<
       })
 
       if (missingData.length > 0) {
-        console.group('🚨 Data Integrity Issues Detected:')
+        debugLog('🚨 Data Integrity Issues Detected:')
         missingData.forEach((record, index) => {
-          console.log(`Record ${index}:`, {
+          debugLog(`Record ${index}:`, {
             id: record.id,
             hasDirectDescricao: !!record.descricao,
             hasNestedDescricao: !!record.items_base?.descricao,
@@ -203,7 +204,6 @@ export const LogisticaTableWithCreatable: React.FC<
             quantityValue: getQuantityValue(record, editRows),
           })
         })
-        console.groupEnd()
       }
     }, [records, editRows])
 
@@ -428,32 +428,35 @@ export const LogisticaTableWithCreatable: React.FC<
   ])
 
   // Handle edit state updates - enhanced for data stability
-  const handleEdit = useCallback((rowId: string, field: string, value: any) => {
-    if (!rowId) {
-      console.warn('handleEdit called with missing rowId')
-      return
-    }
-
-    setEditRows((prev) => {
-      const currentRowEdit = prev[rowId] || {}
-
-      // Preserve critical fields when updating others
-      const preservedData = {
-        item: currentRowEdit.item,
-        quantidade: currentRowEdit.quantidade,
-        guia: currentRowEdit.guia,
+  const handleEdit = useCallback(
+    (rowId: string, field: string, value: unknown) => {
+      if (!rowId) {
+        debugWarn('handleEdit called with missing rowId')
+        return
       }
 
-      return {
-        ...prev,
-        [rowId]: {
-          ...preservedData,
-          ...currentRowEdit,
-          [field]: value,
-        },
-      }
-    })
-  }, [])
+      setEditRows((prev) => {
+        const currentRowEdit = prev[rowId] || {}
+
+        // Preserve critical fields when updating others
+        const preservedData = {
+          item: currentRowEdit.item,
+          quantidade: currentRowEdit.quantidade,
+          guia: currentRowEdit.guia,
+        }
+
+        return {
+          ...prev,
+          [rowId]: {
+            ...preservedData,
+            ...currentRowEdit,
+            [field]: value,
+          },
+        }
+      })
+    },
+    [],
+  )
 
   // Handle row deletion
   const handleDelete = useCallback(
@@ -472,7 +475,7 @@ export const LogisticaTableWithCreatable: React.FC<
 
   // Debug function to log row data (can be removed in production)
   const debugRow = (row: LogisticaRecord) => {
-    console.log('Row data:', {
+    debugLog('Row data:', {
       id: row.id,
       item_id: row.items_base?.id,
       descricao: row.descricao,

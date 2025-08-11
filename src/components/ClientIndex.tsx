@@ -14,6 +14,7 @@ import { createBrowserClient } from '@/utils/supabase'
 import { format } from 'date-fns'
 import { Button } from '@/components/ui/button'
 import { RefreshCcw, Loader2 } from 'lucide-react'
+import { debugLog } from '@/utils/devLogger'
 
 interface Holiday {
   id: string
@@ -208,7 +209,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
 
   const handleItemSave = useCallback(
     async (row: any, value: string) => {
-      console.log('handleItemSave called:', { rowId: row.id, value, row })
+      debugLog('handleItemSave called:', { rowId: row.id, value, row })
 
       const itemId = row.items_base?.id
       if (!itemId) {
@@ -223,7 +224,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
         value,
         selectedDate,
       )
-      console.log('Item description update result:', success)
+      debugLog('Item description update result:', success)
 
       if (success) {
         // Also update the logistica_entregas.descricao field to keep them in sync
@@ -276,7 +277,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
 
   const handleGuiaSave = useCallback(
     async (row: any, value: string) => {
-      console.log('handleGuiaSave called:', {
+      debugLog('handleGuiaSave called:', {
         rowId: row.id,
         value,
         currentGuia: row.guia,
@@ -297,7 +298,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
           value,
           selectedDate,
         )
-        console.log('GUIA update result:', success)
+        debugLog('GUIA update result:', success)
 
         if (success) {
           // If update was successful, refetch to ensure UI is in sync with DB
@@ -340,7 +341,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
 
   const handleRecolhaChange = useCallback(
     async (rowId: string, value: string) => {
-      console.log('🏠 Updating local_recolha:', {
+      debugLog('🏠 Updating local_recolha:', {
         rowId,
         value,
       })
@@ -349,7 +350,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
         const selectedArmazem = armazens.find((a) => a.value === value)
         const textValue = selectedArmazem ? selectedArmazem.label : ''
 
-        console.log('🏠 Armazem details:', {
+        debugLog('🏠 Armazem details:', {
           id: value,
           text: textValue,
         })
@@ -361,7 +362,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
         ])
 
         if (success.every((s) => s)) {
-          console.log(
+          debugLog(
             '✅ Successfully updated both id_local_recolha and local_recolha',
           )
           await refetchRow(rowId, selectedDate)
@@ -379,7 +380,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
 
   const handleEntregaChange = useCallback(
     async (rowId: string, value: string) => {
-      console.log('🚚 Updating local_entrega:', {
+      debugLog('🚚 Updating local_entrega:', {
         rowId,
         value,
       })
@@ -388,7 +389,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
         const selectedArmazem = armazens.find((a) => a.value === value)
         const textValue = selectedArmazem ? selectedArmazem.label : ''
 
-        console.log('🚚 Armazem details:', {
+        debugLog('🚚 Armazem details:', {
           id: value,
           text: textValue,
         })
@@ -400,7 +401,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
         ])
 
         if (success.every((s) => s)) {
-          console.log(
+          debugLog(
             '✅ Successfully updated both id_local_entrega and local_entrega',
           )
           await refetchRow(rowId, selectedDate)
@@ -472,7 +473,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
           data !==
             (selectedDate ? selectedDate.toISOString().split('T')[0] : null)
         ) {
-          console.log(`Logistics entry moved to date: ${data}`)
+          debugLog(`Logistics entry moved to date: ${data}`)
         }
       }
 
@@ -509,7 +510,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
 
   const handleQuantidadeSave = useCallback(
     async (row: any, value: number | null) => {
-      console.log('handleQuantidadeSave called:', {
+      debugLog('handleQuantidadeSave called:', {
         rowId: row.id,
         currentQuantidade: row.quantidade,
         itemsBaseQuantidade: row.items_base?.quantidade,
@@ -582,7 +583,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
   const handleDuplicateRow = useCallback(
     async (row: any) => {
       try {
-        console.log('Duplicate row called for:', row)
+        debugLog('Duplicate row called for:', row)
 
         // Defensive: ensure we have a valid item_id
         const itemId = row.item_id || row.items_base?.id
@@ -601,10 +602,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
         const originalDescription = row.items_base?.descricao || ''
         const duplicatedDescription = `${originalDescription} - Entrega ${copyNumber + 1}`
 
-        console.log(
-          'Creating duplicate with description:',
-          duplicatedDescription,
-        )
+        debugLog('Creating duplicate with description:', duplicatedDescription)
 
         // Defensive: copy all relevant fields, fallback to empty or null if missing
         const payload = {
@@ -666,7 +664,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
         }
 
         setRecords((prevRecords) => [...prevRecords, newLogisticsEntry])
-        console.log('Row duplicated successfully:', newLogisticsEntry)
+        debugLog('Row duplicated successfully:', newLogisticsEntry)
       } catch (error) {
         console.error('Error duplicating row:', error)
         alert(
@@ -761,10 +759,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
       return
     }
 
-    const confirmed = confirm(
-      'Copiar quantidades originais dos itens para a tabela de logística? Isto irá substituir as quantidades existentes.',
-    )
-    if (!confirmed) return
+    // Non-destructive: proceed without confirmation
 
     try {
       // Update all logistics records with original quantities
@@ -784,7 +779,8 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
       // Refresh data to show the updates
       await fetchLogisticaData(selectedDate)
 
-      alert('Quantidades copiadas com sucesso!')
+      // Success: silent in production; optional debug log
+      debugLog('Quantidades copiadas com sucesso!')
     } catch (error) {
       console.error('Error copying quantities:', error)
       alert('Erro ao copiar quantidades. Tente novamente.')
@@ -813,12 +809,7 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
         return
       }
 
-      // Show confirmation with details
-      const confirmed = confirm(
-        `Copiar dados da linha "${sourceRecord.items_base?.descricao || 'Sem descrição'}" para todas as outras linhas?`,
-      )
-
-      if (!confirmed) return
+      // Non-destructive: proceed without confirmation
 
       try {
         // Extract delivery information from the source record
@@ -938,8 +929,8 @@ const ClientIndex: React.FC<ClientIndexProps> = ({ holidays }) => {
 
         // Refresh data to show the updates
         await fetchLogisticaData(selectedDate)
-
-        alert('Informações de entrega copiadas com sucesso!')
+        // Success: silent in production; optional debug log
+        debugLog('Informações de entrega copiadas com sucesso!')
       } catch (error) {
         console.error('Error copying delivery information:', error)
         alert('Erro ao copiar informações de entrega. Tente novamente.')

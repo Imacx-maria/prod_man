@@ -53,8 +53,10 @@ import {
   FileText,
   FilePlus,
   ReceiptText,
+  Thermometer,
 } from 'lucide-react'
 import { createBrowserClient } from '@/utils/supabase'
+import { debugLog } from '@/utils/devLogger'
 import {
   Tooltip,
   TooltipContent,
@@ -98,6 +100,7 @@ interface Job {
   numero_fo: number
   profile_id: string
   nome_campanha: string
+  cliente?: string
   data_saida: string | null
   prioridade: boolean | null
   notas?: string
@@ -176,6 +179,7 @@ interface Item {
   quantidade: number | null
   complexidade_id?: string | null
   complexidade?: string | null
+  notas?: string | null
   em_curso: boolean | null
   duvidas: boolean | null
   maquete_enviada1: boolean | null
@@ -327,7 +331,7 @@ const fetchJobs = async (
   const supabase = createBrowserClient()
 
   try {
-    console.log('fetchJobs called with filters:', filters)
+    debugLog('fetchJobs called with filters:', filters)
 
     let jobIds: string[] | null = null
 
@@ -337,7 +341,7 @@ const fetchJobs = async (
     )
 
     if (hasItemFilters) {
-      console.log(
+      debugLog(
         '🔍 Item/codigo search active - searching globally in items_base',
       )
 
@@ -366,9 +370,9 @@ const fetchJobs = async (
 
       if (itemData && itemData.length > 0) {
         jobIds = Array.from(new Set(itemData.map((item) => item.folha_obra_id)))
-        console.log(`Found ${jobIds.length} jobs matching item/codigo search`)
+        debugLog(`Found ${jobIds.length} jobs matching item/codigo search`)
       } else {
-        console.log('No items found matching search criteria')
+        debugLog('No items found matching search criteria')
         setJobs([])
         return
       }
@@ -378,7 +382,7 @@ const fetchJobs = async (
     let query = supabase
       .from('folhas_obras')
       .select(
-        'id, data_in, numero_fo, numero_orc, profile_id, nome_campanha, data_saida, prioridade, notas, created_at',
+        'id, data_in, numero_fo, numero_orc, profile_id, nome_campanha, cliente, data_saida, prioridade, notas, created_at',
       )
       .not('numero_fo', 'is', null)
       .not('numero_orc', 'is', null)
@@ -420,10 +424,17 @@ const fetchJobs = async (
       return
     }
 
+    try {
+      debugLog(
+        'Sample clientes from folhas_obras:',
+        (jobsData || []).slice(0, 5).map((j: any) => j?.cliente),
+      )
+    } catch {}
+
     // STEP 5: Handle showFechados filter (completion status)
     if (filters.showFechados !== undefined) {
       try {
-        console.log('🔍 Applying showFechados filter')
+        debugLog('🔍 Applying showFechados filter')
 
         // Get all designer items for these jobs to check completion status
         const jobIdsToCheck = jobsData.map((job) => job.id)
@@ -488,7 +499,7 @@ const fetchJobs = async (
           }
         })
 
-        console.log(
+        debugLog(
           `Filtered ${jobsData.length} jobs to ${filteredJobs.length} based on showFechados=${filters.showFechados}`,
         )
         setJobs(filteredJobs)
@@ -526,6 +537,7 @@ const fetchAllItems = async (
         `
         id,
         item_id,
+            notas,
         em_curso,
         duvidas,
         maquete_enviada1,
@@ -687,6 +699,13 @@ export default function DesignerFlow() {
   const [creatingJob, setCreatingJob] = useState(false)
   const [showFechados, setShowFechados] = useState(false)
   const [allItems, setAllItems] = useState<Item[]>([])
+  const [feriadosSet, setFeriadosSet] = useState<Set<string>>(new Set())
+  const [entregaStatusByJob, setEntregaStatusByJob] = useState<
+    Record<string, 'red' | 'yellow' | null>
+  >({})
+  const [nextEntregaDateByJob, setNextEntregaDateByJob] = useState<
+    Record<string, string | null>
+  >({})
   const [pendingNewJobId, setPendingNewJobId] = useState<string | null>(null)
   const foInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const [itemFilter, setItemFilter] = useState('')
@@ -801,7 +820,7 @@ export default function DesignerFlow() {
   const debouncedUpdateComplexidade = useMemo(
     () =>
       debounce(async (itemId: string, complexidadeId: string | null) => {
-        console.log('debouncedUpdateComplexidade called with:', {
+        debugLog('debouncedUpdateComplexidade called with:', {
           itemId,
           complexidadeId,
         })
@@ -841,7 +860,7 @@ export default function DesignerFlow() {
             return
           }
 
-          console.log('Successfully updated complexidade:', data)
+          debugLog('Successfully updated complexidade:', data)
         } catch (error) {
           console.error('Error in debouncedUpdateComplexidade:', error)
         }
@@ -949,6 +968,151 @@ export default function DesignerFlow() {
     fetchAllItems(setAllItems, allJobs)
   }, [jobs, paginadosJobs])
 
+  // Load holidays (feriados) once
+  useEffect(() => {
+    const loadFeriados = async () => {
+      try {
+        const supabase = createBrowserClient()
+        const { data, error } = await supabase.from('feriados').select('*')
+        if (!error && data) {
+          const dates = new Set<string>()
+          ;(data as any[]).forEach((row) => {
+            const raw =
+              row.data || row.data_feriado || row.date || row.dia || row.dta
+            if (raw) {
+              const d = new Date(raw)
+              if (!isNaN(d.getTime())) {
+                const y = d.getFullYear()
+                const m = String(d.getMonth() + 1).padStart(2, '0')
+                const da = String(d.getDate()).padStart(2, '0')
+                dates.add(`${y}-${m}-${da}`)
+              }
+            }
+          })
+          setFeriadosSet(dates)
+        }
+      } catch {}
+    }
+    loadFeriados()
+  }, [])
+
+  // Business day utilities
+  const isBusinessDay = (date: Date) => {
+    const day = date.getDay()
+    if (day === 0 || day === 6) return false
+    const y = date.getFullYear()
+    const m = String(date.getMonth() + 1).padStart(2, '0')
+    const d = String(date.getDate()).padStart(2, '0')
+    return !feriadosSet.has(`${y}-${m}-${d}`)
+  }
+
+  const businessDaysDiffFromToday = (target: Date) => {
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    const end = new Date(target)
+    end.setHours(0, 0, 0, 0)
+    if (end <= today) return Number.MAX_SAFE_INTEGER
+    let count = 0
+    const cursor = new Date(today)
+    cursor.setDate(cursor.getDate() + 1)
+    while (cursor <= end) {
+      if (isBusinessDay(cursor)) count++
+      cursor.setDate(cursor.getDate() + 1)
+    }
+    return count
+  }
+
+  // Compute entrega statuses per job (red: next business day, yellow: 2 business days)
+  useEffect(() => {
+    const computeEntregaStatuses = async () => {
+      try {
+        if (!allItems || allItems.length === 0) {
+          setEntregaStatusByJob({})
+          return
+        }
+        const supabase = createBrowserClient()
+        const itemIdToJobId: Record<string, string> = {}
+        const itemIdToPaginacao: Record<string, boolean> = {}
+        const uniqueItemIds = new Set<string>()
+        allItems.forEach((it) => {
+          if (it.id && it.folha_obra_id) {
+            itemIdToJobId[it.id] = it.folha_obra_id
+            itemIdToPaginacao[it.id] = !!it.paginacao
+            uniqueItemIds.add(it.id)
+          }
+        })
+        const itemIds = Array.from(uniqueItemIds)
+        if (itemIds.length === 0) {
+          setEntregaStatusByJob({})
+          return
+        }
+
+        const { data, error } = await supabase
+          .from('logistica_entregas')
+          .select('item_id, data_saida, saiu')
+          .in('item_id', itemIds)
+          .not('data_saida', 'is', null)
+          .or('saiu.is.null,saiu.eq.false')
+
+        if (error || !data) {
+          setEntregaStatusByJob({})
+          setNextEntregaDateByJob({})
+          return
+        }
+
+        const statusByJob: Record<string, 'red' | 'yellow' | null> = {}
+        const datesByJob: Record<string, Date[]> = {}
+        ;(data as any[]).forEach((row) => {
+          const itemId = row.item_id as string
+          const jobId = itemIdToJobId[itemId]
+          if (!jobId) return
+          // Ignore items that are already paginated (designer_items.paginacao === true)
+          if (itemIdToPaginacao[itemId] === true) return
+          const d = new Date(row.data_saida)
+          if (isNaN(d.getTime())) return
+          // Collect all candidate dates per job for display column
+          if (!datesByJob[jobId]) datesByJob[jobId] = []
+          datesByJob[jobId].push(new Date(d))
+          const diff = businessDaysDiffFromToday(d)
+          if (diff === 1) {
+            statusByJob[jobId] = 'red'
+          } else if (diff === 2) {
+            if (statusByJob[jobId] !== 'red') statusByJob[jobId] = 'yellow'
+          }
+        })
+
+        setEntregaStatusByJob(statusByJob)
+        // Compute earliest date per job among non-paginados
+        const nextMap: Record<string, string | null> = {}
+        Object.entries(datesByJob).forEach(([jobId, dates]) => {
+          if (!dates || dates.length === 0) {
+            nextMap[jobId] = null
+            return
+          }
+          const normalized = dates.map((d) => {
+            const dd = new Date(d)
+            dd.setHours(0, 0, 0, 0)
+            return dd
+          })
+          const chosen = normalized.reduce(
+            (min, d) => (d < min ? d : min),
+            new Date(8640000000000000),
+          )
+          if (isFinite(chosen.getTime())) {
+            nextMap[jobId] = chosen.toISOString()
+          } else {
+            nextMap[jobId] = null
+          }
+        })
+        setNextEntregaDateByJob(nextMap)
+      } catch {
+        setEntregaStatusByJob({})
+        setNextEntregaDateByJob({})
+      }
+    }
+    computeEntregaStatuses()
+  }, [allItems, feriadosSet])
+
   // Jobs are now filtered at database level
   const filteredJobs = jobs
 
@@ -1008,9 +1172,47 @@ export default function DesignerFlow() {
           : bName.localeCompare(aName)
       }
       if (sortColumn === 'prioridade') {
-        const aNum = aValue ? 1 : 0
-        const bNum = bValue ? 1 : 0
-        return sortDirection === 'asc' ? aNum - bNum : bNum - aNum
+        // Map P color states to numeric weights for sorting
+        const weight = (job: Job): number => {
+          if (job.prioridade) return 2 // red (highest)
+          if (job.data_in) {
+            const days =
+              (Date.now() - new Date(job.data_in).getTime()) /
+              (1000 * 60 * 60 * 24)
+            if (days > 3) return 1 // blue (middle)
+          }
+          return 0 // green (lowest)
+        }
+        const wa = weight(a)
+        const wb = weight(b)
+        return sortDirection === 'asc' ? wa - wb : wb - wa
+      }
+      if (sortColumn === 'entrega') {
+        // Map E thermometer status to weights: red > yellow > none
+        const weight = (job: Job): number => {
+          const status = entregaStatusByJob[job.id]
+          if (status === 'red') return 2
+          if (status === 'yellow') return 1
+          return 0
+        }
+        const wa = weight(a)
+        const wb = weight(b)
+        return sortDirection === 'asc' ? wa - wb : wb - wa
+      }
+      if (sortColumn === 'data_saida') {
+        // Sort by earliest nextEntregaDateByJob per job (from logistica_entregas)
+        const aIso = nextEntregaDateByJob[a.id]
+        const bIso = nextEntregaDateByJob[b.id]
+        const at = aIso ? new Date(aIso).getTime() : 0
+        const bt = bIso ? new Date(bIso).getTime() : 0
+        return sortDirection === 'asc' ? at - bt : bt - at
+      }
+      if (sortColumn === 'cliente') {
+        const aName = (a.cliente || '').toString()
+        const bName = (b.cliente || '').toString()
+        return sortDirection === 'asc'
+          ? aName.localeCompare(bName)
+          : bName.localeCompare(aName)
       }
       if (typeof aValue === 'string' && typeof bValue === 'string') {
         return sortDirection === 'asc'
@@ -1054,6 +1256,7 @@ export default function DesignerFlow() {
           `
           id,
           item_id,
+        notas,
           em_curso,
           duvidas,
           maquete_enviada1,
@@ -1260,7 +1463,7 @@ export default function DesignerFlow() {
   // Update item in state (optimistic update)
   const updateItemInState = useCallback(
     ({ designerItemId, updates }: UpdateItemParams) => {
-      console.log('updateItemInState called with:', { designerItemId, updates })
+      debugLog('updateItemInState called with:', { designerItemId, updates })
 
       setDrawerItems((prev) => {
         const newDrawerItems = { ...prev }
@@ -1529,6 +1732,30 @@ export default function DesignerFlow() {
                       </TableHead>
                       <TableHead
                         className="border-border sticky top-0 z-10 min-w-[200px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSort('cliente')}
+                      >
+                        Nome Cliente
+                        {sortColumn === 'cliente' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 min-w-[200px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
+                        onClick={() => handleSort('cliente')}
+                      >
+                        Nome Cliente
+                        {sortColumn === 'cliente' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 min-w-[200px] cursor-pointer border-b-2 bg-[var(--orange)] font-bold uppercase select-none"
                         onClick={() => handleSort('nome_campanha')}
                       >
                         Nome Campanha
@@ -1563,6 +1790,19 @@ export default function DesignerFlow() {
                             <ArrowDown className="ml-1 inline h-3 w-3" />
                           ))}
                       </TableHead>
+
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[120px] cursor-pointer border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
+                        onClick={() => handleSort('data_saida')}
+                      >
+                        Data Saída
+                        {sortColumn === 'data_saida' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
                       <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
                         Ações
                       </TableHead>
@@ -1572,7 +1812,7 @@ export default function DesignerFlow() {
                     {sortedJobs.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={7}
+                          colSpan={10}
                           className="text-center text-gray-500"
                         >
                           Nenhum trabalho encontrado.
@@ -1616,6 +1856,15 @@ export default function DesignerFlow() {
                                   ))}
                               </SelectContent>
                             </Select>
+                          </TableCell>
+                          <TableCell>
+                            {(() => {
+                              const name = job.cliente || ''
+                              if (!name) return '-'
+                              return name.length > 24
+                                ? `${name.slice(0, 24)}...`
+                                : name
+                            })()}
                           </TableCell>
                           <TableCell>{job.nome_campanha}</TableCell>
                           <TableCell>
@@ -1669,6 +1918,40 @@ export default function DesignerFlow() {
                                 updateJob(job.id, { prioridade: newPrioridade })
                               }}
                             />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {(() => {
+                              const status = entregaStatusByJob[job.id]
+                              const colorClass =
+                                status === 'red'
+                                  ? 'text-red-600'
+                                  : status === 'yellow'
+                                    ? 'text-orange-500'
+                                    : 'text-muted-foreground'
+                              return (
+                                <Thermometer
+                                  className={`mx-auto h-4 w-4 ${colorClass}`}
+                                  strokeWidth={2}
+                                  fill="currentColor"
+                                />
+                              )
+                            })()}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {(() => {
+                              const iso = nextEntregaDateByJob[job.id]
+                              if (!iso) return '-'
+                              try {
+                                const d = new Date(iso)
+                                return d.toLocaleDateString('pt-PT', {
+                                  day: '2-digit',
+                                  month: '2-digit',
+                                  year: 'numeric',
+                                })
+                              } catch {
+                                return '-'
+                              }
+                            })()}
                           </TableCell>
                           <TableCell className="flex justify-center gap-2">
                             <Button
@@ -1878,6 +2161,18 @@ export default function DesignerFlow() {
                             <ArrowDown className="ml-1 inline h-3 w-3" />
                           ))}
                       </TableHead>
+                      <TableHead
+                        className="border-border sticky top-0 z-10 w-[36px] cursor-pointer border-b-2 bg-[var(--orange)] text-center font-bold uppercase select-none"
+                        onClick={() => handleSort('entrega')}
+                      >
+                        E
+                        {sortColumn === 'entrega' &&
+                          (sortDirection === 'asc' ? (
+                            <ArrowUp className="ml-1 inline h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="ml-1 inline h-3 w-3" />
+                          ))}
+                      </TableHead>
                       <TableHead className="border-border sticky top-0 z-10 w-[90px] border-b-2 bg-[var(--orange)] text-center font-bold uppercase">
                         Ações
                       </TableHead>
@@ -1887,7 +2182,7 @@ export default function DesignerFlow() {
                     {paginadosJobs.length === 0 ? (
                       <TableRow>
                         <TableCell
-                          colSpan={7}
+                          colSpan={8}
                           className="text-center text-gray-500"
                         >
                           Nenhum trabalho paginado encontrado.
@@ -1931,6 +2226,15 @@ export default function DesignerFlow() {
                                   ))}
                               </SelectContent>
                             </Select>
+                          </TableCell>
+                          <TableCell>
+                            {(() => {
+                              const name = job.cliente || ''
+                              if (!name) return '-'
+                              return name.length > 24
+                                ? `${name.slice(0, 24)}...`
+                                : name
+                            })()}
                           </TableCell>
                           <TableCell>{job.nome_campanha}</TableCell>
                           <TableCell>
@@ -2246,6 +2550,15 @@ export default function DesignerFlow() {
                         onBlur={async (e) => {
                           const newNotas = e.target.value
                           updateJob(job.id, { notas: newNotas })
+                          try {
+                            const supabase = createBrowserClient()
+                            await supabase
+                              .from('folhas_obras')
+                              .update({ notas: newNotas })
+                              .eq('id', job.id)
+                          } catch (error) {
+                            console.error('Error updating notas:', error)
+                          }
                         }}
                         className="h-24 min-h-[80px] w-full resize-none rounded-none"
                         placeholder="Notas (opcional)"
@@ -3784,75 +4097,190 @@ export default function DesignerFlow() {
                                   </TooltipProvider>
                                 </TableCell>
                                 <TableCell className="text-center align-middle">
-                                  <Popover modal={false}>
-                                    <PopoverTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
-                                        aria-label="Ver ou editar path"
-                                      >
-                                        {item.path_trabalho ? (
-                                          <FileText className="h-4 w-4" />
-                                        ) : (
-                                          <FilePlus className="h-4 w-4" />
-                                        )}
-                                      </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="bg-background border-border w-80 border-2 p-4">
-                                      <div className="space-y-2">
-                                        <h4 className="font-medium">Path</h4>
-                                        <Input
-                                          value={item.path_trabalho || ''}
-                                          placeholder="Adicionar path..."
-                                          className="min-h-[40px]"
-                                          onChange={(e) => {
-                                            const newValue = e.target.value
-                                            updateItemInState({
-                                              designerItemId:
-                                                item.designer_item_id,
-                                              updates: {
-                                                path_trabalho: newValue,
-                                              },
-                                            })
-                                          }}
-                                          onBlur={async (e) => {
-                                            const newPath = e.target.value
-                                            const supabase =
-                                              createBrowserClient()
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <Popover modal={false}>
+                                        <TooltipTrigger asChild>
+                                          <PopoverTrigger asChild>
+                                            <Button
+                                              variant={
+                                                item.path_trabalho &&
+                                                item.path_trabalho.trim() !== ''
+                                                  ? 'link'
+                                                  : 'ghost'
+                                              }
+                                              size="icon"
+                                              className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                              aria-label="Ver ou editar path"
+                                              title="PATH (caminho do Trabalho)"
+                                            >
+                                              {item.path_trabalho ? (
+                                                <FileText className="h-4 w-4" />
+                                              ) : (
+                                                <FilePlus className="h-4 w-4" />
+                                              )}
+                                            </Button>
+                                          </PopoverTrigger>
+                                        </TooltipTrigger>
+                                        <PopoverContent className="bg-background border-border w-80 border-2 p-4">
+                                          <div className="space-y-2">
+                                            <h4 className="font-medium">
+                                              Path
+                                            </h4>
+                                            <Input
+                                              value={item.path_trabalho || ''}
+                                              placeholder="Adicionar path..."
+                                              className="min-h-[40px]"
+                                              onChange={(e) => {
+                                                const newValue = e.target.value
+                                                updateItemInState({
+                                                  designerItemId:
+                                                    item.designer_item_id,
+                                                  updates: {
+                                                    path_trabalho: newValue,
+                                                  },
+                                                })
+                                              }}
+                                              onBlur={async (e) => {
+                                                const newPath = e.target.value
+                                                const supabase =
+                                                  createBrowserClient()
 
-                                            // If path is being set (not cleared), also set data_saida
-                                            const updates: any = {
-                                              path_trabalho: newPath,
-                                            }
-                                            if (newPath.trim()) {
-                                              updates.data_saida =
-                                                new Date().toISOString()
-                                            }
+                                                // If path is being set (not cleared), also set data_saida
+                                                const updates: any = {
+                                                  path_trabalho: newPath,
+                                                }
+                                                if (newPath.trim()) {
+                                                  updates.data_saida =
+                                                    new Date().toISOString()
+                                                }
 
-                                            await supabase
-                                              .from('designer_items')
-                                              .update(updates)
-                                              .eq('id', item.designer_item_id)
+                                                await supabase
+                                                  .from('designer_items')
+                                                  .update(updates)
+                                                  .eq(
+                                                    'id',
+                                                    item.designer_item_id,
+                                                  )
 
-                                            // Update local state if data_saida was set
-                                            if (newPath.trim()) {
-                                              updateItemInState({
-                                                designerItemId:
-                                                  item.designer_item_id,
-                                                updates: {
-                                                  data_saida:
-                                                    updates.data_saida,
-                                                },
-                                              })
-                                            }
-                                          }}
-                                        />
-                                      </div>
-                                    </PopoverContent>
-                                  </Popover>
+                                                // Update local state if data_saida was set
+                                                if (newPath.trim()) {
+                                                  updateItemInState({
+                                                    designerItemId:
+                                                      item.designer_item_id,
+                                                    updates: {
+                                                      data_saida:
+                                                        updates.data_saida,
+                                                    },
+                                                  })
+                                                }
+                                              }}
+                                            />
+                                          </div>
+                                        </PopoverContent>
+                                      </Popover>
+                                      <TooltipContent>
+                                        PATH (caminho do Trabalho)
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 </TableCell>
                                 <TableCell className="flex justify-center gap-2">
+                                  {/* Notas button (designer_items.notas) */}
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <Popover>
+                                        <TooltipTrigger asChild>
+                                          <PopoverTrigger asChild>
+                                            <Button
+                                              variant={
+                                                item?.notas &&
+                                                item.notas.trim() !== ''
+                                                  ? 'link'
+                                                  : 'ghost'
+                                              }
+                                              size="icon"
+                                              aria-label="Notas do item"
+                                              className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                              title="NOTAS"
+                                            >
+                                              <FileText className="h-4 w-4" />
+                                            </Button>
+                                          </PopoverTrigger>
+                                        </TooltipTrigger>
+                                        <PopoverContent className="bg-background border-border w-80 border-2 p-4">
+                                          <div className="space-y-3">
+                                            <h4 className="font-medium">
+                                              Notas
+                                            </h4>
+                                            <Textarea
+                                              value={item?.notas || ''}
+                                              placeholder="Adicionar notas..."
+                                              className="min-h-[80px]"
+                                              onChange={(e) => {
+                                                updateItemInState({
+                                                  designerItemId:
+                                                    item.designer_item_id,
+                                                  updates: {
+                                                    notas: e.target
+                                                      .value as any,
+                                                  },
+                                                })
+                                              }}
+                                            />
+                                            <div className="flex justify-end gap-2">
+                                              <Button
+                                                variant="default"
+                                                onClick={async () => {
+                                                  try {
+                                                    const supabase =
+                                                      createBrowserClient()
+                                                    const currentNotas =
+                                                      (
+                                                        drawerItems[job.id] ||
+                                                        []
+                                                      ).find(
+                                                        (it) =>
+                                                          it.id === item.id,
+                                                      )?.notas || ''
+                                                    await supabase
+                                                      .from('designer_items')
+                                                      .update({
+                                                        notas: currentNotas,
+                                                      })
+                                                      .eq(
+                                                        'id',
+                                                        item.designer_item_id,
+                                                      )
+                                                    // close popover by dispatching Escape on active element
+                                                    const active =
+                                                      document.activeElement as HTMLElement | null
+                                                    active?.dispatchEvent(
+                                                      new KeyboardEvent(
+                                                        'keydown',
+                                                        {
+                                                          key: 'Escape',
+                                                          bubbles: true,
+                                                        },
+                                                      ),
+                                                    )
+                                                  } catch (err) {
+                                                    console.error(
+                                                      'Erro ao guardar notas:',
+                                                      err,
+                                                    )
+                                                  }
+                                                }}
+                                              >
+                                                Guardar
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        </PopoverContent>
+                                      </Popover>
+                                      <TooltipContent>NOTAS</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                   {/* <Button
                                     variant="outline"
                                     size="icon"
@@ -3901,387 +4329,406 @@ export default function DesignerFlow() {
                                   >
                                     <Copy className="h-4 w-4" />
                                   </Button> */}
-                                  <Popover>
-                                    <PopoverTrigger asChild>
-                                      <Button
-                                        variant="outline"
-                                        size="icon"
-                                        aria-label="Relatório do item"
-                                        className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
-                                      >
-                                        <ReceiptText className="h-4 w-4" />
-                                      </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent
-                                      className="max-h-[80vh] w-80 overflow-y-auto border-0 bg-[var(--main)] outline outline-2"
-                                      align="start"
-                                      side="left"
-                                      sideOffset={10}
-                                      avoidCollisions={true}
-                                      collisionPadding={20}
-                                    >
-                                      <div className="space-y-4">
-                                        {/* Header */}
-                                        <div className="border-b pb-2">
-                                          <h4 className="text-sm font-semibold">
-                                            {item.descricao ||
-                                              'Item sem descrição'}
-                                          </h4>
-                                          <p className="text-muted-foreground text-xs">
-                                            Quantidade:{' '}
-                                            {item.quantidade || 'N/A'}
-                                          </p>
-                                        </div>
-
-                                        {/* Timeline */}
-                                        <div className="space-y-2">
-                                          <h5 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
-                                            Timeline
-                                          </h5>
-
-                                          {/* Data In */}
-                                          {job.data_in && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                📅 Data In:
-                                              </span>{' '}
-                                              {formatDate(job.data_in)}
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <Popover>
+                                        <TooltipTrigger asChild>
+                                          <PopoverTrigger asChild>
+                                            <Button
+                                              variant="outline"
+                                              size="icon"
+                                              aria-label="Relatório do item"
+                                              className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                              title="RELATÓRIO"
+                                            >
+                                              <ReceiptText className="h-4 w-4" />
+                                            </Button>
+                                          </PopoverTrigger>
+                                        </TooltipTrigger>
+                                        <PopoverContent
+                                          className="max-h-[80vh] w-80 overflow-y-auto border-0 bg-[var(--main)] outline outline-2"
+                                          align="start"
+                                          side="left"
+                                          sideOffset={10}
+                                          avoidCollisions={true}
+                                          collisionPadding={20}
+                                        >
+                                          <div className="space-y-4">
+                                            {/* Header */}
+                                            <div className="border-b pb-2">
+                                              <h4 className="text-sm font-semibold">
+                                                {item.descricao ||
+                                                  'Item sem descrição'}
+                                              </h4>
+                                              <p className="text-muted-foreground text-xs">
+                                                Quantidade:{' '}
+                                                {item.quantidade || 'N/A'}
+                                              </p>
                                             </div>
-                                          )}
 
-                                          {/* Dúvidas */}
-                                          {item.duvidas && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                ❓ Dúvidas:
-                                              </span>{' '}
-                                              {item.data_duvidas
-                                                ? formatDate(item.data_duvidas)
-                                                : 'Sem data'}
-                                            </div>
-                                          )}
+                                            {/* Timeline */}
+                                            <div className="space-y-2">
+                                              <h5 className="text-muted-foreground text-xs font-medium tracking-wide uppercase">
+                                                Timeline
+                                              </h5>
 
-                                          {/* Maquete Enviada 1 */}
-                                          {item.maquete_enviada1 && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                📤 Maquete Enviada 1:
-                                              </span>{' '}
-                                              {item.data_maquete_enviada1
-                                                ? formatDate(
-                                                    item.data_maquete_enviada1,
-                                                  )
-                                                : 'Sem data'}
-                                            </div>
-                                          )}
-
-                                          {/* Aprovação Recebida 1 */}
-                                          {item.aprovacao_recebida1 && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                ✅ Aprovação/Feedback Recebido
-                                                1:
-                                              </span>{' '}
-                                              {item.data_aprovacao_recebida1
-                                                ? formatDate(
-                                                    item.data_aprovacao_recebida1,
-                                                  )
-                                                : 'Sem data'}
-                                              {item.data_maquete_enviada1 &&
-                                                item.data_aprovacao_recebida1 && (
-                                                  <span className="ml-1 text-green-600">
-                                                    (
-                                                    {calculateDaysBetween(
-                                                      item.data_maquete_enviada1,
-                                                      item.data_aprovacao_recebida1,
-                                                    )}
-                                                    )
-                                                  </span>
-                                                )}
-                                            </div>
-                                          )}
-
-                                          {/* Maquete Enviada 2 */}
-                                          {item.maquete_enviada2 && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                📤 Maquete Enviada 2:
-                                              </span>{' '}
-                                              {item.data_maquete_enviada2
-                                                ? formatDate(
-                                                    item.data_maquete_enviada2,
-                                                  )
-                                                : 'Sem data'}
-                                            </div>
-                                          )}
-
-                                          {/* Aprovação Recebida 2 */}
-                                          {item.aprovacao_recebida2 && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                ✅ Aprovação/Feedback Recebido
-                                                2:
-                                              </span>{' '}
-                                              {item.data_aprovacao_recebida2
-                                                ? formatDate(
-                                                    item.data_aprovacao_recebida2,
-                                                  )
-                                                : 'Sem data'}
-                                              {item.data_maquete_enviada2 &&
-                                                item.data_aprovacao_recebida2 && (
-                                                  <span className="ml-1 text-green-600">
-                                                    (
-                                                    {calculateDaysBetween(
-                                                      item.data_maquete_enviada2,
-                                                      item.data_aprovacao_recebida2,
-                                                    )}
-                                                    )
-                                                  </span>
-                                                )}
-                                            </div>
-                                          )}
-
-                                          {/* Maquete Enviada 3 */}
-                                          {item.maquete_enviada3 && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                📤 Maquete Enviada 3:
-                                              </span>{' '}
-                                              {item.data_maquete_enviada3
-                                                ? formatDate(
-                                                    item.data_maquete_enviada3,
-                                                  )
-                                                : 'Sem data'}
-                                            </div>
-                                          )}
-
-                                          {/* Aprovação Recebida 3 */}
-                                          {item.aprovacao_recebida3 && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                ✅ Aprovação/Feedback Recebido
-                                                3:
-                                              </span>{' '}
-                                              {item.data_aprovacao_recebida3
-                                                ? formatDate(
-                                                    item.data_aprovacao_recebida3,
-                                                  )
-                                                : 'Sem data'}
-                                              {item.data_maquete_enviada3 &&
-                                                item.data_aprovacao_recebida3 && (
-                                                  <span className="ml-1 text-green-600">
-                                                    (
-                                                    {calculateDaysBetween(
-                                                      item.data_maquete_enviada3,
-                                                      item.data_aprovacao_recebida3,
-                                                    )}
-                                                    )
-                                                  </span>
-                                                )}
-                                            </div>
-                                          )}
-
-                                          {/* Maquete Enviada 4 */}
-                                          {item.maquete_enviada4 && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                📤 Maquete Enviada 4:
-                                              </span>{' '}
-                                              {item.data_maquete_enviada4
-                                                ? formatDate(
-                                                    item.data_maquete_enviada4,
-                                                  )
-                                                : 'Sem data'}
-                                            </div>
-                                          )}
-
-                                          {/* Aprovação Recebida 4 */}
-                                          {item.aprovacao_recebida4 && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                ✅ Aprovação/Feedback Recebido
-                                                4:
-                                              </span>{' '}
-                                              {item.data_aprovacao_recebida4
-                                                ? formatDate(
-                                                    item.data_aprovacao_recebida4,
-                                                  )
-                                                : 'Sem data'}
-                                              {item.data_maquete_enviada4 &&
-                                                item.data_aprovacao_recebida4 && (
-                                                  <span className="ml-1 text-green-600">
-                                                    (
-                                                    {calculateDaysBetween(
-                                                      item.data_maquete_enviada4,
-                                                      item.data_aprovacao_recebida4,
-                                                    )}
-                                                    )
-                                                  </span>
-                                                )}
-                                            </div>
-                                          )}
-
-                                          {/* Maquete Enviada 5 */}
-                                          {item.maquete_enviada5 && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                📤 Maquete Enviada 5:
-                                              </span>{' '}
-                                              {item.data_maquete_enviada5
-                                                ? formatDate(
-                                                    item.data_maquete_enviada5,
-                                                  )
-                                                : 'Sem data'}
-                                            </div>
-                                          )}
-
-                                          {/* Aprovação Recebida 5 */}
-                                          {item.aprovacao_recebida5 && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                ✅ Aprovação/Feedback Recebido
-                                                5:
-                                              </span>{' '}
-                                              {item.data_aprovacao_recebida5
-                                                ? formatDate(
-                                                    item.data_aprovacao_recebida5,
-                                                  )
-                                                : 'Sem data'}
-                                              {item.data_maquete_enviada5 &&
-                                                item.data_aprovacao_recebida5 && (
-                                                  <span className="ml-1 text-green-600">
-                                                    (
-                                                    {calculateDaysBetween(
-                                                      item.data_maquete_enviada5,
-                                                      item.data_aprovacao_recebida5,
-                                                    )}
-                                                    )
-                                                  </span>
-                                                )}
-                                            </div>
-                                          )}
-
-                                          {/* Maquete Enviada 6 */}
-                                          {item.maquete_enviada6 && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                📤 Maquete Enviada 6:
-                                              </span>{' '}
-                                              {item.data_maquete_enviada6
-                                                ? formatDate(
-                                                    item.data_maquete_enviada6,
-                                                  )
-                                                : 'Sem data'}
-                                            </div>
-                                          )}
-
-                                          {/* Aprovação Recebida 6 */}
-                                          {item.aprovacao_recebida6 && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                ✅ Aprovação/Feedback Recebido
-                                                6:
-                                              </span>{' '}
-                                              {item.data_aprovacao_recebida6
-                                                ? formatDate(
-                                                    item.data_aprovacao_recebida6,
-                                                  )
-                                                : 'Sem data'}
-                                              {item.data_maquete_enviada6 &&
-                                                item.data_aprovacao_recebida6 && (
-                                                  <span className="ml-1 text-green-600">
-                                                    (
-                                                    {calculateDaysBetween(
-                                                      item.data_maquete_enviada6,
-                                                      item.data_aprovacao_recebida6,
-                                                    )}
-                                                    )
-                                                  </span>
-                                                )}
-                                            </div>
-                                          )}
-
-                                          {/* Paginação */}
-                                          {item.paginacao && (
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                📄 Paginação:
-                                              </span>{' '}
-                                              {item.data_paginacao
-                                                ? formatDate(
-                                                    item.data_paginacao,
-                                                  )
-                                                : 'Sem data'}
-                                              {(() => {
-                                                const lastApprovalDate =
-                                                  findLastApprovalDate(item)
-                                                return lastApprovalDate &&
-                                                  item.data_paginacao ? (
-                                                  <span className="ml-1 text-blue-600">
-                                                    (
-                                                    {calculateDaysBetween(
-                                                      lastApprovalDate,
-                                                      item.data_paginacao,
-                                                    )}
-                                                    )
-                                                  </span>
-                                                ) : null
-                                              })()}
-                                            </div>
-                                          )}
-                                        </div>
-
-                                        {/* Duration */}
-                                        {job.data_in && item.data_paginacao && (
-                                          <div className="mt-4 border-t pt-4">
-                                            <h5 className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
-                                              Duração
-                                            </h5>
-                                            <div className="text-xs">
-                                              <span className="font-medium">
-                                                ⏱️ Duração Total:
-                                              </span>{' '}
-                                              <span className="text-blue-600">
-                                                {calculateDaysBetween(
-                                                  job.data_in,
-                                                  item.data_paginacao,
-                                                )}
-                                              </span>
-                                            </div>
-                                            {item.data_duvidas &&
-                                              item.data_paginacao && (
-                                                <div className="mt-1 text-xs">
+                                              {/* Data In */}
+                                              {job.data_in && (
+                                                <div className="text-xs">
                                                   <span className="font-medium">
-                                                    ⏱️ Dúvidas até Paginação:
+                                                    📅 Data In:
                                                   </span>{' '}
-                                                  <span className="text-orange-600">
-                                                    {calculateDaysBetween(
-                                                      item.data_duvidas,
-                                                      item.data_paginacao,
+                                                  {formatDate(job.data_in)}
+                                                </div>
+                                              )}
+
+                                              {/* Dúvidas */}
+                                              {item.duvidas && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    ❓ Dúvidas:
+                                                  </span>{' '}
+                                                  {item.data_duvidas
+                                                    ? formatDate(
+                                                        item.data_duvidas,
+                                                      )
+                                                    : 'Sem data'}
+                                                </div>
+                                              )}
+
+                                              {/* Maquete Enviada 1 */}
+                                              {item.maquete_enviada1 && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    📤 Maquete Enviada 1:
+                                                  </span>{' '}
+                                                  {item.data_maquete_enviada1
+                                                    ? formatDate(
+                                                        item.data_maquete_enviada1,
+                                                      )
+                                                    : 'Sem data'}
+                                                </div>
+                                              )}
+
+                                              {/* Aprovação Recebida 1 */}
+                                              {item.aprovacao_recebida1 && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    ✅ Aprovação/Feedback
+                                                    Recebido 1:
+                                                  </span>{' '}
+                                                  {item.data_aprovacao_recebida1
+                                                    ? formatDate(
+                                                        item.data_aprovacao_recebida1,
+                                                      )
+                                                    : 'Sem data'}
+                                                  {item.data_maquete_enviada1 &&
+                                                    item.data_aprovacao_recebida1 && (
+                                                      <span className="ml-1 text-green-600">
+                                                        (
+                                                        {calculateDaysBetween(
+                                                          item.data_maquete_enviada1,
+                                                          item.data_aprovacao_recebida1,
+                                                        )}
+                                                        )
+                                                      </span>
                                                     )}
-                                                  </span>
+                                                </div>
+                                              )}
+
+                                              {/* Maquete Enviada 2 */}
+                                              {item.maquete_enviada2 && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    📤 Maquete Enviada 2:
+                                                  </span>{' '}
+                                                  {item.data_maquete_enviada2
+                                                    ? formatDate(
+                                                        item.data_maquete_enviada2,
+                                                      )
+                                                    : 'Sem data'}
+                                                </div>
+                                              )}
+
+                                              {/* Aprovação Recebida 2 */}
+                                              {item.aprovacao_recebida2 && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    ✅ Aprovação/Feedback
+                                                    Recebido 2:
+                                                  </span>{' '}
+                                                  {item.data_aprovacao_recebida2
+                                                    ? formatDate(
+                                                        item.data_aprovacao_recebida2,
+                                                      )
+                                                    : 'Sem data'}
+                                                  {item.data_maquete_enviada2 &&
+                                                    item.data_aprovacao_recebida2 && (
+                                                      <span className="ml-1 text-green-600">
+                                                        (
+                                                        {calculateDaysBetween(
+                                                          item.data_maquete_enviada2,
+                                                          item.data_aprovacao_recebida2,
+                                                        )}
+                                                        )
+                                                      </span>
+                                                    )}
+                                                </div>
+                                              )}
+
+                                              {/* Maquete Enviada 3 */}
+                                              {item.maquete_enviada3 && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    📤 Maquete Enviada 3:
+                                                  </span>{' '}
+                                                  {item.data_maquete_enviada3
+                                                    ? formatDate(
+                                                        item.data_maquete_enviada3,
+                                                      )
+                                                    : 'Sem data'}
+                                                </div>
+                                              )}
+
+                                              {/* Aprovação Recebida 3 */}
+                                              {item.aprovacao_recebida3 && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    ✅ Aprovação/Feedback
+                                                    Recebido 3:
+                                                  </span>{' '}
+                                                  {item.data_aprovacao_recebida3
+                                                    ? formatDate(
+                                                        item.data_aprovacao_recebida3,
+                                                      )
+                                                    : 'Sem data'}
+                                                  {item.data_maquete_enviada3 &&
+                                                    item.data_aprovacao_recebida3 && (
+                                                      <span className="ml-1 text-green-600">
+                                                        (
+                                                        {calculateDaysBetween(
+                                                          item.data_maquete_enviada3,
+                                                          item.data_aprovacao_recebida3,
+                                                        )}
+                                                        )
+                                                      </span>
+                                                    )}
+                                                </div>
+                                              )}
+
+                                              {/* Maquete Enviada 4 */}
+                                              {item.maquete_enviada4 && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    📤 Maquete Enviada 4:
+                                                  </span>{' '}
+                                                  {item.data_maquete_enviada4
+                                                    ? formatDate(
+                                                        item.data_maquete_enviada4,
+                                                      )
+                                                    : 'Sem data'}
+                                                </div>
+                                              )}
+
+                                              {/* Aprovação Recebida 4 */}
+                                              {item.aprovacao_recebida4 && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    ✅ Aprovação/Feedback
+                                                    Recebido 4:
+                                                  </span>{' '}
+                                                  {item.data_aprovacao_recebida4
+                                                    ? formatDate(
+                                                        item.data_aprovacao_recebida4,
+                                                      )
+                                                    : 'Sem data'}
+                                                  {item.data_maquete_enviada4 &&
+                                                    item.data_aprovacao_recebida4 && (
+                                                      <span className="ml-1 text-green-600">
+                                                        (
+                                                        {calculateDaysBetween(
+                                                          item.data_maquete_enviada4,
+                                                          item.data_aprovacao_recebida4,
+                                                        )}
+                                                        )
+                                                      </span>
+                                                    )}
+                                                </div>
+                                              )}
+
+                                              {/* Maquete Enviada 5 */}
+                                              {item.maquete_enviada5 && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    📤 Maquete Enviada 5:
+                                                  </span>{' '}
+                                                  {item.data_maquete_enviada5
+                                                    ? formatDate(
+                                                        item.data_maquete_enviada5,
+                                                      )
+                                                    : 'Sem data'}
+                                                </div>
+                                              )}
+
+                                              {/* Aprovação Recebida 5 */}
+                                              {item.aprovacao_recebida5 && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    ✅ Aprovação/Feedback
+                                                    Recebido 5:
+                                                  </span>{' '}
+                                                  {item.data_aprovacao_recebida5
+                                                    ? formatDate(
+                                                        item.data_aprovacao_recebida5,
+                                                      )
+                                                    : 'Sem data'}
+                                                  {item.data_maquete_enviada5 &&
+                                                    item.data_aprovacao_recebida5 && (
+                                                      <span className="ml-1 text-green-600">
+                                                        (
+                                                        {calculateDaysBetween(
+                                                          item.data_maquete_enviada5,
+                                                          item.data_aprovacao_recebida5,
+                                                        )}
+                                                        )
+                                                      </span>
+                                                    )}
+                                                </div>
+                                              )}
+
+                                              {/* Maquete Enviada 6 */}
+                                              {item.maquete_enviada6 && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    📤 Maquete Enviada 6:
+                                                  </span>{' '}
+                                                  {item.data_maquete_enviada6
+                                                    ? formatDate(
+                                                        item.data_maquete_enviada6,
+                                                      )
+                                                    : 'Sem data'}
+                                                </div>
+                                              )}
+
+                                              {/* Aprovação Recebida 6 */}
+                                              {item.aprovacao_recebida6 && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    ✅ Aprovação/Feedback
+                                                    Recebido 6:
+                                                  </span>{' '}
+                                                  {item.data_aprovacao_recebida6
+                                                    ? formatDate(
+                                                        item.data_aprovacao_recebida6,
+                                                      )
+                                                    : 'Sem data'}
+                                                  {item.data_maquete_enviada6 &&
+                                                    item.data_aprovacao_recebida6 && (
+                                                      <span className="ml-1 text-green-600">
+                                                        (
+                                                        {calculateDaysBetween(
+                                                          item.data_maquete_enviada6,
+                                                          item.data_aprovacao_recebida6,
+                                                        )}
+                                                        )
+                                                      </span>
+                                                    )}
+                                                </div>
+                                              )}
+
+                                              {/* Paginação */}
+                                              {item.paginacao && (
+                                                <div className="text-xs">
+                                                  <span className="font-medium">
+                                                    📄 Paginação:
+                                                  </span>{' '}
+                                                  {item.data_paginacao
+                                                    ? formatDate(
+                                                        item.data_paginacao,
+                                                      )
+                                                    : 'Sem data'}
+                                                  {(() => {
+                                                    const lastApprovalDate =
+                                                      findLastApprovalDate(item)
+                                                    return lastApprovalDate &&
+                                                      item.data_paginacao ? (
+                                                      <span className="ml-1 text-blue-600">
+                                                        (
+                                                        {calculateDaysBetween(
+                                                          lastApprovalDate,
+                                                          item.data_paginacao,
+                                                        )}
+                                                        )
+                                                      </span>
+                                                    ) : null
+                                                  })()}
+                                                </div>
+                                              )}
+                                            </div>
+
+                                            {/* Duration */}
+                                            {job.data_in &&
+                                              item.data_paginacao && (
+                                                <div className="mt-4 border-t pt-4">
+                                                  <h5 className="text-muted-foreground mb-2 text-xs font-medium tracking-wide uppercase">
+                                                    Duração
+                                                  </h5>
+                                                  <div className="text-xs">
+                                                    <span className="font-medium">
+                                                      ⏱️ Duração Total:
+                                                    </span>{' '}
+                                                    <span className="text-blue-600">
+                                                      {calculateDaysBetween(
+                                                        job.data_in,
+                                                        item.data_paginacao,
+                                                      )}
+                                                    </span>
+                                                  </div>
+                                                  {item.data_duvidas &&
+                                                    item.data_paginacao && (
+                                                      <div className="mt-1 text-xs">
+                                                        <span className="font-medium">
+                                                          ⏱️ Dúvidas até
+                                                          Paginação:
+                                                        </span>{' '}
+                                                        <span className="text-orange-600">
+                                                          {calculateDaysBetween(
+                                                            item.data_duvidas,
+                                                            item.data_paginacao,
+                                                          )}
+                                                        </span>
+                                                      </div>
+                                                    )}
                                                 </div>
                                               )}
                                           </div>
-                                        )}
-                                      </div>
-                                    </PopoverContent>
-                                  </Popover>
-                                  <Button
-                                    variant="destructive"
-                                    size="icon"
-                                    aria-label="Remover"
-                                    className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
-                                    onClick={() =>
-                                      setDeleteDialog({
-                                        jobId: job.id,
-                                        itemId: item.id,
-                                        idx,
-                                      })
-                                    }
-                                  >
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
+                                        </PopoverContent>
+                                      </Popover>
+                                      <TooltipContent>RELATÓRIO</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
+                                  <TooltipProvider>
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          variant="destructive"
+                                          size="icon"
+                                          aria-label="Remover"
+                                          className="aspect-square !h-10 !w-10 !max-w-10 !min-w-10 !rounded-none !p-0"
+                                          onClick={() =>
+                                            setDeleteDialog({
+                                              jobId: job.id,
+                                              itemId: item.id,
+                                              idx,
+                                            })
+                                          }
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>DELETE</TooltipContent>
+                                    </Tooltip>
+                                  </TooltipProvider>
                                 </TableCell>
                               </TableRow>
                             ))

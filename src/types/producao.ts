@@ -62,6 +62,100 @@ export interface ProductionOperationWithRelations extends ProductionOperation {
   }
 }
 
+// Slim/Lightweight types used in produção page listings
+export interface ProducaoOperacaoSlim {
+  id: string
+  folha_obra_id: string
+  concluido: boolean
+}
+
+export interface DesignerItemSlim {
+  id?: string
+  item_id: string
+  paginacao?: boolean | null
+}
+
+export interface LogisticaRow {
+  id?: string
+  item_id: string
+  descricao?: string | null
+  data?: string | null
+  is_entrega?: boolean | null
+  saiu?: boolean | null
+  concluido?: boolean | null
+  quantidade?: number | null
+  guia?: string | null
+  local_recolha?: string | null
+  local_entrega?: string | null
+  id_local_recolha?: string | null
+  id_local_entrega?: string | null
+  transportadora?: string | null
+  data_saida?: string | null
+  items_base?: {
+    id: string
+    descricao?: string | null
+    codigo?: string | null
+    quantidade?: number | null
+    brindes?: boolean | null
+    folha_obra_id: string
+    folhas_obras?: {
+      id: string
+      numero_orc?: number | null
+      numero_fo?: string | null
+      cliente?: string | null
+      id_cliente?: string | null
+      saiu?: boolean | null
+    } | null
+  } | null
+}
+
+// Adapter to convert between the local LogisticaRow and the table's LogisticaRecord
+export const toLogisticaRecord = (
+  row: LogisticaRow,
+): import('./logistica').LogisticaRecord => ({
+  id: row.id || row.items_base?.id || '',
+  item_id: row.item_id,
+  data: row.data || '',
+  guia: row.guia || undefined,
+  local_recolha: row.local_recolha || undefined,
+  local_entrega: row.local_entrega || undefined,
+  id_local_recolha: row.id_local_recolha || undefined,
+  id_local_entrega: row.id_local_entrega || undefined,
+  transportadora: row.transportadora || undefined,
+  notas: undefined,
+  saiu: row.saiu ?? undefined,
+  concluido: row.concluido ?? undefined,
+  data_concluido: undefined,
+  data_saida: row.data_saida || undefined,
+  is_entrega: row.is_entrega ?? undefined,
+  items_base: row.items_base
+    ? {
+        id: row.items_base.id,
+        descricao: row.items_base.descricao || undefined,
+        codigo: row.items_base.codigo || undefined,
+        quantidade: row.items_base.quantidade ?? null,
+        brindes: row.items_base.brindes ?? undefined,
+        folha_obra_id: row.items_base.folha_obra_id,
+        folhas_obras: row.items_base.folhas_obras
+          ? {
+              id: row.items_base.folhas_obras.id,
+              numero_orc: row.items_base.folhas_obras.numero_orc?.toString(),
+              numero_fo: row.items_base.folhas_obras.numero_fo || undefined,
+              cliente: row.items_base.folhas_obras.cliente || undefined,
+              id_cliente: row.items_base.folhas_obras.id_cliente || undefined,
+              saiu: row.items_base.folhas_obras.saiu ?? undefined,
+            }
+          : undefined,
+      }
+    : undefined,
+  contacto: undefined,
+  telefone: undefined,
+  contacto_entrega: undefined,
+  telefone_entrega: undefined,
+  quantidade: row.quantidade ?? null,
+  descricao: row.descricao || undefined,
+})
+
 // Form input type
 export interface ProductionOperationInput {
   folha_obra_id: string

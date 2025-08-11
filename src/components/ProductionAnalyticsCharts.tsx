@@ -17,6 +17,7 @@ import {
 } from 'recharts'
 import { RotateCw, Package, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
+import { debugLog } from '@/utils/devLogger'
 import { pt } from 'date-fns/locale'
 
 // Types
@@ -132,7 +133,7 @@ export default function ProductionAnalyticsCharts({
         throw error
       }
 
-      console.log(
+      debugLog(
         '🔍 Raw data fetched from database:',
         data?.length || 0,
         'operations',
@@ -147,13 +148,13 @@ export default function ProductionAnalyticsCharts({
           num_placas_print: op.num_placas_print,
           num_placas_corte: op.num_placas_corte,
         }))
-        console.log('🔍 Sample operations from database:', sampleOps)
+        debugLog('🔍 Sample operations from database:', sampleOps)
 
         // Check specifically for Impressao_Flexiveis operations
         const vinilOpsInData = data.filter(
           (op: any) => op.Tipo_Op === 'Impressao_Flexiveis',
         )
-        console.log(
+        debugLog(
           '🎨 Impressao_Flexiveis operations in raw data:',
           vinilOpsInData.length,
         )
@@ -182,17 +183,14 @@ export default function ProductionAnalyticsCharts({
 
   // Process data for monthly totals
   const monthlyTotals = useMemo(() => {
-    console.log(
+    debugLog(
       '🔍 Processing monthly totals - total operations:',
       operations.length,
     )
 
     // Debug: Show all operation types
     const operationTypes = operations.map((op) => op.Tipo_Op).filter(Boolean)
-    console.log(
-      '📊 Operation types found:',
-      Array.from(new Set(operationTypes)),
-    )
+    debugLog('📊 Operation types found:', Array.from(new Set(operationTypes)))
 
     // Debug: Count operations by type
     const typeCounts = operationTypes.reduce(
@@ -204,18 +202,18 @@ export default function ProductionAnalyticsCharts({
       },
       {} as Record<string, number>,
     )
-    console.log('📈 Operation counts by type:', typeCounts)
+    debugLog('📈 Operation counts by type:', typeCounts)
 
     // Debug: Show Impressao_Flexiveis operations specifically
     const impressaoVinilOps = operations.filter(
       (op) => op.Tipo_Op === 'Impressao_Flexiveis',
     )
-    console.log(
+    debugLog(
       '🎨 Impressao_Flexiveis operations found:',
       impressaoVinilOps.length,
     )
     if (impressaoVinilOps.length > 0) {
-      console.log(
+      debugLog(
         '🎨 Impressao_Flexiveis operations details:',
         impressaoVinilOps.map((op) => ({
           id: op.id,
@@ -246,7 +244,7 @@ export default function ProductionAnalyticsCharts({
 
       if (operation.Tipo_Op === 'Impressao' && operation.num_placas_print) {
         monthlyData[monthKey].total_print += operation.num_placas_print
-        console.log(
+        debugLog(
           `➕ Added ${operation.num_placas_print} to Impressao for ${monthLabel}`,
         )
       }
@@ -256,14 +254,14 @@ export default function ProductionAnalyticsCharts({
         operation.num_placas_print
       ) {
         monthlyData[monthKey].total_print_vinil += operation.num_placas_print
-        console.log(
+        debugLog(
           `🎨 Added ${operation.num_placas_print} to Impressao_Flexiveis for ${monthLabel}`,
         )
       }
 
       if (operation.Tipo_Op === 'Corte' && operation.num_placas_corte) {
         monthlyData[monthKey].total_corte += operation.num_placas_corte
-        console.log(
+        debugLog(
           `✂️ Added ${operation.num_placas_corte} to Corte for ${monthLabel}`,
         )
       }
@@ -273,7 +271,7 @@ export default function ProductionAnalyticsCharts({
       a.month.localeCompare(b.month),
     )
 
-    console.log('📊 Final monthly totals:', result)
+    debugLog('📊 Final monthly totals:', result)
     return result
   }, [operations])
 
@@ -337,7 +335,7 @@ export default function ProductionAnalyticsCharts({
 
   // Process data for operator vinyl print operations (Impressao_Flexiveis)
   const operatorPrintVinilData = useMemo(() => {
-    console.log('🎨 Processing Impressao_Flexiveis operator data...')
+    debugLog('🎨 Processing Impressao_Flexiveis operator data...')
 
     const operatorData: { [key: string]: OperatorMonthlyData } = {}
     const operatorNames: { [key: string]: string } = {}
@@ -346,11 +344,11 @@ export default function ProductionAnalyticsCharts({
     const vinilOps = operations.filter(
       (op) => op.Tipo_Op === 'Impressao_Flexiveis',
     )
-    console.log('🎨 Total Impressao_Flexiveis operations:', vinilOps.length)
+    debugLog('🎨 Total Impressao_Flexiveis operations:', vinilOps.length)
 
     // Debug: Check which have operators
     const vinilOpsWithOperators = vinilOps.filter((op) => op.operador_id)
-    console.log(
+    debugLog(
       '🎨 Impressao_Flexiveis operations with operador_id:',
       vinilOpsWithOperators.length,
     )
@@ -359,13 +357,13 @@ export default function ProductionAnalyticsCharts({
     const vinilOpsWithProfiles = vinilOpsWithOperators.filter(
       (op) => op.profiles,
     )
-    console.log(
+    debugLog(
       '🎨 Impressao_Flexiveis operations with profiles:',
       vinilOpsWithProfiles.length,
     )
 
     if (vinilOpsWithProfiles.length > 0) {
-      console.log('🎨 Sample Impressao_Flexiveis operation with profile:', {
+      debugLog('🎨 Sample Impressao_Flexiveis operation with profile:', {
         id: vinilOpsWithProfiles[0].id,
         operador_id: vinilOpsWithProfiles[0].operador_id,
         profiles: vinilOpsWithProfiles[0].profiles,
@@ -383,7 +381,7 @@ export default function ProductionAnalyticsCharts({
         (op.profiles as any).role_id === '2e18fb9d-52ef-4216-90ea-699372cd5a87',
     )
 
-    console.log(
+    debugLog(
       '🎨 Impressao_Flexiveis operations with correct role:',
       validOps.length,
     )
@@ -391,10 +389,10 @@ export default function ProductionAnalyticsCharts({
     validOps.forEach((operation) => {
       const operatorName = `${operation.profiles!.first_name} ${operation.profiles!.last_name}`
       operatorNames[operation.operador_id!] = operatorName
-      console.log('🎨 Added Impressao_Flexiveis operator:', operatorName)
+      debugLog('🎨 Added Impressao_Flexiveis operator:', operatorName)
     })
 
-    console.log(
+    debugLog(
       '🎨 Total Impressao_Flexiveis operators found:',
       Object.keys(operatorNames).length,
     )
@@ -415,7 +413,7 @@ export default function ProductionAnalyticsCharts({
         const monthLabel = format(date, 'MMM', { locale: pt })
         const operatorName = operatorNames[operation.operador_id!]
 
-        console.log(
+        debugLog(
           `🎨 Processing Impressao_Flexiveis operation: ${monthLabel}, operator: ${operatorName}, quantity: ${operation.num_placas_print}`,
         )
 
@@ -431,7 +429,7 @@ export default function ProductionAnalyticsCharts({
           operatorData[monthKey][operatorName] =
             ((operatorData[monthKey][operatorName] as number) || 0) +
             operation.num_placas_print!
-          console.log(
+          debugLog(
             `🎨 Updated operator ${operatorName} total for ${monthLabel}: ${operatorData[monthKey][operatorName]}`,
           )
         }
@@ -444,7 +442,7 @@ export default function ProductionAnalyticsCharts({
       operators: Object.values(operatorNames),
     }
 
-    console.log('🎨 Final Impressao_Flexiveis operator data:', result)
+    debugLog('🎨 Final Impressao_Flexiveis operator data:', result)
     return result
   }, [operations])
 
@@ -507,7 +505,7 @@ export default function ProductionAnalyticsCharts({
 
   // Calculate overview totals
   const overviewTotals = useMemo(() => {
-    console.log('📊 Calculating overview totals...')
+    debugLog('📊 Calculating overview totals...')
 
     const impressaoOps = operations.filter((op) => op.Tipo_Op === 'Impressao')
     const impressaoVinilOps = operations.filter(
@@ -515,7 +513,7 @@ export default function ProductionAnalyticsCharts({
     )
     const corteOps = operations.filter((op) => op.Tipo_Op === 'Corte')
 
-    console.log(
+    debugLog(
       `📊 Operations found - Impressao: ${impressaoOps.length}, Impressao_Flexiveis: ${impressaoVinilOps.length}, Corte: ${corteOps.length}`,
     )
 
@@ -532,12 +530,12 @@ export default function ProductionAnalyticsCharts({
       0,
     )
 
-    console.log(
+    debugLog(
       `📊 Totals calculated - Impressao: ${totalPrint}, Impressao_Vinil: ${totalPrintVinil}, Corte: ${totalCorte}`,
     )
 
     if (impressaoVinilOps.length > 0) {
-      console.log(
+      debugLog(
         '📊 Sample Impressao_Vinil operations:',
         impressaoVinilOps.slice(0, 3).map((op) => ({
           id: op.id,

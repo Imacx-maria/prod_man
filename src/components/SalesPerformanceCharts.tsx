@@ -22,6 +22,7 @@ import {
 } from 'recharts'
 import { RotateCw, TrendingUp, Euro, ArrowLeft, Loader2 } from 'lucide-react'
 import { format } from 'date-fns'
+import { debugLog } from '@/utils/devLogger'
 import { pt } from 'date-fns/locale'
 
 // Types for sales data (monthly aggregated views)
@@ -449,15 +450,12 @@ export default function SalesPerformanceCharts({
     )
 
     // Debug logging for sales discrepancy
-    console.log('🔍 Performance de Vendas Debug (with pagination):')
-    console.log(
-      'Total vendas liquidas records:',
-      salesData.vendasLiquidas.length,
-    )
-    console.log('Current year sales (filtered):', currentYearSales.length)
-    console.log('Total Sales Value:', totalSalesValue)
-    console.log('Sample current year sales:', currentYearSales.slice(0, 3))
-    console.log('All departments found:', allowedDepartments)
+    debugLog('🔍 Performance de Vendas Debug (with pagination):')
+    debugLog('Total vendas liquidas records:', salesData.vendasLiquidas.length)
+    debugLog('Current year sales (filtered):', currentYearSales.length)
+    debugLog('Total Sales Value:', totalSalesValue)
+    debugLog('Sample current year sales:', currentYearSales.slice(0, 3))
+    debugLog('All departments found:', allowedDepartments)
 
     const totalQuotesValue = currentYearQuotes.reduce(
       (sum, orcamento) => sum + (orcamento.euro_total || 0),
@@ -465,14 +463,14 @@ export default function SalesPerformanceCharts({
     )
 
     // Debug logging for orçamentos
-    console.log('💰 Total Orçamentos (Ano) Debug (with pagination):')
-    console.log(
+    debugLog('💰 Total Orçamentos (Ano) Debug (with pagination):')
+    debugLog(
       'Total orcamentos vendedor records:',
       salesData.orcamentosVendedor.length,
     )
-    console.log('Current year quotes (filtered):', currentYearQuotes.length)
-    console.log('Total Quotes Value:', totalQuotesValue)
-    console.log('Sample current year quotes:', currentYearQuotes.slice(0, 3))
+    debugLog('Current year quotes (filtered):', currentYearQuotes.length)
+    debugLog('Total Quotes Value:', totalQuotesValue)
+    debugLog('Sample current year quotes:', currentYearQuotes.slice(0, 3))
 
     // Updated conversion rate calculation using count data (no department filtering to match Visão Geral)
     const currentYearQuotesCount = salesData.orcamentosVendedorCount
@@ -503,18 +501,18 @@ export default function SalesPerformanceCharts({
         : 0
 
     // Debug logging for conversion rate
-    console.log('📊 Taxa de Conversão Debug (with pagination):')
-    console.log(
+    debugLog('📊 Taxa de Conversão Debug (with pagination):')
+    debugLog(
       'Total faturas count records fetched:',
       salesData.faturasVendedorCount.length,
     )
-    console.log(
+    debugLog(
       'Total orcamentos count records fetched:',
       salesData.orcamentosVendedorCount.length,
     )
-    console.log('Current year invoices count:', currentYearInvoicesCount)
-    console.log('Current year quotes count:', currentYearQuotesCount)
-    console.log(
+    debugLog('Current year invoices count:', currentYearInvoicesCount)
+    debugLog('Current year quotes count:', currentYearQuotesCount)
+    debugLog(
       'Conversion rate calculation:',
       `(${currentYearInvoicesCount} / ${currentYearQuotesCount}) * 100 = ${conversionRate.toFixed(1)}%`,
     )
@@ -600,7 +598,7 @@ export default function SalesPerformanceCharts({
       }))
 
     // Log final data to confirm values are correct
-    console.log(
+    debugLog(
       '✅ Top 15 Clientes YTD data ready:',
       result.length,
       'clients with current month filter:',
@@ -614,7 +612,7 @@ export default function SalesPerformanceCharts({
     // Log client normalization for debugging
     const hhSpainEntry = result.find((client) => client.name === 'HH Spain')
     if (hhSpainEntry) {
-      console.log('🎯 HH Spain grouped data:', hhSpainEntry)
+      debugLog('🎯 HH Spain grouped data:', hhSpainEntry)
     }
 
     return result

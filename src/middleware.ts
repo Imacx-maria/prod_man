@@ -32,14 +32,16 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith(route),
     )
 
-    console.log('🛡️ Middleware check:', {
-      pathname,
-      hasSession: !!session,
-      isPublicRoute,
-      isProtectedRoute,
-      userId: session?.user?.id,
-      error: error?.message,
-    })
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('🛡️ Middleware check:', {
+        pathname,
+        hasSession: !!session,
+        isPublicRoute,
+        isProtectedRoute,
+        userId: session?.user?.id,
+        error: error?.message,
+      })
+    }
 
     // If there's an error getting the session, handle it gracefully
     if (error) {
@@ -56,14 +58,18 @@ export async function middleware(request: NextRequest) {
     if (!session) {
       // No session - redirect protected routes to login
       if (isProtectedRoute) {
-        console.log('🔒 No session, redirecting to login')
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🔒 No session, redirecting to login')
+        }
         url.pathname = '/login'
         return NextResponse.redirect(url)
       }
     } else {
       // Has session - redirect login page to dashboard if already authenticated
       if (pathname === '/login') {
-        console.log('✅ Already authenticated, redirecting to dashboard')
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('✅ Already authenticated, redirecting to dashboard')
+        }
         url.pathname = '/dashboard'
         return NextResponse.redirect(url)
       }

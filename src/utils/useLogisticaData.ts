@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef } from 'react'
+import { debugLog } from '@/utils/devLogger'
 import { format } from 'date-fns'
 import { createBrowserClient } from '@/utils/supabase'
 import {
@@ -383,7 +384,7 @@ export function useLogisticaData() {
             }
           }
 
-          console.log(`Updating guia field with value:`, {
+          debugLog(`Updating guia field with value:`, {
             rowId,
             original: value,
             processed: processedValue,
@@ -402,13 +403,13 @@ export function useLogisticaData() {
 
         // Update local data if we have a date context
         if (currentDate) {
-          console.log(`Refetching row ${rowId} after updating ${field}`)
+          debugLog(`Refetching row ${rowId} after updating ${field}`)
           await refetchRow(rowId, currentDate)
 
           // Also clear cache to force fresh data on next load
           const dateStr = format(currentDate, 'yyyy-MM-dd')
           if (dataCacheRef.current[dateStr]) {
-            console.log(`Clearing cache for ${dateStr} to ensure fresh data`)
+            debugLog(`Clearing cache for ${dateStr} to ensure fresh data`)
             delete dataCacheRef.current[dateStr]
           }
         }
@@ -685,7 +686,7 @@ export function useLogisticaData() {
           is_entrega: true,
         }
 
-        console.log('Creating duplicate logistics entry:', newLogisticaData)
+        debugLog('Creating duplicate logistics entry:', newLogisticaData)
 
         const { data: newRecord, error } = await supabase
           .from('logistica_entregas')
@@ -745,7 +746,7 @@ export function useLogisticaData() {
           // Clear cache and force fresh data on next load
           if (currentDate) {
             const dateStr = format(currentDate, 'yyyy-MM-dd')
-            console.log(`Clearing cache for ${dateStr} after duplicating row`)
+            debugLog(`Clearing cache for ${dateStr} after duplicating row`)
             delete dataCacheRef.current[dateStr]
 
             // Force immediate refresh to ensure we have the latest data

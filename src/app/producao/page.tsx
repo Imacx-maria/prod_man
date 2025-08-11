@@ -15,6 +15,14 @@
 // Note: This is a client component - metadata should be added to layout.tsx or a parent server component
 
 import { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type {
+  ProducaoOperacaoSlim,
+  DesignerItemSlim,
+  LogisticaRow,
+} from '@/types/producao'
+import { toLogisticaRecord } from '@/types/producao'
+import type { ClienteOption } from '@/components/CreatableClienteCombobox'
 import {
   Drawer,
   DrawerContent,
@@ -62,9 +70,7 @@ import {
   Check,
   Edit,
 } from 'lucide-react'
-import CreatableClienteCombobox, {
-  ClienteOption,
-} from '@/components/CreatableClienteCombobox'
+import CreatableClienteCombobox from '@/components/CreatableClienteCombobox'
 import SimpleNotasPopover from '@/components/ui/SimpleNotasPopover'
 import {
   Tooltip,
@@ -83,10 +89,10 @@ import {
   Download,
 } from 'lucide-react'
 import LogisticaTableWithCreatable from '@/components/LogisticaTableWithCreatable'
-import { LogisticaRecord } from '@/types/logistica'
 import { useLogisticaData } from '@/utils/useLogisticaData'
 import { exportProducaoToExcel } from '@/utils/exportProducaoToExcel'
 import { Suspense } from 'react'
+import { debugLog, debugWarn, debugTrace } from '@/utils/devLogger'
 
 /* ---------- constants ---------- */
 const JOBS_PER_PAGE = 50 // Pagination limit for better performance
@@ -134,11 +140,7 @@ interface LoadingState {
 const dotColor = (v?: boolean | null, warn = false) =>
   v ? 'bg-green-600' : warn ? 'bg-orange-500' : 'bg-red-600'
 
-// Utility function to parse a date string as a local date
-function parseDateFromYYYYMMDD(dateString: string): Date {
-  const [year, month, day] = dateString.split('-').map(Number)
-  return new Date(year, month - 1, day)
-}
+// Dev-only logger helpers moved to utils/devLogger
 
 /**
  * Format date to Portuguese short format (DD/MM/YY)
@@ -208,7 +210,7 @@ const getPColor = (job: Job): string => {
 const getAColor = (
   jobId: string,
   items: Item[],
-  designerItems: any[],
+  designerItems: DesignerItemSlim[],
 ): string => {
   // Get all items for this job
   const jobItems = items.filter((item) => item.folha_obra_id === jobId)
@@ -233,7 +235,10 @@ const getAColor = (
   return 'bg-orange-500' // Some completed = orange
 }
 
-const getCColor = (jobId: string, operacoes: any[]): string => {
+const getCColor = (
+  jobId: string,
+  operacoes: ProducaoOperacaoSlim[],
+): string => {
   const jobOperacoes = operacoes.filter((op) => op.folha_obra_id === jobId)
   if (jobOperacoes.length === 0) return 'bg-red-600'
   return jobOperacoes.some((op) => op.concluido) ? 'bg-green-600' : 'bg-red-600'
@@ -271,13 +276,15 @@ const ErrorMessage = ({
 
 /* ---------- main page ---------- */
 export default function ProducaoPage() {
-  const supabase = useMemo(() => createBrowserClient(), [])
+  const supabase = useMemo<SupabaseClient>(() => createBrowserClient(), [])
 
   /* state */
   const [jobs, setJobs] = useState<Job[]>([])
   const [allItems, setAllItems] = useState<Item[]>([])
-  const [allOperacoes, setAllOperacoes] = useState<any[]>([])
-  const [allDesignerItems, setAllDesignerItems] = useState<any[]>([])
+  const [allOperacoes, setAllOperacoes] = useState<ProducaoOperacaoSlim[]>([])
+  const [allDesignerItems, setAllDesignerItems] = useState<DesignerItemSlim[]>(
+    [],
+  )
   const [openId, setOpenId] = useState<string | null>(null)
   const [clientes, setClientes] = useState<{ value: string; label: string }[]>(
     [],
@@ -341,7 +348,7 @@ export default function ProducaoPage() {
 
   // Debug: Track when codeF and debounced value changes
   useEffect(() => {
-    console.log(
+    debugLog(
       '🔤 codeF state changed to:',
       `"${codeF}"`,
       'length:',
@@ -349,16 +356,16 @@ export default function ProducaoPage() {
     )
     // Log stack trace to see what's causing the change
     if (codeF === '' && debouncedCodeF !== '') {
-      console.warn(
+      debugWarn(
         '⚠️ CodeF was unexpectedly cleared! Previous value was:',
         debouncedCodeF,
       )
-      console.trace('Stack trace for codeF clear:')
+      debugTrace('Stack trace for codeF clear:')
     }
   }, [codeF, debouncedCodeF])
 
   useEffect(() => {
-    console.log(
+    debugLog(
       '⏱️ debouncedCodeF changed to:',
       `"${debouncedCodeF}"`,
       'length:',
@@ -534,7 +541,7 @@ export default function ProducaoPage() {
         )
 
         if (itemFiltersActive) {
-          console.log(
+          debugLog(
             '🔍 Item/codigo filter detected - searching ALL items in database',
           )
 
@@ -550,14 +557,14 @@ export default function ProducaoPage() {
 
           // Search for each term in both codigo and descricao fields
           for (const term of searchTerms) {
-            console.log('🔍 Global search for term:', term)
+            debugLog('🔍 Global search for term:', term)
 
             const { data: itemData, error: itemErr } = await supabase
               .from('items_base')
               .select('folha_obra_id')
               .or(`descricao.ilike.%${term}%,codigo.ilike.%${term}%`)
 
-            console.log(
+            debugLog(
               '🔍 Items found for term',
               term,
               ':',
@@ -575,18 +582,18 @@ export default function ProducaoPage() {
           if (allJobIds.length > 0) {
             // Keep ALL job IDs, including duplicates if same item appears multiple times
             const uniqueJobIds = Array.from(new Set(allJobIds))
-            console.log(
+            debugLog(
               '🎯 Found',
               allJobIds.length,
               'item matches in',
               uniqueJobIds.length,
               'unique jobs',
             )
-            console.log('🎯 Job IDs to retrieve:', uniqueJobIds)
+            debugLog('🎯 Job IDs to retrieve:', uniqueJobIds)
 
             jobIds = uniqueJobIds
           } else {
-            console.log('❌ No items found matching search criteria')
+            debugLog('❌ No items found matching search criteria')
             setJobs((prev: Job[]) => (reset ? [] : prev))
             setHasMoreJobs(false)
             setCurrentPage(page)
@@ -610,21 +617,21 @@ export default function ProducaoPage() {
 
         // If we have job IDs from item search, filter by those ONLY
         if (jobIds) {
-          console.log(
+          debugLog(
             '🎯 Item search active - filtering to specific job IDs:',
             jobIds,
           )
           query = query.in('id', jobIds)
-          console.log('🎯 Bypassing all other filters due to item search')
+          debugLog('🎯 Bypassing all other filters due to item search')
         }
 
         // STEP 3: Apply other filters (only if no item search is active)
         if (!jobIds) {
-          console.log('🔄 Applying standard filters (no item search active)')
+          debugLog('🔄 Applying standard filters (no item search active)')
 
           // Tab-based filtering (completion status)
           if (filters.activeTab === 'concluidos') {
-            console.log(
+            debugLog(
               '🔄 Applying date filter for concluidos tab:',
               twoMonthsAgoString,
             )
@@ -656,7 +663,7 @@ export default function ProducaoPage() {
             }
           }
         } else {
-          console.log('🔄 Skipping all standard filters due to item search')
+          debugLog('🔄 Skipping all standard filters due to item search')
         }
 
         // Order and pagination
@@ -669,13 +676,13 @@ export default function ProducaoPage() {
 
         // Debug: Log the full query conditions before execution
         if (jobIds) {
-          console.log('🔍 DEBUGGING QUERY CONDITIONS:')
-          console.log('- Job IDs to find:', jobIds)
-          console.log('- Active tab:', filters.activeTab)
-          console.log('- FO filter:', filters.foF)
-          console.log('- Campaign filter:', filters.campF)
-          console.log('- Client filter:', filters.clientF)
-          console.log('- Show fatura:', filters.showFatura)
+          debugLog('🔍 DEBUGGING QUERY CONDITIONS:')
+          debugLog('- Job IDs to find:', jobIds)
+          debugLog('- Active tab:', filters.activeTab)
+          debugLog('- FO filter:', filters.foF)
+          debugLog('- Campaign filter:', filters.campF)
+          debugLog('- Client filter:', filters.clientF)
+          debugLog('- Show fatura:', filters.showFatura)
         }
 
         // Execute the main query
@@ -687,14 +694,14 @@ export default function ProducaoPage() {
         }
 
         let filteredJobs = (jobsData as Job[]) || []
-        console.log('📊 Query result: jobs found:', filteredJobs.length)
+        debugLog('📊 Query result: jobs found:', filteredJobs.length)
 
         // Apply logistics-based filtering for tabs (only if no item filter was used)
         // Skip this entirely when item/codigo filters are active
         const itemFiltersPresent = !!(
           filters.itemF?.trim() || filters.codeF?.trim()
         )
-        console.log('🔄 Logistics filtering check:', {
+        debugLog('🔄 Logistics filtering check:', {
           hasJobIds: !!jobIds,
           hasItemFilters: itemFiltersPresent,
           activeTab: filters.activeTab,
@@ -709,7 +716,7 @@ export default function ProducaoPage() {
           (filters.activeTab === 'em_curso' ||
             filters.activeTab === 'concluidos')
         ) {
-          console.log('🔄 Applying logistics-based tab filtering')
+          debugLog('🔄 Applying logistics-based tab filtering')
           const currentJobIds = filteredJobs.map((job) => job.id)
 
           // Get all items for these jobs
@@ -765,7 +772,7 @@ export default function ProducaoPage() {
                 // Debug logging
                 if (process.env.NODE_ENV === 'development') {
                   const job = filteredJobs.find((j) => j.id === jobId)
-                  console.log(
+                  debugLog(
                     `🔍 Job ${job?.numero_fo}: ${jobItems.length} items, all completed: ${allItemsCompleted}`,
                   )
                 }
@@ -795,8 +802,8 @@ export default function ProducaoPage() {
         )
 
         if (filteredJobs) {
-          console.log('📊 Final jobs to display:', filteredJobs.length, 'jobs')
-          console.log(
+          debugLog('📊 Final jobs to display:', filteredJobs.length, 'jobs')
+          debugLog(
             '📊 Sample job IDs:',
             filteredJobs.slice(0, 3).map((j) => j.numero_fo),
           )
@@ -1057,49 +1064,7 @@ export default function ProducaoPage() {
     [supabase],
   )
 
-  const fetchDesignerItems = useCallback(
-    async (jobIds: string[]) => {
-      if (jobIds.length === 0) return
-
-      // Get item IDs for these jobs first (exclude pending items)
-      const jobItemIds = allItems
-        .filter(
-          (item) =>
-            jobIds.includes(item.folha_obra_id) && !item.id.startsWith('temp-'),
-        )
-        .map((item) => item.id)
-
-      // If no items are loaded yet, skip designer items fetch
-      // This prevents the race condition on initial page load
-      if (jobItemIds.length === 0) return
-
-      setLoading((prev) => ({ ...prev, operacoes: true })) // Reuse loading state
-      try {
-        const { data: designerData, error } = await supabase
-          .from('designer_items')
-          .select('id, item_id, paginacao')
-          .in('item_id', jobItemIds)
-
-        if (error) throw error
-
-        if (designerData) {
-          setAllDesignerItems((prev) => {
-            // Replace designer items for these jobs to avoid duplicates
-            const filtered = prev.filter(
-              (designer) => !jobItemIds.includes(designer.item_id),
-            )
-            return [...filtered, ...designerData]
-          })
-        }
-      } catch (error) {
-        console.error('Error fetching designer items:', error)
-        setError('Failed to load designer items')
-      } finally {
-        setLoading((prev) => ({ ...prev, operacoes: false }))
-      }
-    },
-    [supabase, allItems],
-  )
+  // Note: designer items are fetched within fetchItems and merged into allItems.
 
   // Initial data load
   useEffect(() => {
@@ -1121,7 +1086,7 @@ export default function ProducaoPage() {
 
   // Trigger search when filters change
   useEffect(() => {
-    console.log('🔍 Filter change detected:', {
+    debugLog('🔍 Filter change detected:', {
       debouncedCodeF,
       debouncedItemF,
       debouncedFoF,
@@ -1140,7 +1105,7 @@ export default function ProducaoPage() {
       showFatura
     ) {
       // Reset pagination and search with filters
-      console.log('🎯 Triggering filtered search')
+      debugLog('🎯 Triggering filtered search')
       setHasMoreJobs(true)
       setCurrentPage(0)
       fetchJobs(0, true, {
@@ -1154,7 +1119,7 @@ export default function ProducaoPage() {
       })
     } else {
       // No filters, reset to load all jobs for current tab
-      console.log('🔄 Resetting to default search')
+      debugLog('🔄 Resetting to default search')
       setHasMoreJobs(true)
       setCurrentPage(0)
       fetchJobs(0, true, { activeTab })
@@ -1201,7 +1166,7 @@ export default function ProducaoPage() {
 
         // If job has logistics entries and all are completed, mark job as completed
         if (completionStatus && completionStatus.completed) {
-          console.log(
+          debugLog(
             `🎯 Auto-completing job ${job.numero_fo} - all logistics entries completed`,
           )
 
@@ -1305,10 +1270,22 @@ export default function ProducaoPage() {
           A = a.notas ?? ''
           B = b.notas ?? ''
           break
-        case 'prioridade':
-          A = a.prioridade ?? false
-          B = b.prioridade ?? false
+        case 'prioridade': {
+          // Color/state-based sort for P: red (prioridade) > blue (>3 days) > green (else)
+          const weightP = (job: Job) => {
+            if (job.prioridade) return 2 // red (highest)
+            if (job.data_in) {
+              const days =
+                (Date.now() - new Date(job.data_in).getTime()) /
+                (1000 * 60 * 60 * 24)
+              if (days > 3) return 1 // blue (middle)
+            }
+            return 0 // green (lowest)
+          }
+          A = weightP(a)
+          B = weightP(b)
           break
+        }
         case 'data_concluido':
           // Date completion is now handled by logistics data
           A = 0
@@ -1326,32 +1303,30 @@ export default function ProducaoPage() {
           A = a.fatura ?? false
           B = b.fatura ?? false
           break
-        case 'artwork':
-          // Sort by operacoes completion status
-          const aOperacoes = allOperacoes.filter(
-            (op) => op.folha_obra_id === a.id,
+        case 'artwork': {
+          // Color/state-based sort for A (Artes Finais) using the same color states as the dot
+          const weightFromColor = (color: string) =>
+            color.includes('green') ? 2 : color.includes('orange') ? 1 : 0
+          const wa = weightFromColor(
+            getAColor(a.id, allItems, allDesignerItems),
           )
-          const bOperacoes = allOperacoes.filter(
-            (op) => op.folha_obra_id === b.id,
+          const wb = weightFromColor(
+            getAColor(b.id, allItems, allDesignerItems),
           )
-          const aHasCompleted = aOperacoes.some((op) => op.concluido)
-          const bHasCompleted = bOperacoes.some((op) => op.concluido)
-          A = aHasCompleted
-          B = bHasCompleted
+          A = wa
+          B = wb
           break
-        case 'corte':
-          // Sort by operacoes completion status
-          const aCorteOps = allOperacoes.filter(
-            (op) => op.folha_obra_id === a.id,
-          )
-          const bCorteOps = allOperacoes.filter(
-            (op) => op.folha_obra_id === b.id,
-          )
-          const aCorteCompleted = aCorteOps.some((op) => op.concluido)
-          const bCorteCompleted = bCorteOps.some((op) => op.concluido)
-          A = aCorteCompleted
-          B = bCorteCompleted
+        }
+        case 'corte': {
+          // Color/state-based sort for C (Corte) using the same color states as the dot
+          const weightFromColor = (color: string) =>
+            color.includes('green') ? 2 : 0 // only red or green for corte
+          const wa = weightFromColor(getCColor(a.id, allOperacoes))
+          const wb = weightFromColor(getCColor(b.id, allOperacoes))
+          A = wa
+          B = wb
           break
+        }
         case 'created_at':
           // Use data_in (input date) instead of created_at for proper date sorting
           A = a.data_in ? new Date(a.data_in).getTime() : 0
@@ -1401,15 +1376,12 @@ export default function ProducaoPage() {
               className="h-10 w-40 rounded-none"
               value={codeF}
               onChange={(e) => {
-                console.log('🔤 Code input changed:', e.target.value)
+                debugLog('🔤 Code input changed:', e.target.value)
                 setCodeF(e.target.value)
               }}
               onBlur={(e) => {
                 // Prevent accidental clearing on blur
-                console.log(
-                  '🔤 Code field blur, keeping value:',
-                  e.target.value,
-                )
+                debugLog('🔤 Code field blur, keeping value:', e.target.value)
               }}
             />
             <Input
@@ -1493,7 +1465,7 @@ export default function ProducaoPage() {
                           return
                         }
 
-                        console.log(
+                        debugLog(
                           `Exporting data for ${jobIds.length} jobs with incomplete logistics...`,
                         )
 
@@ -1987,7 +1959,7 @@ export default function ProducaoPage() {
                                                 data_saida:
                                                   job.data_saida || null,
                                               }
-                                              console.log(
+                                              debugLog(
                                                 'Inserting ORC job (no duplicate) with data:',
                                                 insertData,
                                               )
@@ -2078,7 +2050,7 @@ export default function ProducaoPage() {
                                             notas: job.notas || null,
                                             data_saida: job.data_saida || null,
                                           }
-                                          console.log(
+                                          debugLog(
                                             'Inserting ORC job with data:',
                                             insertData,
                                           )
@@ -2337,7 +2309,7 @@ export default function ProducaoPage() {
                                       (c) => c.value === selectedId,
                                     )
                                     // Debug logging
-                                    console.log(
+                                    debugLog(
                                       `Job ${job.numero_fo} - selecting cliente: ${selectedId} -> ${selected?.label}`,
                                     )
                                     setJobs((prevJobs) =>
@@ -2534,13 +2506,7 @@ export default function ProducaoPage() {
                                           size="icon"
                                           variant="destructive"
                                           onClick={async () => {
-                                            if (
-                                              !confirm(
-                                                `Tem certeza que deseja eliminar a Folha de Obra ${job.numero_fo}? Esta ação irá eliminar todos os itens e dados logísticos associados.`,
-                                              )
-                                            ) {
-                                              return
-                                            }
+                                            // Proceed without confirmation dialog
 
                                             try {
                                               // Simple deletion using database CASCADE DELETE
@@ -2890,7 +2856,7 @@ export default function ProducaoPage() {
                                                 data_saida:
                                                   job.data_saida || null,
                                               }
-                                              console.log(
+                                              debugLog(
                                                 'Inserting ORC job (no duplicate) with data:',
                                                 insertData,
                                               )
@@ -2981,7 +2947,7 @@ export default function ProducaoPage() {
                                             notas: job.notas || null,
                                             data_saida: job.data_saida || null,
                                           }
-                                          console.log(
+                                          debugLog(
                                             'Inserting ORC job with data:',
                                             insertData,
                                           )
@@ -3240,7 +3206,7 @@ export default function ProducaoPage() {
                                       (c) => c.value === selectedId,
                                     )
                                     // Debug logging
-                                    console.log(
+                                    debugLog(
                                       `Job ${job.numero_fo} - selecting cliente: ${selectedId} -> ${selected?.label}`,
                                     )
                                     setJobs((prevJobs) =>
@@ -3686,7 +3652,7 @@ function JobDrawerContent({
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   // Logistica Tab State/Logic - MUST be called before any early returns
-  const [logisticaRows, setLogisticaRows] = useState<any[]>([])
+  const [logisticaRows, setLogisticaRows] = useState<LogisticaRow[]>([])
   const [logisticaLoading, setLogisticaLoading] = useState(false)
   const [sourceRowId, setSourceRowId] = useState<string | null>(null)
   const {
@@ -3751,7 +3717,7 @@ function JobDrawerContent({
       }
 
       // 1. Save the item to database
-      console.log('🔄 Inserting item with data:', finalData)
+      debugLog('🔄 Inserting item with data:', finalData)
       const { data: baseData, error: baseError } = await supabase
         .from('items_base')
         .insert(finalData)
@@ -3892,7 +3858,7 @@ function JobDrawerContent({
       }
 
       // Debug log the data being sent
-      console.log('🔧 Updating item with data:', finalData)
+      debugLog('🔧 Updating item with data:', finalData)
 
       // Update existing item in database
       const { error } = await supabase
@@ -4073,10 +4039,10 @@ function JobDrawerContent({
   // Fetch logistics records for job items
   const fetchLogisticaRows = async () => {
     setLogisticaLoading(true)
-    console.log('🔍 Fetching logistics for job items:', jobItems)
+    debugLog('🔍 Fetching logistics for job items:', jobItems)
 
     if (jobItems.length === 0) {
-      console.log('📦 No job items, clearing logistics table')
+      debugLog('📦 No job items, clearing logistics table')
       setLogisticaRows([])
       setLogisticaLoading(false)
       return
@@ -4087,14 +4053,14 @@ function JobDrawerContent({
     const pendingItemsArray = jobItems.filter((item) => isPending(item.id))
     const itemIds = realItems.map((item) => item.id)
 
-    console.log('🔍 jobItems breakdown:', {
+    debugLog('🔍 jobItems breakdown:', {
       total: jobItems.length,
       real: realItems.length,
       pending: pendingItemsArray.length,
       pendingIds: pendingItemsArray.map((i) => i.id),
     })
     // 2. Fetch all logistics records for those items
-    let logisticsData: any[] = []
+    let logisticsData: LogisticaRow[] = []
     if (itemIds.length > 0) {
       const { data: logistics, error: logisticsError } = await supabase
         .from('logistica_entregas')
@@ -4121,14 +4087,14 @@ function JobDrawerContent({
         )
         .in('item_id', itemIds)
       if (!logisticsError && logistics) {
-        console.log('Fetched logistics data:', logistics)
+        debugLog('Fetched logistics data:', logistics)
         logisticsData = logistics
       } else if (logisticsError) {
         console.error('Error fetching logistics:', logisticsError)
       }
     }
     // 3. Create rows: show all logistics records + items without logistics records
-    const mergedRows: any[] = []
+    const mergedRows: LogisticaRow[] = []
 
     // Add all existing logistics records
     logisticsData.forEach((logistics) => {
@@ -4141,14 +4107,14 @@ function JobDrawerContent({
     )
 
     if (itemsWithoutLogistics.length > 0) {
-      console.log(
+      debugLog(
         '📦 Creating logistics entries for items without them:',
         itemsWithoutLogistics.length,
       )
       // Create logistics entries for all items without them
       const newLogisticsEntries = itemsWithoutLogistics.map((item) => {
         const description = item.descricao || 'Novo Item'
-        console.log('📦 Creating logistics entry for item:', {
+        debugLog('📦 Creating logistics entry for item:', {
           itemId: item.id,
           description,
         })
@@ -4157,7 +4123,7 @@ function JobDrawerContent({
           descricao: description, // Store item description directly
           data: new Date().toISOString().split('T')[0],
           is_entrega: true,
-        }
+        } as LogisticaRow
       })
 
       const { data: newLogisticsData, error: logisticsInsertError } =
@@ -4185,7 +4151,7 @@ function JobDrawerContent({
       if (logisticsInsertError) {
         console.error('Error creating logistics entries:', logisticsInsertError)
       } else if (newLogisticsData) {
-        console.log('Created logistics entries:', newLogisticsData)
+        debugLog('Created logistics entries:', newLogisticsData)
         // Add the newly created logistics entries to our data
         logisticsData.push(...newLogisticsData)
         mergedRows.push(...newLogisticsData)
@@ -4762,38 +4728,30 @@ function JobDrawerContent({
                   size="sm"
                   variant="secondary"
                   onClick={async () => {
-                    console.log('📊 Starting quantity copy process...')
-                    console.log('📊 Current job ID:', job.id)
-                    console.log(
-                      '📊 Current logistics rows:',
-                      logisticaRows.length,
-                    )
-                    console.log('📊 Current job items:', jobItems.length)
+                    debugLog('📊 Starting quantity copy process...')
+                    debugLog('📊 Current job ID:', job.id)
+                    debugLog('📊 Current logistics rows:', logisticaRows.length)
+                    debugLog('📊 Current job items:', jobItems.length)
 
                     if (logisticaRows.length === 0) {
-                      console.log('❌ No logistics items to copy quantities to')
+                      debugLog('❌ No logistics items to copy quantities to')
                       alert('Não há itens na tabela de logística.')
                       return
                     }
 
                     if (jobItems.length === 0) {
-                      console.log(
-                        '❌ No job items found to copy quantities from',
-                      )
+                      debugLog('❌ No job items found to copy quantities from')
                       alert(
                         'Não há itens base encontrados para esta folha de obra.',
                       )
                       return
                     }
 
-                    const confirmed = confirm(
-                      'Copiar quantidades originais dos itens para a tabela de logística? Isto irá substituir as quantidades existentes na logística.',
-                    )
-                    if (!confirmed) return
+                    // Proceed without confirmation dialog
 
                     try {
                       // Use the jobItems that are already loaded instead of fetching again
-                      console.log(
+                      debugLog(
                         '📊 Using loaded job items:',
                         jobItems.map((item) => ({
                           id: item.id,
@@ -4807,7 +4765,7 @@ function JobDrawerContent({
                         jobItems.map((item) => [item.id, item.quantidade]),
                       )
 
-                      console.log(
+                      debugLog(
                         '📊 Quantity map:',
                         Object.fromEntries(quantityMap),
                       )
@@ -4817,7 +4775,7 @@ function JobDrawerContent({
                         const hasItemId =
                           row.item_id && quantityMap.has(row.item_id)
                         const hasLogisticsId = row.id // Must have logistics ID to update
-                        console.log(`📊 Checking row:`, {
+                        debugLog(`📊 Checking row:`, {
                           logisticsId: row.id,
                           itemId: row.item_id,
                           hasItemId,
@@ -4828,25 +4786,25 @@ function JobDrawerContent({
                         return hasItemId && hasLogisticsId
                       })
 
-                      console.log(
+                      debugLog(
                         '📊 Logistics rows to update:',
                         rowsToUpdate.length,
                       )
 
                       if (rowsToUpdate.length === 0) {
-                        console.log(
+                        debugLog(
                           '❌ No matching logistics rows found to update',
                         )
-                        console.log('📊 Debug info:')
-                        console.log(
+                        debugLog('📊 Debug info:')
+                        debugLog(
                           '- Job items IDs:',
                           jobItems.map((i) => i.id),
                         )
-                        console.log(
+                        debugLog(
                           '- Logistics rows item_ids:',
                           logisticaRows.map((r) => r.item_id),
                         )
-                        console.log(
+                        debugLog(
                           '- Logistics rows with IDs:',
                           logisticaRows
                             .filter((r) => r.id)
@@ -4863,7 +4821,7 @@ function JobDrawerContent({
                       const updatePromises = rowsToUpdate.map(
                         async (row, index) => {
                           const originalQuantity = quantityMap.get(row.item_id)
-                          console.log(
+                          debugLog(
                             `📊 Updating row ${index + 1}/${rowsToUpdate.length}:`,
                             {
                               logisticsId: row.id,
@@ -4890,7 +4848,7 @@ function JobDrawerContent({
                               return { success: false, error, rowId: row.id }
                             }
 
-                            console.log(`✅ Successfully updated row ${row.id}`)
+                            debugLog(`✅ Successfully updated row ${row.id}`)
                             return { success: true, rowId: row.id }
                           } catch (error) {
                             console.error(
@@ -4902,14 +4860,14 @@ function JobDrawerContent({
                         },
                       )
 
-                      console.log('📊 Executing all updates...')
+                      debugLog('📊 Executing all updates...')
                       const results = await Promise.all(updatePromises)
 
                       // Check results
                       const successful = results.filter((r) => r.success)
                       const failed = results.filter((r) => !r.success)
 
-                      console.log(
+                      debugLog(
                         `📊 Update results: ${successful.length} successful, ${failed.length} failed`,
                       )
 
@@ -4936,27 +4894,19 @@ function JobDrawerContent({
                         }),
                       )
 
-                      console.log('✅ Local state updated')
+                      debugLog('✅ Local state updated')
 
                       // Optionally refresh logistics data to ensure consistency
-                      console.log(
+                      debugLog(
                         '🔄 Refreshing logistics data to ensure consistency...',
                       )
                       await fetchLogisticaRows()
 
-                      console.log(
+                      debugLog(
                         '✅ Quantity copy process completed successfully',
                       )
 
-                      if (failed.length === 0) {
-                        alert(
-                          `Quantidades copiadas com sucesso! ${successful.length} registros atualizados.`,
-                        )
-                      } else {
-                        alert(
-                          `Processo concluído com ${successful.length} sucessos e ${failed.length} falhas. Verifique o console para detalhes.`,
-                        )
-                      }
+                      // Silent success; user can verify values directly in the table
                     } catch (error: any) {
                       console.error(
                         '❌ Error in copy quantities process:',
@@ -4997,10 +4947,7 @@ function JobDrawerContent({
                       return
                     }
 
-                    const confirmed = confirm(
-                      `Copiar informações de entrega da linha "${sourceRow.items_base?.descricao || sourceRow.descricao}" para todas as outras linhas?`,
-                    )
-                    if (!confirmed) return
+                    // Proceed without confirmation dialog
 
                     const deliveryInfo = {
                       local_recolha: sourceRow.local_recolha,
@@ -5070,7 +5017,7 @@ function JobDrawerContent({
               <div className="bg-background border-border mt-6 w-full rounded-none border-2">
                 <div className="w-full rounded-none">
                   <LogisticaTableWithCreatable
-                    records={logisticaRows}
+                    records={logisticaRows.map(toLogisticaRecord)}
                     clientes={logisticaClientes || []}
                     transportadoras={logisticaTransportadoras || []}
                     armazens={logisticaArmazens || []}
@@ -5078,8 +5025,8 @@ function JobDrawerContent({
                     showSourceSelection={true}
                     sourceRowId={sourceRowId}
                     onSourceRowChange={setSourceRowId}
-                    onItemSave={async (row: any, value) => {
-                      console.log('📝 Updating item description:', {
+                    onItemSave={async (row: any, value: string) => {
+                      debugLog('📝 Updating item description:', {
                         rowId: row.id,
                         itemId: row.item_id,
                         value,
@@ -5095,9 +5042,7 @@ function JobDrawerContent({
                             null,
                           )
                           if (success) {
-                            console.log(
-                              '✅ Successfully updated item description',
-                            )
+                            debugLog('✅ Successfully updated item description')
                             setLogisticaRows((prevRows) =>
                               prevRows.map((r) =>
                                 r.id === row.id
@@ -5120,7 +5065,7 @@ function JobDrawerContent({
                         }
                       } else if (row.item_id) {
                         // Create new logistics record with description
-                        console.log(
+                        debugLog(
                           '🆕 Creating new logistics record with description:',
                           value,
                         )
@@ -5156,7 +5101,7 @@ function JobDrawerContent({
                             )
                             .single()
                           if (!error && data) {
-                            console.log(
+                            debugLog(
                               '✅ Successfully created new logistics record',
                             )
                             setLogisticaRows((prevRows) =>
@@ -5335,7 +5280,7 @@ function JobDrawerContent({
                       }
                     }}
                     onGuiaSave={async (row: any, value: string) => {
-                      console.log('📋 Updating guia:', {
+                      debugLog('📋 Updating guia:', {
                         rowId: row.id,
                         value,
                         valueType: typeof value,
@@ -5343,7 +5288,7 @@ function JobDrawerContent({
                       if (row.id) {
                         try {
                           // Additional logging for guia field debugging
-                          console.log('📋 Guia field details:', {
+                          debugLog('📋 Guia field details:', {
                             original: value,
                             trimmed: value?.trim(),
                             isEmpty:
@@ -5360,7 +5305,7 @@ function JobDrawerContent({
                             null,
                           )
                           if (success) {
-                            console.log('✅ Successfully updated guia')
+                            debugLog('✅ Successfully updated guia')
                             setLogisticaRows((prevRows) =>
                               prevRows.map((r) =>
                                 r.id === row.id ? { ...r, guia: value } : r,
@@ -5416,7 +5361,7 @@ function JobDrawerContent({
                       }
                     }}
                     onRecolhaChange={async (rowId: string, value: string) => {
-                      console.log('🏠 Updating local_recolha:', {
+                      debugLog('🏠 Updating local_recolha:', {
                         rowId,
                         value,
                       })
@@ -5429,7 +5374,7 @@ function JobDrawerContent({
                           ? selectedArmazem.label
                           : ''
 
-                        console.log('🏠 Armazem details:', {
+                        debugLog('🏠 Armazem details:', {
                           id: value,
                           text: textValue,
                         })
@@ -5451,7 +5396,7 @@ function JobDrawerContent({
                         ])
 
                         if (success.every((s) => s)) {
-                          console.log(
+                          debugLog(
                             '✅ Successfully updated both id_local_recolha and local_recolha',
                           )
                           setLogisticaRows((prevRows) =>
@@ -5477,7 +5422,7 @@ function JobDrawerContent({
                       }
                     }}
                     onEntregaChange={async (rowId: string, value: string) => {
-                      console.log('🚚 Updating local_entrega:', {
+                      debugLog('🚚 Updating local_entrega:', {
                         rowId,
                         value,
                       })
@@ -5490,7 +5435,7 @@ function JobDrawerContent({
                           ? selectedArmazem.label
                           : ''
 
-                        console.log('🚚 Armazem details:', {
+                        debugLog('🚚 Armazem details:', {
                           id: value,
                           text: textValue,
                         })
@@ -5512,7 +5457,7 @@ function JobDrawerContent({
                         ])
 
                         if (success.every((s) => s)) {
-                          console.log(
+                          debugLog(
                             '✅ Successfully updated both id_local_entrega and local_entrega',
                           )
                           setLogisticaRows((prevRows) =>
@@ -5538,7 +5483,7 @@ function JobDrawerContent({
                       }
                     }}
                     onTransportadoraChange={async (row: any, value: string) => {
-                      console.log('🚛 Updating transportadora:', {
+                      debugLog('🚛 Updating transportadora:', {
                         rowId: row.id,
                         value,
                       })
@@ -5554,7 +5499,7 @@ function JobDrawerContent({
                             ? selectedTransportadora.label
                             : ''
 
-                          console.log('🚛 Transportadora details:', {
+                          debugLog('🚛 Transportadora details:', {
                             id: value,
                             text: textValue,
                           })
@@ -5566,9 +5511,7 @@ function JobDrawerContent({
                             null,
                           )
                           if (success) {
-                            console.log(
-                              '✅ Successfully updated transportadora',
-                            )
+                            debugLog('✅ Successfully updated transportadora')
                             setLogisticaRows((prevRows) =>
                               prevRows.map((r) =>
                                 r.id === row.id
@@ -5598,7 +5541,7 @@ function JobDrawerContent({
                       row: any,
                       value: number | null,
                     ) => {
-                      console.log('🔢 Updating quantidade:', {
+                      debugLog('🔢 Updating quantidade:', {
                         rowId: row.id,
                         value,
                         valueType: typeof value,
@@ -5612,7 +5555,7 @@ function JobDrawerContent({
                             null,
                           )
                           if (success) {
-                            console.log('✅ Successfully updated quantidade')
+                            debugLog('✅ Successfully updated quantidade')
                             setLogisticaRows((prevRows) =>
                               prevRows.map((r) =>
                                 r.id === row.id

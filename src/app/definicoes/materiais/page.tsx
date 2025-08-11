@@ -192,13 +192,17 @@ export default function MateriaisPage() {
         }
 
         const { data, error } = await query
-        console.log('Materiais fetch result:', { data, error })
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('Materiais fetch result:', { data, error })
+        }
 
         if (error) {
           console.error('Supabase error fetching materiais:', error)
           alert(`Error fetching materiais: ${error.message}`)
         } else if (data) {
-          console.log('Successfully fetched materiais:', data)
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('Successfully fetched materiais:', data)
+          }
           setMateriais(data)
         }
       } catch (error) {
@@ -546,7 +550,9 @@ export default function MateriaisPage() {
           .filter(Boolean),
       ),
     )
-    console.log('Fetched tipos from materiais:', tipos)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Fetched tipos from materiais:', tipos)
+    }
     setAvailableTipos(tipos)
   }
 
@@ -575,19 +581,23 @@ export default function MateriaisPage() {
   }
 
   const fetchCaracteristicas = async (tipo: string, material: string) => {
-    console.log(
-      'Fetching características for tipo:',
-      tipo,
-      'material:',
-      material,
-    )
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(
+        'Fetching características for tipo:',
+        tipo,
+        'material:',
+        material,
+      )
+    }
     const { data } = await supabase
       .from('materiais')
       .select('carateristica, tipo, material')
       .not('carateristica', 'is', null)
       .not('tipo', 'is', null)
       .not('material', 'is', null)
-    console.log('Raw características data:', data)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Raw características data:', data)
+    }
     // Only include carateristicas with matching normalized tipo and material
     const filtered = data?.filter((item) => {
       const itemTipo =
@@ -600,22 +610,26 @@ export default function MateriaisPage() {
         item.material.trim().toUpperCase()
       const match = itemTipo === tipo && itemMaterial === material
       if (!match) {
-        console.log(
-          'Skipping:',
-          item.carateristica,
-          'tipo:',
-          itemTipo,
-          'vs',
-          tipo,
-          'material:',
-          itemMaterial,
-          'vs',
-          material,
-        )
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(
+            'Skipping:',
+            item.carateristica,
+            'tipo:',
+            itemTipo,
+            'vs',
+            tipo,
+            'material:',
+            itemMaterial,
+            'vs',
+            material,
+          )
+        }
       }
       return match
     })
-    console.log('Filtered características:', filtered)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Filtered características:', filtered)
+    }
     const caracteristicas = Array.from(
       new Set(
         filtered
@@ -626,7 +640,9 @@ export default function MateriaisPage() {
           .filter(Boolean),
       ),
     )
-    console.log('Final características options:', caracteristicas)
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('Final características options:', caracteristicas)
+    }
     setAvailableCaracteristicas(caracteristicas)
   }
 

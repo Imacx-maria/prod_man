@@ -27,10 +27,14 @@ export function useAuth() {
 
       if (session?.user) {
         setUser(session.user)
-        console.log('🔄 Auth refreshed successfully:', session.user.id)
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🔄 Auth refreshed successfully:', session.user.id)
+        }
       } else {
         setUser(null)
-        console.log('🔄 No session found during refresh')
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🔄 No session found during refresh')
+        }
       }
     } catch (error) {
       console.error('Error in refreshAuth:', error)
@@ -66,13 +70,15 @@ export function useAuth() {
           setLoading(false)
           setInitialized(true)
 
-          console.log('🔐 Auth initialized:', {
-            hasSession: !!session,
-            userId: session?.user?.id,
-            expiresAt: session?.expires_at
-              ? new Date(session.expires_at * 1000).toLocaleString()
-              : null,
-          })
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('🔐 Auth initialized:', {
+              hasSession: !!session,
+              userId: session?.user?.id,
+              expiresAt: session?.expires_at
+                ? new Date(session.expires_at * 1000).toLocaleString()
+                : null,
+            })
+          }
         }
       } catch (error) {
         console.error('Error initializing auth:', error)
@@ -90,13 +96,15 @@ export function useAuth() {
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return
 
-      console.log('🔐 Auth state change:', event, {
-        hasSession: !!session,
-        userId: session?.user?.id,
-        expiresAt: session?.expires_at
-          ? new Date(session.expires_at * 1000).toLocaleString()
-          : null,
-      })
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('🔐 Auth state change:', event, {
+          hasSession: !!session,
+          userId: session?.user?.id,
+          expiresAt: session?.expires_at
+            ? new Date(session.expires_at * 1000).toLocaleString()
+            : null,
+        })
+      }
 
       // Update user state
       setUser(session?.user ?? null)
@@ -109,7 +117,9 @@ export function useAuth() {
       // Handle specific auth events
       switch (event) {
         case 'SIGNED_IN':
-          console.log('✅ User signed in successfully')
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('✅ User signed in successfully')
+          }
           // Force a small delay to ensure all providers are ready
           setTimeout(() => {
             if (mounted) {
@@ -120,21 +130,29 @@ export function useAuth() {
           break
 
         case 'SIGNED_OUT':
-          console.log('👋 User signed out')
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('👋 User signed out')
+          }
           setUser(null)
           setLoading(false)
           break
 
         case 'TOKEN_REFRESHED':
-          console.log('🔄 Token refreshed successfully')
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('🔄 Token refreshed successfully')
+          }
           break
 
         case 'USER_UPDATED':
-          console.log('👤 User updated')
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('👤 User updated')
+          }
           break
 
         case 'PASSWORD_RECOVERY':
-          console.log('🔑 Password recovery initiated')
+          if (process.env.NODE_ENV !== 'production') {
+            console.log('🔑 Password recovery initiated')
+          }
           break
       }
     })
@@ -145,7 +163,9 @@ export function useAuth() {
     // Fallback timeout to ensure loading state resolves
     const timeoutId = setTimeout(() => {
       if (mounted && !initialized) {
-        console.warn('⚠️ Auth initialization timeout, forcing completion')
+        if (process.env.NODE_ENV !== 'production') {
+          console.warn('⚠️ Auth initialization timeout, forcing completion')
+        }
         setLoading(false)
         setInitialized(true)
       }
@@ -154,7 +174,9 @@ export function useAuth() {
     // Listen for custom refresh events
     const handleRefreshAuth = () => {
       if (mounted) {
-        console.log('🔄 Force refreshing auth state')
+        if (process.env.NODE_ENV !== 'production') {
+          console.log('🔄 Force refreshing auth state')
+        }
         refreshAuth()
       }
     }
@@ -191,7 +213,9 @@ export function useAuth() {
       setInitialized(false)
 
       // Force a complete page refresh to ensure clean state
-      console.log('👋 Signing out and forcing page refresh')
+      if (process.env.NODE_ENV !== 'production') {
+        console.log('👋 Signing out and forcing page refresh')
+      }
       window.location.href = '/login'
     } catch (error) {
       console.error('Unexpected error during sign out:', error)

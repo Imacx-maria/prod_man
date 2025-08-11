@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import Combobox from '@/components/ui/Combobox'
+import { debugLog } from '@/utils/devLogger'
 import {
   Table,
   TableBody,
@@ -82,8 +83,8 @@ export default function MaquinasPage() {
     async (filters: { nameFilter?: string } = {}) => {
       setLoading(true)
       try {
-        console.log('Fetching maquinas...', filters)
-        console.log(
+        debugLog('Fetching maquinas...', filters)
+        debugLog(
           'nameFilter type:',
           typeof filters.nameFilter,
           'value:',
@@ -104,13 +105,13 @@ export default function MaquinasPage() {
           ascending: true,
         })
 
-        console.log('Maquinas operacao fetch result:', { data, error })
+        debugLog('Maquinas operacao fetch result:', { data, error })
 
         if (error) {
           console.error('Supabase error fetching maquinas_operacao:', error)
           alert(`Error fetching maquinas: ${error.message}`)
         } else if (data) {
-          console.log('Successfully fetched maquinas_operacao:', data)
+          debugLog('Successfully fetched maquinas_operacao:', data)
           setMaquinas(data)
         }
       } catch (error) {
