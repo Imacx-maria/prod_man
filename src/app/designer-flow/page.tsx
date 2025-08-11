@@ -321,6 +321,7 @@ const fetchJobs = async (
   setJobs: React.Dispatch<React.SetStateAction<Job[]>>,
   filters: {
     selectedDesigner?: string
+    orcFilter?: string
     poFilter?: string
     campaignFilter?: string
     itemFilter?: string
@@ -397,6 +398,14 @@ const fetchJobs = async (
     // STEP 3: Apply other filters (only if no item search, or in combination with item search)
     if (filters.selectedDesigner && filters.selectedDesigner !== 'all') {
       query = query.eq('profile_id', filters.selectedDesigner)
+    }
+
+    if (filters.orcFilter?.trim()) {
+      const clean = String(filters.orcFilter).trim()
+      const numeric = Number(clean)
+      if (!Number.isNaN(numeric) && /^\d+$/.test(clean)) {
+        query = query.eq('numero_orc', numeric)
+      }
     }
 
     if (filters.poFilter?.trim()) {
@@ -657,6 +666,7 @@ const fetchAllItems = async (
 
 export default function DesignerFlow() {
   const [selectedDesigner, setSelectedDesigner] = useState('all')
+  const [orcFilter, setOrcFilter] = useState('')
   const [poFilter, setPoFilter] = useState('')
   const [campaignFilter, setCampaignFilter] = useState('')
   const [jobs, setJobs] = useState<Job[]>([])
@@ -710,6 +720,9 @@ export default function DesignerFlow() {
   const foInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const [itemFilter, setItemFilter] = useState('')
   const [codigoFilter, setCodigoFilter] = useState('')
+  // Second-row filters
+  const [filterDOnly, setFilterDOnly] = useState(false)
+  const [filterMaqueteNoApproval, setFilterMaqueteNoApproval] = useState(false)
   const {
     complexidades,
     isLoading: isLoadingComplexidades,
@@ -717,6 +730,7 @@ export default function DesignerFlow() {
   } = useComplexidades()
 
   // Debounced filter values for performance
+  const [debouncedOrcFilter, setDebouncedOrcFilter] = useState('')
   const [debouncedPoFilter, setDebouncedPoFilter] = useState('')
   const [debouncedCampaignFilter, setDebouncedCampaignFilter] = useState('')
   const [debouncedItemFilter, setDebouncedItemFilter] = useState('')
@@ -732,6 +746,11 @@ export default function DesignerFlow() {
   }, [])
 
   // Debounce filter values
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedOrcFilter(orcFilter), 300)
+    return () => clearTimeout(timer)
+  }, [orcFilter])
+
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedPoFilter(poFilter), 300)
     return () => clearTimeout(timer)
@@ -927,6 +946,7 @@ export default function DesignerFlow() {
   useEffect(() => {
     fetchJobs(setJobs, {
       selectedDesigner,
+      orcFilter: debouncedOrcFilter,
       poFilter: debouncedPoFilter,
       campaignFilter: debouncedCampaignFilter,
       itemFilter: debouncedItemFilter,
@@ -935,6 +955,7 @@ export default function DesignerFlow() {
     })
   }, [
     selectedDesigner,
+    debouncedOrcFilter,
     debouncedPoFilter,
     debouncedCampaignFilter,
     debouncedItemFilter,
@@ -948,6 +969,7 @@ export default function DesignerFlow() {
   useEffect(() => {
     fetchJobs(setPaginadosJobs, {
       selectedDesigner,
+      orcFilter: debouncedOrcFilter,
       poFilter: debouncedPoFilter,
       campaignFilter: debouncedCampaignFilter,
       itemFilter: debouncedItemFilter,
@@ -956,6 +978,7 @@ export default function DesignerFlow() {
     })
   }, [
     selectedDesigner,
+    debouncedOrcFilter,
     debouncedPoFilter,
     debouncedCampaignFilter,
     debouncedItemFilter,
@@ -1113,8 +1136,55 @@ export default function DesignerFlow() {
     computeEntregaStatuses()
   }, [allItems, feriadosSet])
 
-  // Jobs are now filtered at database level
-  const filteredJobs = jobs
+  // Jobs are now filtered at database level, apply second-row item-state filters on top
+  const itemHasDOnly = (it: Item): boolean => {
+    const isFalse = (v: boolean | null | undefined) => v !== true
+    return (
+      it.duvidas === true &&
+      isFalse(it.em_curso) &&
+      isFalse(it.paginacao) &&
+      isFalse(it.maquete_enviada1) &&
+      isFalse(it.maquete_enviada2) &&
+      isFalse(it.maquete_enviada3) &&
+      isFalse(it.maquete_enviada4) &&
+      isFalse(it.maquete_enviada5) &&
+      isFalse(it.maquete_enviada6) &&
+      isFalse(it.aprovacao_recebida1) &&
+      isFalse(it.aprovacao_recebida2) &&
+      isFalse(it.aprovacao_recebida3) &&
+      isFalse(it.aprovacao_recebida4) &&
+      isFalse(it.aprovacao_recebida5) &&
+      isFalse(it.aprovacao_recebida6)
+    )
+  }
+
+  const itemHasMaqueteAwaitingApproval = (it: Item): boolean => {
+    const pair = (sent?: boolean | null, approved?: boolean | null): boolean =>
+      !!sent && approved !== true
+    return (
+      pair(it.maquete_enviada1, it.aprovacao_recebida1) ||
+      pair(it.maquete_enviada2, it.aprovacao_recebida2) ||
+      pair(it.maquete_enviada3, it.aprovacao_recebida3) ||
+      pair(it.maquete_enviada4, it.aprovacao_recebida4) ||
+      pair(it.maquete_enviada5, it.aprovacao_recebida5) ||
+      pair(it.maquete_enviada6, it.aprovacao_recebida6)
+    )
+  }
+
+  const jobMatchesSecondRowFilters = (jobId: string): boolean => {
+    if (!filterDOnly && !filterMaqueteNoApproval) return true
+    if (!allItems || allItems.length === 0) return true
+    const jobItems = allItems.filter((it) => it.folha_obra_id === jobId)
+    const matchesD = !filterDOnly || jobItems.some(itemHasDOnly)
+    const matchesM =
+      !filterMaqueteNoApproval || jobItems.some(itemHasMaqueteAwaitingApproval)
+    return matchesD && matchesM
+  }
+
+  const filteredJobs = jobs.filter((job) => jobMatchesSecondRowFilters(job.id))
+  const filteredPaginadosJobs = paginadosJobs.filter((job) =>
+    jobMatchesSecondRowFilters(job.id),
+  )
 
   // Sorting logic
   const handleSort = (column: string) => {
@@ -1593,6 +1663,12 @@ export default function DesignerFlow() {
               </SelectContent>
             </Select>
             <Input
+              placeholder="Filtra ORC"
+              value={orcFilter}
+              onChange={(e) => setOrcFilter(e.target.value)}
+              className="h-10 w-[120px] rounded-none"
+            />
+            <Input
               placeholder="Filtra FO"
               value={poFilter}
               onChange={(e) => setPoFilter(e.target.value)}
@@ -1627,11 +1703,14 @@ export default function DesignerFlow() {
                   className="h-10 w-10 rounded-none"
                   onClick={() => {
                     setSelectedDesigner('all')
+                    setOrcFilter('')
                     setPoFilter('')
                     setCampaignFilter('')
                     setItemFilter('')
                     setCodigoFilter('')
                     setShowFechados(false)
+                    setFilterDOnly(false)
+                    setFilterMaqueteNoApproval(false)
                   }}
                 >
                   <X className="h-4 w-4" />
@@ -1671,6 +1750,33 @@ export default function DesignerFlow() {
                 <TooltipContent>Atualizar</TooltipContent>
               </Tooltip>
             </TooltipProvider>
+          </div>
+        </div>
+
+        {/* Second row: special item-state filters */}
+        <div className="flex w-full items-center gap-6">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="filter-donly"
+              checked={filterDOnly}
+              onCheckedChange={(c) => setFilterDOnly(Boolean(c))}
+            />
+            <label htmlFor="filter-donly" className="text-sm select-none">
+              Itens com D=Sim e restantes=Não (qualquer item)
+            </label>
+          </div>
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="filter-m-noapproval"
+              checked={filterMaqueteNoApproval}
+              onCheckedChange={(c) => setFilterMaqueteNoApproval(Boolean(c))}
+            />
+            <label
+              htmlFor="filter-m-noapproval"
+              className="text-sm select-none"
+            >
+              Maquete M enviada sem aprovação A (qualquer item)
+            </label>
           </div>
         </div>
 
@@ -2179,7 +2285,7 @@ export default function DesignerFlow() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginadosJobs.length === 0 ? (
+                    {filteredPaginadosJobs.length === 0 ? (
                       <TableRow>
                         <TableCell
                           colSpan={8}
@@ -2189,7 +2295,7 @@ export default function DesignerFlow() {
                         </TableCell>
                       </TableRow>
                     ) : (
-                      getSortedJobs(paginadosJobs).map((job, index) => (
+                      getSortedJobs(filteredPaginadosJobs).map((job, index) => (
                         <TableRow key={job.id || `job-${index}`}>
                           <TableCell>
                             {job.data_in

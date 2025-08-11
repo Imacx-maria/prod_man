@@ -327,6 +327,7 @@ export default function ProducaoPage() {
   const [hasMoreJobs, setHasMoreJobs] = useState(true)
 
   /* filters */
+  const [orcF, setOrcF] = useState('')
   const [foF, setFoF] = useState('')
   const [campF, setCampF] = useState('')
   const [itemF, setItemF] = useState('')
@@ -341,6 +342,7 @@ export default function ProducaoPage() {
   )
 
   // Debounced filter values for performance
+  const debouncedOrcF = useDebounce(orcF, 300)
   const debouncedFoF = useDebounce(foF, 300)
   const debouncedCampF = useDebounce(campF, 300)
   const debouncedItemF = useDebounce(itemF, 300)
@@ -514,6 +516,7 @@ export default function ProducaoPage() {
       page = 0,
       reset = false,
       filters: {
+        orcF?: string
         foF?: string
         campF?: string
         itemF?: string
@@ -642,6 +645,18 @@ export default function ProducaoPage() {
           }
 
           // Direct field filters
+          if (filters.orcF && String(filters.orcF).trim() !== '') {
+            // numero_orc is numeric; prefer exact match when input is numeric, else ilike fallback
+            const clean = String(filters.orcF).trim()
+            const numeric = Number(clean)
+            if (!Number.isNaN(numeric) && clean.match(/^\d+$/)) {
+              query = query.eq('numero_orc', numeric)
+            } else {
+              // fallback partial in case user types mixed
+              query = query.ilike('numero_orc', `%${clean}%` as any)
+            }
+          }
+
           if (filters.foF && filters.foF.trim() !== '') {
             query = query.ilike('numero_fo', `%${filters.foF.trim()}%`)
           }
@@ -1087,6 +1102,7 @@ export default function ProducaoPage() {
   // Trigger search when filters change
   useEffect(() => {
     debugLog('🔍 Filter change detected:', {
+      debouncedOrcF,
       debouncedCodeF,
       debouncedItemF,
       debouncedFoF,
@@ -1097,6 +1113,7 @@ export default function ProducaoPage() {
     })
 
     if (
+      debouncedOrcF ||
       debouncedFoF ||
       debouncedCampF ||
       debouncedItemF ||
@@ -1109,6 +1126,7 @@ export default function ProducaoPage() {
       setHasMoreJobs(true)
       setCurrentPage(0)
       fetchJobs(0, true, {
+        orcF: debouncedOrcF,
         foF: debouncedFoF,
         campF: debouncedCampF,
         itemF: debouncedItemF,
@@ -1125,6 +1143,7 @@ export default function ProducaoPage() {
       fetchJobs(0, true, { activeTab })
     }
   }, [
+    debouncedOrcF,
     debouncedFoF,
     debouncedCampF,
     debouncedItemF,
@@ -1204,6 +1223,7 @@ export default function ProducaoPage() {
   const loadMoreJobs = useCallback(() => {
     if (!loading.jobs && hasMoreJobs) {
       fetchJobs(currentPage + 1, false, {
+        orcF: debouncedOrcF,
         foF: debouncedFoF,
         campF: debouncedCampF,
         itemF: debouncedItemF,
@@ -1218,6 +1238,7 @@ export default function ProducaoPage() {
     hasMoreJobs,
     currentPage,
     fetchJobs,
+    debouncedOrcF,
     debouncedFoF,
     debouncedCampF,
     debouncedItemF,
@@ -1354,6 +1375,12 @@ export default function ProducaoPage() {
           <h1 className="text-2xl font-bold">Gestão de Produção</h1>
           <div className="flex items-center gap-2">
             <Input
+              placeholder="Filtra ORC"
+              className="h-10 w-28 rounded-none"
+              value={orcF}
+              onChange={(e) => setOrcF(e.target.value)}
+            />
+            <Input
               placeholder="Filtra FO"
               className="h-10 w-28 rounded-none"
               value={foF}
@@ -1398,6 +1425,7 @@ export default function ProducaoPage() {
                     size="icon"
                     variant="outline"
                     onClick={() => {
+                      setOrcF('')
                       setFoF('')
                       setCampF('')
                       setItemF('')
@@ -1426,6 +1454,7 @@ export default function ProducaoPage() {
                       setCurrentPage(0)
                       setHasMoreJobs(true)
                       await fetchJobs(0, true, {
+                        orcF: debouncedOrcF,
                         foF: debouncedFoF,
                         campF: debouncedCampF,
                         itemF: debouncedItemF,
